@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+// Daten Map
+
 // Variablen zum prüfen
 var row_tag string = "r-float"
 var col_tag string = "c-float"
@@ -14,6 +16,17 @@ var is_row bool
 var is_p bool
 var is_col bool
 var is_code bool
+var is_data bool
+var is_first_line bool
+
+// Daten
+type keyvalue struct {
+	key   string
+	value interface{}
+}
+
+var Data map[string]interface{}
+var lastData map[int8]keyvalue
 
 // Neues Text Dokument
 var new_text string
@@ -63,36 +76,35 @@ func parse_p(line string) bool {
 
 // Code prüfen
 func parse_code(line string) bool {
-	if !strings.HasPrefix(line, "```") {
-		if is_code {
-			// Zeile hinzufügen
-			new_text += line + "<br>"
-			return true
-		} else {
-			// abbrechen
-			return false
+	if strings.HasPrefix(line, "```") {
+		code_param := strings.Replace(line, "```", "", 1)
+		if code_param != "" {
+			// todo: code Parameter setzen
 		}
+
+		var text string
+
+		// wenn schon ein Codeblock dann abschliessen
+		if is_code {
+			text += "</code></pre>"
+			is_code = false
+		} else {
+			// Code beginnen
+			text += "<pre><code>"
+			is_code = true
+		}
+
+		add_text(text)
+		return true
 	}
 
-	code_param := strings.Replace(line, "```", "", 1)
-	if code_param != "" {
-		// todo: code Parameter setzen
-	}
-
-	var text string
-
-	// wenn schon ein Codeblock dann abschliessen
 	if is_code {
-		text += "</code></pre>"
-		is_code = false
-	} else {
-		// Code beginnen
-		text += "<pre><code>"
-		is_code = true
+		// Zeile hinzufügen
+		new_text += line + "<br>"
+		return true
 	}
 
-	add_text(text)
-	return true
+	return false
 }
 
 // Header prüfen
@@ -156,6 +168,37 @@ func parse_header(line string) bool {
 	return true
 }
 
+// Anzahl der Leerzeichen vor einem Text
+func countLeadingSpaces(line string) int {
+	return len(line) - len(strings.TrimLeft(line, " "))
+}
+
+// Daten parsen
+func parse_data(line string) {
+	// Wenn keine Daten zum parsen
+	if !is_data {
+		return
+	}
+
+	// Wenn letze Datenzeile
+	if line == "---" {
+		is_data = false
+		return
+	}
+
+	key, value, found := strings.Cut(line, ": ")
+
+	// Wenn ein Key Value
+	if found {
+		step := countLeadingSpaces(key)
+		if step == 0 {
+			kv := keyvalue{key, value}
+			lastData[int8(step)] = kv
+			Data[key] = value
+		}
+	}
+}
+
 // Zeile prüfen
 func parse_row(line string) {
 	// Leerzeichen entfernen
@@ -194,7 +237,7 @@ func parse_row(line string) {
 	}
 }
 
-// Die Daten parsen
+// Datei parsen
 func Parse(filePath string) string {
 	// prüfen ob vorhanden
 	if !is_file_exists(filePath) {
@@ -213,16 +256,26 @@ func Parse(filePath string) string {
 	is_row = false
 	is_col = false
 	is_p = false
+	is_data = false
 	new_text = ""
 
 	// Zeilenweise lesen
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Println("Zeile:", line)
+		//fmt.Println("Zeile:", line)
 
-		// Zeile Parsen
-		parse_row(line)
+		// wenn erste Zeile Daten
+		if is_first_line && line == "---" {
+			is_data = true
+		} else if is_data {
+			// Daten prüfen
+			parse_data(line)
+		} else {
+			// Zeile Parsen
+			parse_row(line)
+		}
+		is_first_line = false
 	}
 
 	if err := scanner.Err(); err != nil {

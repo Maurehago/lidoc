@@ -43,6 +43,11 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 
 	// Pfad aus URL
 	relFile := r.URL.Path
+	// wenn keine Datei -> Index.html
+	if strings.HasSuffix(relFile, "/") {
+		relFile += "index.html"
+	}
+
 	file := Static + relFile
 	fmt.Println("file: " + file)
 
