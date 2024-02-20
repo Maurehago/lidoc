@@ -26,7 +26,10 @@ type keyvalue struct {
 }
 
 var Data map[string]interface{}
-var lastData map[int8]keyvalue
+var lastData map[int16]*interface{}
+var lastString map[int16]*string
+var last_step int16
+var is_data_text bool
 
 // Neues Text Dokument
 var new_text string
@@ -182,19 +185,76 @@ func parse_data(line string) {
 
 	// Wenn letze Datenzeile
 	if line == "---" {
+		// todo: ??? Letzten Key Value abschliessen
 		is_data = false
 		return
 	}
 
-	key, value, found := strings.Cut(line, ": ")
+	// Verschachtelung feststellen
+	step := int16(countLeadingSpaces(line))
 
-	// Wenn ein Key Value
+	// Leerzeichen entfernen
+	trim_line := strings.TrimSpace(line)
+
+	// Wenn leerzeile
+	if trim_line == "" {
+		// Wenn Textzeile
+		if is_data_text {
+			// todo: zum Letzen Text hinzufügen
+			*lastString[last_step] += "\n"
+		}
+		return
+	}
+
+	key, value, found := strings.Cut(trim_line, ":")
+	// Wert trimmen
+	value = strings.TrimSpace(value)
+
+	// Art feststellen	/ kv, var, obj, obj_item, item
+	line_art := "kv"
+	kv := keyvalue{key, value}
 	if found {
-		step := countLeadingSpaces(key)
+		// wenn value "" -> wahrscheinlich Objekt oder Array
+		if value == "" {
+			line_art = "obj"
+			is_data_text = false
+		} else if value == "|" {
+			// Wenn value "|" -> folgt mehrzeiliger Text
+			line_art = "kv"
+			kv.value = "" // Wert auf leer setzen
+			is_data_text = true
+		} else if step > 0 && is_data_text {
+			line_art = "var"
+			value = trim_line
+		} else if step > 0 && strings.HasPrefix(key, "- ") {
+			// Wenn key "- ..." dann ist Objekt-Item und voriges Objekt muss Array sein / Step 0 nicht zulässig
+			line_art = "obj_item"
+			kv.key = strings.TrimPrefix(key, "- ") // Key ohne Item
+		}
+	} else if step > 0 {
+		// Kein Objekt und kein Array
+		// wenn value "- ..." dann ist es ein Item und voriges Objekt muss ein Array sein / step 0 nich zulässig
+		if strings.HasPrefix(key, "- ") {
+			line_art = "item"
+			value = strings.TrimPrefix(key, "- ") // Key ohne Item
+		} else {
+			line_art = "var"
+			value = key
+		}
+	}
+
+	// line Art prüfen
+	switch line_art {
+	case "kv":
 		if step == 0 {
-			kv := keyvalue{key, value}
-			lastData[int8(step)] = kv
-			Data[key] = value
+			Data[key] = &value
+			lastString[0] = &value
+		} else if step > 0 {
+			// ????
+		}
+	case "var":
+		if step > 0 {
+			*lastString[last_step] += value + "\n"
 		}
 	}
 }
@@ -268,6 +328,9 @@ func Parse(filePath string) string {
 		// wenn erste Zeile Daten
 		if is_first_line && line == "---" {
 			is_data = true
+			last_step = 0
+			lastString = make(map[int16]*string) // Letzte Daten zurücksetzen
+			Data = make(map[string]interface{})
 		} else if is_data {
 			// Daten prüfen
 			parse_data(line)
