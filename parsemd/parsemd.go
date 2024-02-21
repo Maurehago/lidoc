@@ -25,6 +25,8 @@ type keyvalue struct {
 	value interface{}
 }
 
+type obj map[string]interface{}
+
 var Data map[string]interface{}
 var lastData map[int16]*interface{}
 var lastString map[int16]*string
@@ -33,6 +35,25 @@ var is_data_text bool
 
 // Neues Text Dokument
 var new_text string
+
+// Daten auslesen
+func Get_value(o *obj, key string) *interface{} {
+	// Nach punkte aufsplitten
+	k1, k2, ok := strings.Cut(key, ".")
+
+	// Wert lesen
+	nested := (*o)[k1]
+	if !ok {
+		return &nested
+	}
+
+	// Unterobjekte im weitern Pfad prüfen
+	nested2, ok := nested.(obj)
+	if ok {
+		return Get_value(&nested2, k2)
+	}
+	return &nested
+}
 
 // Datei Vorhanden prüfen
 func is_file_exists(file string) bool {
@@ -247,14 +268,16 @@ func parse_data(line string) {
 	switch line_art {
 	case "kv":
 		if step == 0 {
-			Data[key] = &value
+			Data[kv.key] = &kv.value
+			lastData[0] = &kv.value
 			lastString[0] = &value
 		} else if step > 0 {
-			// ????
+			// ???? todo: Pfad Merken -> pro step
+			// Werte in Data
 		}
 	case "var":
 		if step > 0 {
-			*lastString[last_step] += value + "\n"
+			// todo: Wert aus Pfad lesen
 		}
 	}
 }
