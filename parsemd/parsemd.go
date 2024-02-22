@@ -28,8 +28,7 @@ type keyvalue struct {
 type obj map[string]interface{}
 
 var Data map[string]interface{}
-var lastData map[int16]*interface{}
-var lastString map[int16]*string
+var step_data_path map[int16]*string
 var last_step int16
 var is_data_text bool
 
@@ -37,7 +36,7 @@ var is_data_text bool
 var new_text string
 
 // Daten auslesen
-func Get_value(o *obj, key string) *interface{} {
+func Get_object_value(o *obj, key string) *interface{} {
 	// Nach punkte aufsplitten
 	k1, k2, ok := strings.Cut(key, ".")
 
@@ -50,7 +49,7 @@ func Get_value(o *obj, key string) *interface{} {
 	// Unterobjekte im weitern Pfad prüfen
 	nested2, ok := nested.(obj)
 	if ok {
-		return Get_value(&nested2, k2)
+		return Get_object_value(&nested2, k2)
 	}
 	return &nested
 }
@@ -222,7 +221,12 @@ func parse_data(line string) {
 		// Wenn Textzeile
 		if is_data_text {
 			// todo: zum Letzen Text hinzufügen
-			*lastString[last_step] += "\n"
+			path := step_data_path[last_step]
+			d := Get_object_value((*obj)(&Data), *path)
+			if str, ok := (*d).(string); ok {
+				str += "\n"
+				(*d) = str
+			}
 		}
 		return
 	}
@@ -269,8 +273,8 @@ func parse_data(line string) {
 	case "kv":
 		if step == 0 {
 			Data[kv.key] = &kv.value
-			lastData[0] = &kv.value
-			lastString[0] = &value
+			//lastData[0] = &kv.value
+			//lastString[0] = &value
 		} else if step > 0 {
 			// ???? todo: Pfad Merken -> pro step
 			// Werte in Data
@@ -352,7 +356,7 @@ func Parse(filePath string) string {
 		if is_first_line && line == "---" {
 			is_data = true
 			last_step = 0
-			lastString = make(map[int16]*string) // Letzte Daten zurücksetzen
+			// lastString = make(map[int16]*string) // Letzte Daten zurücksetzen
 			Data = make(map[string]interface{})
 		} else if is_data {
 			// Daten prüfen
