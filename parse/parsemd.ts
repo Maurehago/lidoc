@@ -1,6 +1,7 @@
 // lidoc Markdown Parser
 
 import { existsSync } from "https://deno.land/std@0.217.0/fs/exists.ts";
+import { Site } from "./parse.ts";
 
 let is_first_line: boolean = false;
 let is_data: boolean = false;
@@ -9,6 +10,8 @@ let last_obj: any = {};
 let last_key: string = "";
 let last_step: number = 0;
 let data_path: string = "";
+let step_path: any = {};
+
 
 // Markdown
 var row_tag: string = "r_float";
@@ -17,6 +20,7 @@ var is_row: boolean = false;
 var is_col: boolean = false;
 var is_p: boolean = false;
 var is_code: boolean = false;
+var is_multiline = false;
 
 // neuer Text zum anzeigen
 var new_text: string = "";
@@ -82,7 +86,7 @@ function parse_data(line: string) {
     }
 
     // Wenn letzte Datenzeile
-    if (line == "---") {
+    if (line.startsWith("---")) {
         // todo: eventuell letzte Daten abschliessen
         is_data = false;
         return;
@@ -129,10 +133,14 @@ function parse_data(line: string) {
                 data_path = last_key;
             }
         }
+
+        // Daten-Pfad für Stufe merken
+        step_path[step] = data_path;
     } else if (step < last_step) {
         // voriges Objekt - im Pfad einen schritt zurück
-        let pos1: number = data_path.lastIndexOf(".");
-        data_path = data_path.substring(0, pos1);
+        //let pos1: number = data_path.lastIndexOf(".");
+        //data_path = data_path.substring(0, pos1);
+        data_path = step_path[step];
         last_obj = get_data_value(data, data_path);
     }
 
@@ -141,6 +149,17 @@ function parse_data(line: string) {
 
     // Wenn Key/Value / ist Objekt
     if (ok == "ok") {
+        // multiline
+        if (is_multiline) {
+            if (step == 0) {
+                is_multiline = false;
+            } else if (typeof last_obj[last_key] == "string") {
+                // wenn String
+                last_obj[last_key] += trim_line + "\n";
+            }
+            return;
+        }
+
         // Wenn Key ein Item
         if (key.startsWith("- ")) {
             // Ist Objekt Item -> Letztes Objekt muss ein Array sein
@@ -157,12 +176,15 @@ function parse_data(line: string) {
             }
 
             // neues Objekt hinzufügen
-            let new_key: number = last_obj.push({key: value}) -1;
+            let new_obj: any = {};
+            new_obj[key] = value;
+            let new_key: number = last_obj.push(new_obj) -1;
             last_key = new_key.toString();
         } else if (value == "|") {
             // Es folgt mehrzeiliger Text
             last_obj[key] = "";
             last_key = key;
+            is_multiline = true;
         } else if (value == "") {
             // Ist Objekt
             last_obj[key] = {};
@@ -310,15 +332,45 @@ function parse_header(line: string): boolean {
 
 // Markdown parsen
 function parse_row(line:string) {
+    let trim_line: string = line.trim();
 
-}
+    // Wenn zeile leer ist
+    if (trim_line == "") {
+        // Wenn Absatz
+        if (is_p) {
+            // Absatz schliessen
+            new_text += "</p>";
+            is_p = false;
+
+            // todo: prüfen auf 2. Leerzeile
+
+            return;
+        }
+    } // if leere Zeile
+
+    // Code Parsen
+    if (parse_code(line)) {
+        return;
+    }
+
+    // Header Parsen
+    if (parse_header(line)) {
+        return;
+    }
+
+    // Absatz
+    if (parse_p(line)) {
+        return;
+    }
+} // parse_row
+
 
 
 // Parse Funktion
-export function parse(filePath: string): string {
+export function parse(filePath: string): Site {
     // Wenn die Datei nicht existiert
     if (!existsSync(filePath, {isReadable: true, isFile: true})) {
-        return ""
+        return {};
     }
 
     // Datei laden
@@ -326,11 +378,14 @@ export function parse(filePath: string): string {
 
     // in Zeilen aufsplitten
     let lines = file.split("\n");
+    is_first_line = true;
 
     // Alle Zeilen durchgehen
     lines.forEach((line: string, index: number) => {
+       // console.log(is_first_line, is_data, line);
+
         // wenn erste Zeile
-        if (is_first_line && line == "---") {
+        if (is_first_line && line.startsWith("---")) {
             // Datenzeile
             is_data = true;
 
@@ -351,5 +406,14 @@ export function parse(filePath: string): string {
         // erste Zeile zurücksetzen
         is_first_line = false;
     })
-    return "test"
+
+    // console.log(data);
+
+    // Rückgabe
+    let site_data: Site = {
+        data: data
+        , content: new_text
+    }
+
+    return site_data;
 } // parse
