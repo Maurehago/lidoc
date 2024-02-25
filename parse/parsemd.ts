@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 // lidoc Markdown Parser
 
 import { existsSync } from "https://deno.land/std@0.217.0/fs/exists.ts";
@@ -14,16 +15,16 @@ let step_path: any = {};
 
 
 // Markdown
-var row_tag: string = "r_float";
-var col_tag: string = "c_float";
-var is_row: boolean = false;
-var is_col: boolean = false;
-var is_p: boolean = false;
-var is_code: boolean = false;
-var is_multiline = false;
+const row_tag: string = "r_float";
+const col_tag: string = "c_float";
+let is_row: boolean = false;
+let is_col: boolean = false;
+let is_p: boolean = false;
+let is_code: boolean = false;
+let is_multiline = false;
 
 // neuer Text zum anzeigen
-var new_text: string = "";
+let new_text: string = "";
 
 
 /**
@@ -36,7 +37,7 @@ var new_text: string = "";
  * @returns {string[]}
  */
 function cut_string(s: string, sep: string): string[] {
-    let pos1: number = s.indexOf(sep);
+    const pos1: number = s.indexOf(sep);
     if (pos1 < 0) {
         return [s, "", ""];
     } else if (pos1 == 0) {
@@ -44,8 +45,8 @@ function cut_string(s: string, sep: string): string[] {
     }
 
     // Auftrennen
-    let key: string = s.substring(0, pos1);
-    let value: string = s.substring(pos1 +1);
+    const key: string = s.substring(0, pos1);
+    const value: string = s.substring(pos1 +1);
 
     return [key, value, "ok"];
 } // cut_string
@@ -58,16 +59,16 @@ function cut_string(s: string, sep: string): string[] {
  * @returns {any} Wert vom obj[path]
  */
 function get_data_value(obj: any, path: string): any {
-    let len: number = path.length;
+    const len: number = path.length;
     if (len < 1) {
         return obj;
     }
 
     // Aufsplitten
-    let s: string[] = cut_string(path, ".");
-    let key: string = s[0];
-    let next_path:string = s[1];
-    let ok: string = s[2];
+    const s: string[] = cut_string(path, ".");
+    const key: string = s[0];
+    const next_path:string = s[1];
+    const ok: string = s[2];
 
     if (ok == "nok") {
         return obj[path];
@@ -92,10 +93,10 @@ function parse_data(line: string) {
         return;
     }
 
-    let step: number = line.search(/\S|$/);
+    const step: number = line.search(/\S|$/);
 
     // Zeile ohne Leerzeichen am Beginn und Ende
-    let trim_line: string = line.trim();
+    const trim_line: string = line.trim();
 
     // Wenn Zeile Leer
     if (trim_line == "") {
@@ -243,7 +244,7 @@ function add_text(text: string) {
 
 // Absatz prüfen
 function parse_p(line: string): boolean {
-    var text: string = "";
+    let text: string = "";
     if (!is_p) {
         text = "<p>" + line;
         is_p = true;
