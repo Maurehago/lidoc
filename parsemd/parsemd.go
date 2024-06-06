@@ -10,8 +10,8 @@ import (
 // Daten Map
 
 // Variablen zum prüfen
-var row_tag string = "r-float"
-var col_tag string = "c-float"
+var row_tag string = "f-row"
+var col_tag string = "f-item"
 var is_row bool
 var is_p bool
 var is_col bool
