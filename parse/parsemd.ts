@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
 // lidoc Markdown Parser
 
-import { existsSync } from "https://deno.land/std@0.217.0/fs/exists.ts";
-import { Site, Element } from "./parse.ts";
+import { existsSync } from "@std/fs/exists";
+import { Site } from "./parse.ts";
 
 let is_first_line: boolean = false;
 let is_data: boolean = false;

@@ -1,6 +1,5 @@
 // HTTP-Server und Dokument generator
-import * as path from "https://deno.land/std@0.217.0/path/mod.ts";
-import * as fileserver from "https://deno.land/std@0.217.0/http/file_server.ts";
+import * as path from "@std/path";
 import * as parseMD from "./parse/parsemd.ts";
 import {Site} from "./parse/parse.ts";
 
