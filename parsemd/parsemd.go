@@ -2,6 +2,7 @@ package parsemd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,55 +21,25 @@ type Site struct {
 	Path     string   // Pfad / Ordner in dem sich die Seite befindet (ohne Dateiname)
 	Template string   // Template welches für die Anzeige der Seite verwendet wird
 	Tags     []string // Schlüsselwörter um die Seite bei einer Suche zu finden
-}
-
-// HTML Tag Element
-type htmlTag struct {
-	id      string
-	tagname string
-	prop    string
-	text    string
-	parrent string
+	Html     string   // HTML Sourcecode für die Seite
 }
 
 // Variablen zum prüfen
 var row_tag string = "f-row"
 var col_tag string = "f-item"
 
+var last_param string
 var is_first_line bool
 var is_data bool
 var is_row bool
 var is_col bool
+var is_colline bool
+var is_empty bool
 var is_p bool
 var is_code bool
+
 var site Site
-var lastData string
-var last_step int16
-
-var is_data_text bool
 var is_tags bool
-
-// Neues Text Dokument
-var new_text string
-
-// Daten auslesen
-func Get_object_value(o *obj, key string) *interface{} {
-	// Nach punkte aufsplitten
-	k1, k2, ok := strings.Cut(key, ".")
-
-	// Wert lesen
-	nested := (*o)[k1]
-	if !ok {
-		return &nested
-	}
-
-	// Unterobjekte im weitern Pfad prüfen
-	nested2, ok := nested.(obj)
-	if ok {
-		return Get_object_value(&nested2, k2)
-	}
-	return &nested
-}
 
 // Datei Vorhanden prüfen
 func is_file_exists(file string) bool {
@@ -81,21 +52,37 @@ func is_file_exists(file string) bool {
 	return false
 }
 
+// HTML TAGS abschliessen
+func close_htmlTags() {
+	if is_p {
+		site.Html += "</p>"
+		is_p = false
+	}
+	if is_col {
+		site.Html += "</" + col_tag + ">"
+		is_col = false
+	}
+	if is_row {
+		site.Html += "</" + row_tag + ">"
+		is_row = false
+	}
+}
+
 // Text hinzufügen
 func add_text(text string) {
-	// Header hinzufügen
+	// HTML Zeile hinzufügen
 	if !is_row {
 		// wenn noch keine Zeile
-		new_text += "<" + row_tag + ">" + "<" + col_tag + ">" + text
+		site.Html += "<" + row_tag + ">" + "<" + col_tag + ">" + text
 		is_row = true
 		is_col = true
 	} else if !is_col {
 		// Wenn noch keine Spalte
-		new_text += "<" + col_tag + ">" + text
+		site.Html += "<" + col_tag + ">" + text
 		is_col = true
 	} else {
-		// nur Header hinzufügen
-		new_text += text
+		// nur Text hinzufügen
+		site.Html += text
 	}
 }
 
@@ -117,9 +104,6 @@ func parse_p(line string) bool {
 func parse_code(line string) bool {
 	if strings.HasPrefix(line, "```") {
 		code_param := strings.Replace(line, "```", "", 1)
-		if code_param != "" {
-			// todo: code Parameter setzen
-		}
 
 		var text string
 
@@ -129,7 +113,12 @@ func parse_code(line string) bool {
 			is_code = false
 		} else {
 			// Code beginnen
-			text += "<pre><code>"
+			if code_param != "" {
+				// code Parameter setzen
+				text += "<pre><code class='language-" + code_param + "' >"
+			} else {
+				text += "<pre><code>"
+			}
 			is_code = true
 		}
 
@@ -139,7 +128,7 @@ func parse_code(line string) bool {
 
 	if is_code {
 		// Zeile hinzufügen
-		new_text += line + "<br>"
+		site.Html += line + "<br>"
 		return true
 	}
 
@@ -161,35 +150,33 @@ func parse_header(line string) bool {
 	text := ""
 	tag := ""
 
-	var newTag = htmlTag{}
-
 	// Stufe 6
 	if strings.HasPrefix(trim_line, "###### ") {
-		newTag.text = strings.Replace(trim_line, "###### ", "", 1)
-		newTag.tagname = "h6"
+		text = strings.Replace(trim_line, "###### ", "", 1)
+		tag = "h6"
 	} else if strings.HasPrefix(trim_line, "##### ") {
 		// Stufe 5
-		newTag.text = strings.Replace(trim_line, "##### ", "", 1)
-		newTag.tagname = "h5"
+		text = strings.Replace(trim_line, "##### ", "", 1)
+		tag = "h5"
 	} else if strings.HasPrefix(trim_line, "#### ") {
 		// Stufe 4
-		newTag.text = strings.Replace(trim_line, "#### ", "", 1)
-		newTag.tagname = "h4"
+		text = strings.Replace(trim_line, "#### ", "", 1)
+		tag = "h4"
 	} else if strings.HasPrefix(trim_line, "### ") {
 		// Stufe 3
-		newTag.text = strings.Replace(trim_line, "### ", "", 1)
-		newTag.tagname = "h3"
+		text = strings.Replace(trim_line, "### ", "", 1)
+		tag = "h3"
 	} else if strings.HasPrefix(trim_line, "## ") {
 		// Stufe 2
-		newTag.text = strings.Replace(trim_line, "## ", "", 1)
-		newTag.tagname = "h2"
+		text = strings.Replace(trim_line, "## ", "", 1)
+		tag = "h2"
 	} else if strings.HasPrefix(trim_line, "# ") {
 		// Stufe 1
-		newTag.text = strings.Replace(trim_line, "# ", "", 1)
-		newTag.tagname = "h1"
+		text = strings.Replace(trim_line, "# ", "", 1)
+		tag = "h1"
 	}
 
-	if newTag.tagname == "" {
+	if tag == "" {
 		// kein Header
 		return false
 	}
@@ -198,7 +185,7 @@ func parse_header(line string) bool {
 
 	// Wenn noch Absatz offen
 	if is_p {
-		new_text += "</p>"
+		site.Html += "</p>"
 		is_p = false
 	}
 
@@ -210,9 +197,9 @@ func parse_header(line string) bool {
 }
 
 // Anzahl der Leerzeichen vor einem Text
-func countLeadingSpaces(line string) int {
-	return len(line) - len(strings.TrimLeft(line, " "))
-}
+//func countLeadingSpaces(line string) int {
+//	return len(line) - len(strings.TrimLeft(line, " "))
+//}
 
 // Daten parsen
 func parse_data(line string) {
@@ -251,13 +238,18 @@ func parse_data(line string) {
 		switch key {
 		case "template":
 			site.Template = value
+			is_tags = false
 
 		case "date":
 			site.Date = value
+			is_tags = false
 
 		case "tags":
 			site.Tags = []string{}
 			is_tags = true
+
+		default:
+			is_tags = false
 		}
 	} else {
 		// Kein KeyValue - sondern nur ein Wert
@@ -277,16 +269,25 @@ func parse_row(line string) {
 
 	// Wenn die Zeile leer ist
 	if trim_line == "" {
+		// ist leere Zeile
+		is_empty = true
+
+		// wenn zuvor eine Spaltenzeile
+		if is_colline {
+			// alles schliessen
+			close_htmlTags()
+			is_colline = false
+		}
+
 		// Wenn Absatz
 		if is_p {
 			// Absatz schliessen
-			new_text += "</p>"
+			site.Html += "</p>"
 			is_p = false
-
-			// todo: prüfen auf 2. Leerzeile
-
-			return
 		}
+
+		// rest ignorieren
+		return
 	}
 
 	// wenn Code
@@ -294,6 +295,47 @@ func parse_row(line string) {
 		// Abbrechen für nächste Zeile
 		return
 	}
+
+	// Wenn neue Spalte
+	if strings.HasPrefix(trim_line, "---") {
+		// neue Spalte
+		is_colline = true
+		last_param = strings.Replace(trim_line, "---", "", 1)
+
+		// alles schliessen bis auf die Row
+		if is_p {
+			site.Html += "</p>"
+			is_p = false
+		}
+		if is_col {
+			site.Html += "</" + col_tag + ">"
+			is_col = false
+		}
+
+		if is_empty {
+			close_htmlTags()
+		}
+
+		return
+	}
+
+	// wenn zuvor eine Spalte begonnen
+	if is_colline {
+		// neue Spalte
+		if !is_row {
+			site.Html += "<" + row_tag + ">"
+			is_row = true
+		}
+
+		site.Html += "<" + col_tag + last_param + ">"
+		is_col = true
+
+		last_param = ""
+	}
+
+	// Keine Spaltenzeile
+	is_colline = false
+	is_empty = false
 
 	// wenn Header
 	if parse_header(line) {
@@ -315,7 +357,7 @@ func Parse(fullPath string) (Site, error) {
 
 	// prüfen ob vorhanden
 	if !is_file_exists(fullPath) {
-		return site, nil
+		return site, errors.New("File" + fullPath + " not found!")
 	}
 
 	// Datei öffnen
@@ -332,12 +374,16 @@ func Parse(fullPath string) (Site, error) {
 	is_col = false
 	is_p = false
 	is_data = false
-	new_text = ""
+	is_colline = false
+	is_empty = false
+	is_first_line = true
 
+	// Seiten eigenschaften setzen
 	site.Url = fullPath
 	site.Path = filepath.Dir(fullPath)
 	name, _, _ := strings.Cut(filepath.Base(fullPath), ".")
 	site.Name = name
+	site.Html = ""
 
 	// Zeilenweise lesen
 	scanner := bufio.NewScanner(file)
@@ -348,7 +394,6 @@ func Parse(fullPath string) (Site, error) {
 		// wenn erste Zeile Daten
 		if is_first_line && line == "---" {
 			is_data = true
-			last_step = 0 // Einrückung der Zeile auf 0
 		} else if is_data {
 			// Daten prüfen
 			parse_data(line)
@@ -361,20 +406,11 @@ func Parse(fullPath string) (Site, error) {
 
 	if err := scanner.Err(); err != nil {
 		fmt.Println("Fehler beim Lesen der Datei:", err)
+		return site, err
 	}
 
 	// Abschliessen
-	if is_p {
-		new_text += "</p>"
-		is_p = false
-	}
-	if is_col {
-		new_text += "</" + col_tag + ">"
-		is_col = false
-	}
-	if is_row {
-		new_text += "</" + row_tag + ">"
-		is_row = false
-	}
+	close_htmlTags()
+
 	return site, nil
 } // Parse

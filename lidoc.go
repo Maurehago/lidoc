@@ -59,13 +59,22 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 		mdFile := strings.Replace(file, ".html", ".md", 1)
 
 		// Hier Marrkdown parsen und zurückgeben
-		mdString := parsemd.Parse((mdFile))
-		if mdString != "" {
-			_, err := fmt.Fprintf(w, mdString)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
+		site, err := parsemd.Parse(mdFile)
+		if err == nil {
+			// Template lesen
+			if site.Template != "" {
+				// todo: Template laden
+			} else {
+				// todo: standard Template
 			}
-			return
+			if site.Html != "" {
+				// todo: Siten HTML ins Template einfügen
+				_, err := fmt.Fprintf(w, site.Html)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
+				}
+				return
+			}
 		}
 	} // else if filetype == ".lidoc" {
 	// hier Liste Parsen und zurückgeben
