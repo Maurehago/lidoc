@@ -2,7 +2,7 @@
 // lidoc Markdown Parser
 
 import { existsSync } from "https://deno.land/std@0.217.0/fs/exists.ts";
-import { Site } from "./parse.ts";
+import { Site, Element } from "./parse.ts";
 
 let is_first_line: boolean = false;
 let is_data: boolean = false;
@@ -366,55 +366,64 @@ function parse_row(line:string) {
 } // parse_row
 
 
+async function fetch_text(filePath: string): Promise<string> {
+    const res = await fetch(filePath);
+    return await res.text();
+} // fetch_string
+
 
 // Parse Funktion
-export function parse(filePath: string): Site {
+export function parse(filePath: string): Site|null {
     // Wenn die Datei nicht existiert
     if (!existsSync(filePath, {isReadable: true, isFile: true})) {
-        return {};
+        return null;
     }
 
     // Datei laden
-    let file = Deno.readTextFileSync(filePath);
+    //let file = Deno.readTextFileSync(filePath);
+    let fileString: string;
+    fetch_text(filePath).then(value =>{
+        fileString = value;
 
-    // in Zeilen aufsplitten
-    let lines = file.split("\n");
-    is_first_line = true;
+        // in Zeilen aufsplitten
+        const lines = fileString.split("\n");
+        is_first_line = true;
 
-    // Alle Zeilen durchgehen
-    lines.forEach((line: string, index: number) => {
-       // console.log(is_first_line, is_data, line);
+        // Alle Zeilen durchgehen
+        lines.forEach((line: string, index: number) => {
+        // console.log(is_first_line, is_data, line);
 
-        // wenn erste Zeile
-        if (is_first_line && line.startsWith("---")) {
-            // Datenzeile
-            is_data = true;
+            // wenn erste Zeile
+            if (is_first_line && line.startsWith("---")) {
+                // Datenzeile
+                is_data = true;
 
-            // Daten zurücksetzen
-            data = {};
-            data_path = "";
-            last_key = "";
-            last_step = 0;
+                // Daten zurücksetzen
+                data = {};
+                data_path = "";
+                last_key = "";
+                last_step = 0;
 
-        } else if (is_data) {
-            // Daten Parsen
-            parse_data(line);
-        } else {
-            // Zeile als Markdown parsen
-            parse_row(line);
+            } else if (is_data) {
+                // Daten Parsen
+                parse_data(line);
+            } else {
+                // Zeile als Markdown parsen
+                parse_row(line);
+            }
+
+            // erste Zeile zurücksetzen
+            is_first_line = false;
+        })
+
+        // console.log(data);
+
+        // Rückgabe
+        let site_data: Site = {
+            data: data
+            , content: new_text
         }
 
-        // erste Zeile zurücksetzen
-        is_first_line = false;
-    })
-
-    // console.log(data);
-
-    // Rückgabe
-    let site_data: Site = {
-        data: data
-        , content: new_text
-    }
-
-    return site_data;
+        return site_data;
+    });
 } // parse
