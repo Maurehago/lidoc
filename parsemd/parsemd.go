@@ -4,33 +4,49 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // Daten Map
+type KeyValue map[string]interface{}
+
+// Seite Objekt Aufbau
+type Site struct {
+	Err      string   // Bei Fehler die Fehlermeldung
+	Name     string   // Dateiname ohne Endung
+	Date     string   // Datum und Uhrzeit für Sortierung in Listen
+	Url      string   // Pfad und Dateiname
+	Path     string   // Pfad / Ordner in dem sich die Seite befindet (ohne Dateiname)
+	Template string   // Template welches für die Anzeige der Seite verwendet wird
+	Tags     []string // Schlüsselwörter um die Seite bei einer Suche zu finden
+}
+
+// HTML Tag Element
+type htmlTag struct {
+	id      string
+	tagname string
+	prop    string
+	text    string
+	parrent string
+}
 
 // Variablen zum prüfen
 var row_tag string = "f-row"
 var col_tag string = "f-item"
-var is_row bool
-var is_p bool
-var is_col bool
-var is_code bool
-var is_data bool
+
 var is_first_line bool
-
-// Daten
-type keyvalue struct {
-	key   string
-	value interface{}
-}
-
-type obj map[string]interface{}
-
-var Data map[string]interface{}
-var step_data_path map[int16]*string
+var is_data bool
+var is_row bool
+var is_col bool
+var is_p bool
+var is_code bool
+var site Site
+var lastData string
 var last_step int16
+
 var is_data_text bool
+var is_tags bool
 
 // Neues Text Dokument
 var new_text string
@@ -145,33 +161,35 @@ func parse_header(line string) bool {
 	text := ""
 	tag := ""
 
+	var newTag = htmlTag{}
+
 	// Stufe 6
 	if strings.HasPrefix(trim_line, "###### ") {
-		text = strings.Replace(trim_line, "###### ", "", 1)
-		tag = "h6"
+		newTag.text = strings.Replace(trim_line, "###### ", "", 1)
+		newTag.tagname = "h6"
 	} else if strings.HasPrefix(trim_line, "##### ") {
 		// Stufe 5
-		text = strings.Replace(trim_line, "##### ", "", 1)
-		tag = "h5"
+		newTag.text = strings.Replace(trim_line, "##### ", "", 1)
+		newTag.tagname = "h5"
 	} else if strings.HasPrefix(trim_line, "#### ") {
 		// Stufe 4
-		text = strings.Replace(trim_line, "#### ", "", 1)
-		tag = "h4"
+		newTag.text = strings.Replace(trim_line, "#### ", "", 1)
+		newTag.tagname = "h4"
 	} else if strings.HasPrefix(trim_line, "### ") {
 		// Stufe 3
-		text = strings.Replace(trim_line, "### ", "", 1)
-		tag = "h3"
+		newTag.text = strings.Replace(trim_line, "### ", "", 1)
+		newTag.tagname = "h3"
 	} else if strings.HasPrefix(trim_line, "## ") {
 		// Stufe 2
-		text = strings.Replace(trim_line, "## ", "", 1)
-		tag = "h2"
+		newTag.text = strings.Replace(trim_line, "## ", "", 1)
+		newTag.tagname = "h2"
 	} else if strings.HasPrefix(trim_line, "# ") {
 		// Stufe 1
-		text = strings.Replace(trim_line, "# ", "", 1)
-		tag = "h1"
+		newTag.text = strings.Replace(trim_line, "# ", "", 1)
+		newTag.tagname = "h1"
 	}
 
-	if tag == "" {
+	if newTag.tagname == "" {
 		// kein Header
 		return false
 	}
@@ -211,23 +229,15 @@ func parse_data(line string) {
 	}
 
 	// Verschachtelung feststellen
-	step := int16(countLeadingSpaces(line))
+	// step := int16(countLeadingSpaces(line))
 
 	// Leerzeichen entfernen
 	trim_line := strings.TrimSpace(line)
 
 	// Wenn leerzeile
 	if trim_line == "" {
-		// Wenn Textzeile
-		if is_data_text {
-			// todo: zum Letzen Text hinzufügen
-			path := step_data_path[last_step]
-			d := Get_object_value((*obj)(&Data), *path)
-			if str, ok := (*d).(string); ok {
-				str += "\n"
-				(*d) = str
-			}
-		}
+		// Zurücksetzen
+		is_tags = false
 		return
 	}
 
@@ -235,53 +245,27 @@ func parse_data(line string) {
 	// Wert trimmen
 	value = strings.TrimSpace(value)
 
-	// Art feststellen	/ kv, var, obj, obj_item, item
-	line_art := "kv"
-	kv := keyvalue{key, value}
+	// Wenn Key Value
 	if found {
-		// wenn value "" -> wahrscheinlich Objekt oder Array
-		if value == "" {
-			line_art = "obj"
-			is_data_text = false
-		} else if value == "|" {
-			// Wenn value "|" -> folgt mehrzeiliger Text
-			line_art = "kv"
-			kv.value = "" // Wert auf leer setzen
-			is_data_text = true
-		} else if step > 0 && is_data_text {
-			line_art = "var"
-			value = trim_line
-		} else if step > 0 && strings.HasPrefix(key, "- ") {
-			// Wenn key "- ..." dann ist Objekt-Item und voriges Objekt muss Array sein / Step 0 nicht zulässig
-			line_art = "obj_item"
-			kv.key = strings.TrimPrefix(key, "- ") // Key ohne Item
-		}
-	} else if step > 0 {
-		// Kein Objekt und kein Array
-		// wenn value "- ..." dann ist es ein Item und voriges Objekt muss ein Array sein / step 0 nich zulässig
-		if strings.HasPrefix(key, "- ") {
-			line_art = "item"
-			value = strings.TrimPrefix(key, "- ") // Key ohne Item
-		} else {
-			line_art = "var"
-			value = key
-		}
-	}
+		// je nach key
+		switch key {
+		case "template":
+			site.Template = value
 
-	// line Art prüfen
-	switch line_art {
-	case "kv":
-		if step == 0 {
-			Data[kv.key] = &kv.value
-			//lastData[0] = &kv.value
-			//lastString[0] = &value
-		} else if step > 0 {
-			// ???? todo: Pfad Merken -> pro step
-			// Werte in Data
+		case "date":
+			site.Date = value
+
+		case "tags":
+			site.Tags = []string{}
+			is_tags = true
 		}
-	case "var":
-		if step > 0 {
-			// todo: Wert aus Pfad lesen
+	} else {
+		// Kein KeyValue - sondern nur ein Wert
+		if strings.HasPrefix(key, "- ") {
+			value = strings.TrimPrefix(key, "- ") // Key ohne Item
+			if is_tags {
+				site.Tags = append(site.Tags, value)
+			}
 		}
 	}
 }
@@ -325,17 +309,21 @@ func parse_row(line string) {
 }
 
 // Datei parsen
-func Parse(filePath string) string {
+func Parse(fullPath string) (Site, error) {
+	// neue Seite
+	site = Site{}
+
 	// prüfen ob vorhanden
-	if !is_file_exists(filePath) {
-		return ""
+	if !is_file_exists(fullPath) {
+		return site, nil
 	}
 
 	// Datei öffnen
-	file, err := os.Open(filePath)
+	file, err := os.Open(fullPath)
 	if err != nil {
 		fmt.Println("Fehler beim Öffnen der Datei:", err)
-		return err.Error()
+		site.Err = err.Error()
+		return site, err
 	}
 	defer file.Close()
 
@@ -346,6 +334,11 @@ func Parse(filePath string) string {
 	is_data = false
 	new_text = ""
 
+	site.Url = fullPath
+	site.Path = filepath.Dir(fullPath)
+	name, _, _ := strings.Cut(filepath.Base(fullPath), ".")
+	site.Name = name
+
 	// Zeilenweise lesen
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -355,9 +348,7 @@ func Parse(filePath string) string {
 		// wenn erste Zeile Daten
 		if is_first_line && line == "---" {
 			is_data = true
-			last_step = 0
-			// lastString = make(map[int16]*string) // Letzte Daten zurücksetzen
-			Data = make(map[string]interface{})
+			last_step = 0 // Einrückung der Zeile auf 0
 		} else if is_data {
 			// Daten prüfen
 			parse_data(line)
@@ -385,5 +376,5 @@ func Parse(filePath string) string {
 		new_text += "</" + row_tag + ">"
 		is_row = false
 	}
-	return new_text
-}
+	return site, nil
+} // Parse

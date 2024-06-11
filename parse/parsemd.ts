@@ -1,6 +1,6 @@
 // lidoc Markdown Parser
 
-import { existsSync } from "https://deno.land/std@0.217.0/fs/exists.ts";
+import { existsSync } from "@std/fs/exists";
 import { Site } from "./parse.ts";
 
 let is_first_line: boolean = false;
