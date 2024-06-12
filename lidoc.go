@@ -69,6 +69,8 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 			}
 			if site.Html != "" {
 				// todo: Siten HTML ins Template einfügen
+
+				w.Header().Add("Content-Type", "text/html")
 				_, err := fmt.Fprintf(w, site.Html)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)

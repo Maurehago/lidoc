@@ -17,18 +17,21 @@ type Site struct {
 	Err      string   // Bei Fehler die Fehlermeldung
 	Name     string   // Dateiname ohne Endung
 	Date     string   // Datum und Uhrzeit für Sortierung in Listen
+	Author   string   // Autor des Dokumentes
 	Url      string   // Pfad und Dateiname
 	Path     string   // Pfad / Ordner in dem sich die Seite befindet (ohne Dateiname)
 	Template string   // Template welches für die Anzeige der Seite verwendet wird
 	Tags     []string // Schlüsselwörter um die Seite bei einer Suche zu finden
 	Html     string   // HTML Sourcecode für die Seite
+	Images   []string // Liste Mit Bildern
+	Links    []string // Liste mit Links
 }
 
 // Variablen zum prüfen
 var row_tag string = "f-row"
 var col_tag string = "f-item"
 
-var last_param string
+var last_attribute string
 var is_first_line bool
 var is_data bool
 var is_row bool
@@ -37,6 +40,11 @@ var is_colline bool
 var is_empty bool
 var is_p bool
 var is_code bool
+var is_ul bool                      // Einfache Liste
+var is_ol bool                      // Sortierte Liste
+var is_li bool                      // Listen Element
+var last_list_step int              // Letzte Listen Stufe
+var parrent_step_tag map[int]string // letztes Listen Element
 
 var site Site
 var is_tags bool
@@ -54,6 +62,9 @@ func is_file_exists(file string) bool {
 
 // HTML TAGS abschliessen
 func close_htmlTags() {
+	// Listen schliessen
+	close_listTags()
+
 	if is_p {
 		site.Html += "</p>"
 		is_p = false
@@ -65,6 +76,23 @@ func close_htmlTags() {
 	if is_row {
 		site.Html += "</" + row_tag + ">"
 		is_row = false
+	}
+}
+
+// Listen Tags schliessen
+func close_listTags() {
+	// Listen Tags schliessen
+	if is_li {
+		site.Html += "</li>"
+		is_li = false
+	}
+	if is_ul {
+		site.Html += "</ul>"
+		is_ul = false
+	}
+	if is_ol {
+		site.Html += "</ol>"
+		is_ol = false
 	}
 }
 
@@ -89,6 +117,7 @@ func add_text(text string) {
 // Absatz prüfen
 func parse_p(line string) bool {
 	var text string
+
 	// wenn noch kein Absatz
 	if !is_p {
 		text = "<p>" + line
@@ -112,6 +141,9 @@ func parse_code(line string) bool {
 			text += "</code></pre>"
 			is_code = false
 		} else {
+			// Listtags bei Code schliessen
+			close_listTags()
+
 			// Code beginnen
 			if code_param != "" {
 				// code Parameter setzen
@@ -128,7 +160,8 @@ func parse_code(line string) bool {
 
 	if is_code {
 		// Zeile hinzufügen
-		site.Html += line + "<br>"
+		parse_line := strings.ReplaceAll(line, "<", "&lt;") // < HTML-TAG Zeichen müssen umgewandelt werden
+		site.Html += parse_line + "<br>"
 		return true
 	}
 
@@ -197,9 +230,9 @@ func parse_header(line string) bool {
 }
 
 // Anzahl der Leerzeichen vor einem Text
-//func countLeadingSpaces(line string) int {
-//	return len(line) - len(strings.TrimLeft(line, " "))
-//}
+func countLeadingSpaces(line string) int {
+	return len(line) - len(strings.TrimLeft(line, " "))
+}
 
 // Daten parsen
 func parse_data(line string) {
@@ -234,19 +267,22 @@ func parse_data(line string) {
 
 	// Wenn Key Value
 	if found {
+		// Tags zurücksetzen
+		is_tags = false
+
 		// je nach key
 		switch key {
 		case "template":
 			site.Template = value
-			is_tags = false
 
 		case "date":
 			site.Date = value
-			is_tags = false
 
 		case "tags":
 			site.Tags = []string{}
-			is_tags = true
+
+		case "author":
+			site.Author = value
 
 		default:
 			is_tags = false
@@ -262,15 +298,15 @@ func parse_data(line string) {
 	}
 }
 
-// Zeile prüfen
-func parse_row(line string) {
-	// Leerzeichen entfernen
-	trim_line := strings.TrimSpace(line)
-
+// auf leere Zeile Prüfen
+func parse_empty(trim_line string) bool {
 	// Wenn die Zeile leer ist
 	if trim_line == "" {
 		// ist leere Zeile
 		is_empty = true
+
+		// Listen schliessen
+		close_listTags()
 
 		// wenn zuvor eine Spaltenzeile
 		if is_colline {
@@ -287,20 +323,18 @@ func parse_row(line string) {
 		}
 
 		// rest ignorieren
-		return
+		return true
 	}
+	return false
+}
 
-	// wenn Code
-	if parse_code(line) {
-		// Abbrechen für nächste Zeile
-		return
-	}
-
+// Auf Spalten prüfen
+func parse_column(trim_line string) bool {
 	// Wenn neue Spalte
 	if strings.HasPrefix(trim_line, "---") {
 		// neue Spalte
 		is_colline = true
-		last_param = strings.Replace(trim_line, "---", "", 1)
+		last_attribute = strings.Replace(trim_line, "---", "", 1)
 
 		// alles schliessen bis auf die Row
 		if is_p {
@@ -316,6 +350,213 @@ func parse_row(line string) {
 			close_htmlTags()
 		}
 
+		return true
+	} else {
+		return false
+	}
+} // parse_column
+
+// Auf Bilder prüfen
+func parse_line_image(line string) string {
+	// Start von Bild prüfen
+	pos1 := strings.Index(line, "![")
+	if pos1 < 0 {
+		return line
+	}
+
+	// Splitt Position zwischen Tag und URL
+	pos2 := strings.Index(line, "](")
+	if pos2 < pos1 {
+		return line
+	}
+
+	// Ende Position
+	pos3 := strings.Index(line[pos2:], ")")
+	if pos3 < 0 {
+		return line
+	}
+	pos3 += pos2 // Weil Position von einem Substring
+
+	// 1. Teil vor dem Bild
+	part1 := line[:pos1]       // 1. Teil vor dem Bild
+	tag := line[pos1+2 : pos2] // Tag / Name vom Bild
+	url := line[pos2+2 : pos3] // URL vom Bild
+	part2 := line[pos3+1:]     // 2. Teil nach dem Bild
+
+	// neue Zeile zusammenbauen
+	new_line := part1 + "<img src='" + url + "' tag='" + tag + "'>" + part2
+
+	// Bild URL merken
+	site.Images = append(site.Images, url)
+
+	// auf weitere Bilder prüfen und zurückgeben
+	return parse_line_image(new_line)
+} // Parse_line_image
+
+// Auf Links prüfen
+func parse_line_link(line string) string {
+	// Start von Bild prüfen
+	pos1 := strings.Index(line, "[")
+	if pos1 < 0 {
+		return line
+	}
+
+	// Splitt Position zwischen Tag und URL
+	pos2 := strings.Index(line, "](")
+	if pos2 < pos1 {
+		return line
+	}
+
+	// Ende Position
+	pos3 := strings.Index(line[pos2:], ")")
+	if pos3 < 0 {
+		return line
+	}
+	pos3 += pos2 // Weil Position von einem Substring
+
+	// 1. Teil vor dem Link
+	part1 := line[:pos1]        // 1. Teil vor dem Link
+	text := line[pos1+1 : pos2] // Text vom Link
+	url := line[pos2+2 : pos3]  // URL vom Link
+	part2 := line[pos3+1:]      // 2. Teil nach dem Link
+
+	// Wenn kein Text
+	if text == "" {
+		text = url
+	}
+
+	// neue Zeile zusammenbauen
+	new_line := part1 + "<a href='" + url + "'>" + text + "</a>" + part2
+
+	// Link URL merken
+	site.Links = append(site.Links, url)
+
+	// auf weitere Links prüfen und zurückgeben
+	return parse_line_link(new_line)
+} // Parse_line_link
+
+// Listen Prüfen
+func parse_lists(line string) bool {
+	trim_line := strings.TrimLeft(line, " ")
+
+	// Einrückung prüfen
+	step := len(line) - len(trim_line)
+
+	// Wenn Einrückung und keine Listen
+	if step > last_list_step && !is_li {
+		// Es kann keine Liste mit Einrückung beginnen
+		close_listTags()
+		return false
+	}
+
+	text := ""
+	listTag := ""
+	is_new_item := false
+
+	// Wenn UL - Listitem
+	if strings.HasPrefix(trim_line, "- ") {
+		text = trim_line[2:]
+		listTag = "ul"
+		is_new_item = true
+	} else if strings.HasPrefix(trim_line[1:4], ". ") {
+		text = trim_line[3:]
+		listTag = "ol"
+		is_new_item = true
+	} else {
+		// wenn keine Listen abbrechen
+		if !is_ul && !is_ol {
+			close_listTags()
+			return false
+		}
+
+		text = trim_line
+	}
+
+	// nur wenn neuer Listeneitrag
+	if is_new_item {
+		// voriges List Item schliessen
+		if step == last_list_step {
+			if is_li {
+				site.Html += "</li>"
+				is_li = false
+			}
+		} else if step < last_list_step {
+			// Liste schliessen
+			close_listTags()
+
+			// Listentag lesen
+			listTag = parrent_step_tag[step]
+			if listTag == "ul" {
+				is_ul = true
+			} else if listTag == "ol" {
+				is_ol = true
+			}
+			last_list_step = step
+		} else if step > last_list_step {
+			// merken
+			if is_ul {
+				parrent_step_tag[last_list_step] = "ul"
+			} else if is_ol {
+				parrent_step_tag[last_list_step] = "ol"
+			}
+			is_ul = false
+			is_ol = false
+			last_list_step = step
+		}
+
+		// wenn noch keine Liste
+		if listTag == "ul" && !is_ul {
+			site.Html += "<ul>"
+			is_ul = true
+			is_li = false
+		} else if listTag == "ol" && !is_ol {
+			site.Html += "<ol>"
+			is_ol = true
+			is_li = false
+		}
+
+		// Listen Element hinzufügen
+		if is_li {
+			// voriges schliessen und neues anfangen
+			site.Html += "</li><li>" + text
+			is_li = true
+		} else {
+			site.Html += "<li>" + text
+			is_li = true
+		}
+	} else {
+		// kein neues element
+
+		// wenn keint ListItem offen
+		if !is_li {
+			return false
+		}
+
+		// Text hinzufügen
+		site.Html += "</br>" + text
+	} // if new_item
+
+	return true
+} // parse Lists
+
+// Zeile prüfen
+func parse_row(line string) {
+	// Leerzeichen entfernen
+	trim_line := strings.TrimSpace(line)
+
+	// Wenn die Zeile leer ist
+	if parse_empty(trim_line) {
+		return
+	}
+
+	// wenn Code
+	if parse_code(line) {
+		// Abbrechen für nächste Zeile
+		return
+	}
+
+	// Auf Spalten Beginn prüfen
+	if parse_column(trim_line) {
 		return
 	}
 
@@ -327,19 +568,32 @@ func parse_row(line string) {
 			is_row = true
 		}
 
-		site.Html += "<" + col_tag + last_param + ">"
+		site.Html += "<" + col_tag + last_attribute + ">"
 		is_col = true
 
-		last_param = ""
+		last_attribute = ""
 	}
 
-	// Keine Spaltenzeile
+	// ab hier keine Spaltenzeile
 	is_colline = false
 	is_empty = false
 
 	// wenn Header
 	if parse_header(line) {
 		// Abbrechen für nächste Zeile
+		return
+	}
+
+	// auf Bilder prüfen
+	line = parse_line_image(line)
+
+	// auf Links prüfen
+	line = parse_line_link(line)
+
+	// auf Fett / Italic prüfen
+
+	// auf Listen prüfen
+	if parse_lists(line) {
 		return
 	}
 
@@ -377,6 +631,10 @@ func Parse(fullPath string) (Site, error) {
 	is_colline = false
 	is_empty = false
 	is_first_line = true
+	is_ul = false
+	is_ol = false
+	last_list_step = 0
+	parrent_step_tag = map[int]string{}
 
 	// Seiten eigenschaften setzen
 	site.Url = fullPath
@@ -384,6 +642,8 @@ func Parse(fullPath string) (Site, error) {
 	name, _, _ := strings.Cut(filepath.Base(fullPath), ".")
 	site.Name = name
 	site.Html = ""
+	site.Images = []string{}
+	site.Links = []string{}
 
 	// Zeilenweise lesen
 	scanner := bufio.NewScanner(file)
