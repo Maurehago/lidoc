@@ -15,14 +15,15 @@ type KeyValue map[string]interface{}
 // Seite Objekt Aufbau
 type Site struct {
 	Err      string   // Bei Fehler die Fehlermeldung
-	Name     string   // Dateiname ohne Endung
+	Title    string   // Titel der Seite
+	Name     string   // Dateiname
 	Date     string   // Datum und Uhrzeit für Sortierung in Listen
 	Author   string   // Autor des Dokumentes
 	Url      string   // Pfad und Dateiname
 	Path     string   // Pfad / Ordner in dem sich die Seite befindet (ohne Dateiname)
 	Template string   // Template welches für die Anzeige der Seite verwendet wird
 	Tags     []string // Schlüsselwörter um die Seite bei einer Suche zu finden
-	Html     string   // HTML Sourcecode für die Seite
+	Content  string   // HTML Sourcecode für die Seite
 	Images   []string // Liste Mit Bildern
 	Links    []string // Liste mit Links
 }
@@ -66,15 +67,15 @@ func close_htmlTags() {
 	close_listTags()
 
 	if is_p {
-		site.Html += "</p>"
+		site.Content += "</p>"
 		is_p = false
 	}
 	if is_col {
-		site.Html += "</" + col_tag + ">"
+		site.Content += "</" + col_tag + ">"
 		is_col = false
 	}
 	if is_row {
-		site.Html += "</" + row_tag + ">"
+		site.Content += "</" + row_tag + ">"
 		is_row = false
 	}
 }
@@ -83,15 +84,15 @@ func close_htmlTags() {
 func close_listTags() {
 	// Listen Tags schliessen
 	if is_li {
-		site.Html += "</li>"
+		site.Content += "</li>"
 		is_li = false
 	}
 	if is_ul {
-		site.Html += "</ul>"
+		site.Content += "</ul>"
 		is_ul = false
 	}
 	if is_ol {
-		site.Html += "</ol>"
+		site.Content += "</ol>"
 		is_ol = false
 	}
 }
@@ -101,16 +102,16 @@ func add_text(text string) {
 	// HTML Zeile hinzufügen
 	if !is_row {
 		// wenn noch keine Zeile
-		site.Html += "<" + row_tag + ">" + "<" + col_tag + ">" + text
+		site.Content += "<" + row_tag + ">" + "<" + col_tag + ">" + text
 		is_row = true
 		is_col = true
 	} else if !is_col {
 		// Wenn noch keine Spalte
-		site.Html += "<" + col_tag + ">" + text
+		site.Content += "<" + col_tag + ">" + text
 		is_col = true
 	} else {
 		// nur Text hinzufügen
-		site.Html += text
+		site.Content += text
 	}
 }
 
@@ -161,7 +162,7 @@ func parse_code(line string) bool {
 	if is_code {
 		// Zeile hinzufügen
 		parse_line := strings.ReplaceAll(line, "<", "&lt;") // < HTML-TAG Zeichen müssen umgewandelt werden
-		site.Html += parse_line + "<br>"
+		site.Content += parse_line + "<br>"
 		return true
 	}
 
@@ -218,7 +219,7 @@ func parse_header(line string) bool {
 
 	// Wenn noch Absatz offen
 	if is_p {
-		site.Html += "</p>"
+		site.Content += "</p>"
 		is_p = false
 	}
 
@@ -230,9 +231,9 @@ func parse_header(line string) bool {
 }
 
 // Anzahl der Leerzeichen vor einem Text
-func countLeadingSpaces(line string) int {
-	return len(line) - len(strings.TrimLeft(line, " "))
-}
+//func countLeadingSpaces(line string) int {
+//	return len(line) - len(strings.TrimLeft(line, " "))
+//}
 
 // Daten parsen
 func parse_data(line string) {
@@ -274,6 +275,9 @@ func parse_data(line string) {
 		switch key {
 		case "template":
 			site.Template = value
+
+		case "title":
+			site.Title = value
 
 		case "date":
 			site.Date = value
@@ -318,7 +322,7 @@ func parse_empty(trim_line string) bool {
 		// Wenn Absatz
 		if is_p {
 			// Absatz schliessen
-			site.Html += "</p>"
+			site.Content += "</p>"
 			is_p = false
 		}
 
@@ -338,11 +342,11 @@ func parse_column(trim_line string) bool {
 
 		// alles schliessen bis auf die Row
 		if is_p {
-			site.Html += "</p>"
+			site.Content += "</p>"
 			is_p = false
 		}
 		if is_col {
-			site.Html += "</" + col_tag + ">"
+			site.Content += "</" + col_tag + ">"
 			is_col = false
 		}
 
@@ -477,7 +481,7 @@ func parse_lists(line string) bool {
 		// voriges List Item schliessen
 		if step == last_list_step {
 			if is_li {
-				site.Html += "</li>"
+				site.Content += "</li>"
 				is_li = false
 			}
 		} else if step < last_list_step {
@@ -506,11 +510,11 @@ func parse_lists(line string) bool {
 
 		// wenn noch keine Liste
 		if listTag == "ul" && !is_ul {
-			site.Html += "<ul>"
+			site.Content += "<ul>"
 			is_ul = true
 			is_li = false
 		} else if listTag == "ol" && !is_ol {
-			site.Html += "<ol>"
+			site.Content += "<ol>"
 			is_ol = true
 			is_li = false
 		}
@@ -518,10 +522,10 @@ func parse_lists(line string) bool {
 		// Listen Element hinzufügen
 		if is_li {
 			// voriges schliessen und neues anfangen
-			site.Html += "</li><li>" + text
+			site.Content += "</li><li>" + text
 			is_li = true
 		} else {
-			site.Html += "<li>" + text
+			site.Content += "<li>" + text
 			is_li = true
 		}
 	} else {
@@ -533,7 +537,7 @@ func parse_lists(line string) bool {
 		}
 
 		// Text hinzufügen
-		site.Html += "</br>" + text
+		site.Content += "</br>" + text
 	} // if new_item
 
 	return true
@@ -564,11 +568,11 @@ func parse_row(line string) {
 	if is_colline {
 		// neue Spalte
 		if !is_row {
-			site.Html += "<" + row_tag + ">"
+			site.Content += "<" + row_tag + ">"
 			is_row = true
 		}
 
-		site.Html += "<" + col_tag + last_attribute + ">"
+		site.Content += "<" + col_tag + last_attribute + ">"
 		is_col = true
 
 		last_attribute = ""
@@ -640,8 +644,9 @@ func Parse(fullPath string) (Site, error) {
 	site.Url = fullPath
 	site.Path = filepath.Dir(fullPath)
 	name, _, _ := strings.Cut(filepath.Base(fullPath), ".")
+	site.Title = ""
 	site.Name = name
-	site.Html = ""
+	site.Content = ""
 	site.Images = []string{}
 	site.Links = []string{}
 

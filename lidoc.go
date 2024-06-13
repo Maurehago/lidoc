@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -34,6 +35,11 @@ func is_file_exists(file string) bool {
 	return false
 }
 
+// Keine HTML Escapen für Templates
+func noescape(s string) template.HTML {
+	return template.HTML(s)
+}
+
 // Datei Handler
 func handleFile(w http.ResponseWriter, r *http.Request) {
 	// nur GET Requests erlaubt
@@ -58,24 +64,37 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 		// prüfen ob ein Datei mit markdown existiert
 		mdFile := strings.Replace(file, ".html", ".md", 1)
 
-		// Hier Marrkdown parsen und zurückgeben
-		site, err := parsemd.Parse(mdFile)
-		if err == nil {
-			// Template lesen
-			if site.Template != "" {
-				// todo: Template laden
-			} else {
-				// todo: standard Template
-			}
-			if site.Html != "" {
-				// todo: Siten HTML ins Template einfügen
-
-				w.Header().Add("Content-Type", "text/html")
-				_, err := fmt.Fprintf(w, site.Html)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
+		if is_file_exists(mdFile) {
+			// Hier Marrkdown parsen und zurückgeben
+			site, err := parsemd.Parse(mdFile)
+			if err == nil {
+				// Template lesen
+				templFile := site.Template
+				if templFile != "" {
+					// Standard Template
+					templFile = "_template.html"
 				}
-				return
+
+				// Template parsen
+				templ, err := template.New(templFile).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
+				if err != nil {
+					fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
+
+					if site.Content != "" {
+						w.Header().Add("Content-Type", "text/html")
+						_, err := fmt.Fprintf(w, site.Content)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
+						}
+						return
+					}
+				} else {
+					err = templ.Execute(w, site)
+					if err != nil {
+						fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
+					}
+					return
+				}
 			}
 		}
 	} // else if filetype == ".lidoc" {
@@ -94,7 +113,7 @@ func main() {
 	flag.Parse()
 
 	// Handler
-	go http.Handle("/", http.HandlerFunc(handleFile))
+	go http.HandleFunc("/", handleFile)
 
 	//Create the server.
 	serverURL := Host + ":" + port
