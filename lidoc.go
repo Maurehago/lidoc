@@ -70,7 +70,7 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 			if err == nil {
 				// Template lesen
 				templFile := site.Template
-				if templFile != "" {
+				if templFile == "" {
 					// Standard Template
 					templFile = "_template.html"
 				}
