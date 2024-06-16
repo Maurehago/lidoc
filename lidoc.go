@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -23,6 +24,7 @@ const (
 )
 
 var port string
+var fileList []string
 
 // Datei Vorhanden prüfen
 func is_file_exists(file string) bool {
@@ -38,6 +40,95 @@ func is_file_exists(file string) bool {
 // Keine HTML Escapen für Templates
 func noescape(s string) template.HTML {
 	return template.HTML(s)
+}
+
+// Datei Prüfung
+func buildFile(path string, info fs.DirEntry, err error) error {
+	// Verzeichnisse werden nicht berücksichtigt
+	if info.IsDir() {
+		return nil
+	}
+
+	fileName := info.Name()
+	dir := filepath.Dir(path)
+	ext := filepath.Ext(path)
+
+	// Alle Dateien oder Ordner mit "_" werden ignoriert
+	if strings.HasPrefix(fileName, "_") {
+		return nil
+	}
+
+	// Wenn Markdown
+	if ext == ".md" {
+		// Parsen
+		site, err := parsemd.Parse(path)
+		if err != nil {
+			fmt.Println(site, err)
+		}
+
+		htmlName := strings.Replace(fileName, ".md", ".html", 1)
+		htmlPath := filepath.Join(dir, htmlName)
+
+		// Template lesen
+		templFile := ""
+		templName := ""
+
+		if site.Template != "" {
+			// Nur Datei Name nehmen sonnst kommt ein Fehler beim Parsen
+			templFile = site.Template
+			templName = filepath.Base(site.Template)
+		} else {
+			// Standard Template
+			templFile = "_template.html"
+			templName = "_template.html"
+		}
+
+		// Template parsen
+		templ, err := template.New(templName).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		// Datei erstellen
+		var file *os.File
+		file, err = os.Create(htmlPath)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		err = templ.Execute(file, site)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		fileList = append(fileList, htmlPath)
+	} else {
+		fileList = append(fileList, path)
+	}
+	return nil
+}
+
+// Alle Dateien und Ordner in durchgehen
+func build() {
+	homePath, err := os.Getwd()
+	fmt.Println("Path:", homePath)
+	if err != nil {
+		fmt.Println(homePath, err)
+		return
+	}
+
+	fileList = make([]string, 0)
+
+	// Alle Dateien durchgehen
+	err = filepath.WalkDir(homePath, buildFile)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(fileList)
 }
 
 // Datei Handler
@@ -69,14 +160,23 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 			site, err := parsemd.Parse(mdFile)
 			if err == nil {
 				// Template lesen
-				templFile := site.Template
-				if templFile == "" {
+				templFile := ""
+				templName := ""
+				if site.Template != "" {
+					// Nur Datei Name nehmen sonnst kommt ein Fehler beim Parsen
+					templName = filepath.Base(site.Template)
+					templFile = site.Template
+				} else {
 					// Standard Template
 					templFile = "_template.html"
+					templName = "_template.html"
 				}
 
+				// zum Test
+				fmt.Println("Site:", site)
+
 				// Template parsen
-				templ, err := template.New(templFile).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
+				templ, err := template.New(templName).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
 				if err != nil {
 					fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
 
@@ -105,6 +205,15 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, file)
 }
 
+// HTML Dateien erzeugen
+func buildFiles(w http.ResponseWriter, r *http.Request) {
+	build()
+	_, err := fmt.Fprintf(w, "Dateien erstellt")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
+	}
+}
+
 // Start Funktion
 func main() {
 	// Parameter prüfen
@@ -113,6 +222,7 @@ func main() {
 	flag.Parse()
 
 	// Handler
+	go http.HandleFunc("/build", buildFiles)
 	go http.HandleFunc("/", handleFile)
 
 	//Create the server.

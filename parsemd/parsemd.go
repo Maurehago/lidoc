@@ -289,6 +289,7 @@ func parse_data(line string) {
 
 		case "tags":
 			site.Tags = []string{}
+			is_tags = true
 
 		case "author":
 			site.Author = value
