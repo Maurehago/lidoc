@@ -233,9 +233,13 @@ func main() {
 	fmt.Println("stop with CTRL+C")
 	fmt.Println("...")
 
+	// Server starten
 	err := http.ListenAndServe(serverURL, nil)
 	if err != nil {
 		log.Fatal("Error Starting the HTTP Server :", err)
 		return
 	}
+
+	// Build beim Start
+	go build()
 }

@@ -469,7 +469,7 @@ func parse_lists(line string) bool {
 		text = trim_line[2:]
 		listTag = "ul"
 		is_new_item = true
-	} else if strings.HasPrefix(trim_line[1:4], ". ") {
+	} else if strings.Index(trim_line, ".") == 2 {
 		text = trim_line[3:]
 		listTag = "ol"
 		is_new_item = true
