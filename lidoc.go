@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"html/template"
@@ -42,6 +43,40 @@ func noescape(s string) template.HTML {
 	return template.HTML(s)
 }
 
+// Template auflösen
+func parseSite(site parsemd.Site) (bytes.Buffer, error) {
+	var doc bytes.Buffer
+
+	// Template lesen
+	templFile := ""
+	templName := ""
+
+	if site.Template != "" {
+		// Nur Datei Name nehmen sonnst kommt ein Fehler beim Parsen
+		templFile = site.Template
+		templName = filepath.Base(site.Template)
+	} else {
+		// Standard Template
+		templFile = "_template.html"
+		templName = "_template.html"
+	}
+
+	// Template parsen
+	templ, err := template.New(templName).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
+	if err != nil {
+		fmt.Println(err)
+		return doc, err
+	}
+
+	err = templ.Execute(&doc, site)
+	if err != nil {
+		fmt.Println(err)
+		return doc, err
+	}
+
+	return doc, nil
+}
+
 // Datei Prüfung
 func buildFile(path string, info fs.DirEntry, err error) error {
 	// Verzeichnisse werden nicht berücksichtigt
@@ -69,39 +104,26 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		htmlName := strings.Replace(fileName, ".md", ".html", 1)
 		htmlPath := filepath.Join(dir, htmlName)
 
-		// Template lesen
-		templFile := ""
-		templName := ""
-
-		if site.Template != "" {
-			// Nur Datei Name nehmen sonnst kommt ein Fehler beim Parsen
-			templFile = site.Template
-			templName = filepath.Base(site.Template)
-		} else {
-			// Standard Template
-			templFile = "_template.html"
-			templName = "_template.html"
-		}
-
 		// Template parsen
-		templ, err := template.New(templName).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
+		doc, err := parseSite(site)
 		if err != nil {
 			fmt.Println(err)
 			return err
 		}
 
 		// Datei erstellen
-		var file *os.File
-		file, err = os.Create(htmlPath)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-		err = templ.Execute(file, site)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
+		os.WriteFile(htmlPath, doc.Bytes(), 0777)
+		// var file *os.File
+		// file, err = os.Create(htmlPath)
+		// if err != nil {
+		// 	fmt.Println(err)
+		// 	return err
+		// }
+		// err = templ.Execute(file, site)
+		// if err != nil {
+		// 	fmt.Println(err)
+		// 	return err
+		// }
 
 		fileList = append(fileList, htmlPath)
 	} else {
@@ -158,44 +180,66 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 		if is_file_exists(mdFile) {
 			// Hier Marrkdown parsen und zurückgeben
 			site, err := parsemd.Parse(mdFile)
-			if err == nil {
-				// Template lesen
-				templFile := ""
-				templName := ""
-				if site.Template != "" {
-					// Nur Datei Name nehmen sonnst kommt ein Fehler beim Parsen
-					templName = filepath.Base(site.Template)
-					templFile = site.Template
-				} else {
-					// Standard Template
-					templFile = "_template.html"
-					templName = "_template.html"
-				}
-
-				// zum Test
-				fmt.Println("Site:", site)
-
-				// Template parsen
-				templ, err := template.New(templName).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
-				if err != nil {
-					fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
-
-					if site.Content != "" {
-						w.Header().Add("Content-Type", "text/html")
-						_, err := fmt.Fprintf(w, site.Content)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
-						}
-						return
-					}
-				} else {
-					err = templ.Execute(w, site)
-					if err != nil {
-						fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
-					}
-					return
-				}
+			if err != nil {
+				// Fehler
+				fmt.Println("ERROR parsing site:", site, err)
+				return
 			}
+
+			// Seite mit Template auflösen
+			doc, err := parseSite(site)
+			if err != nil {
+				// Fehler
+				fmt.Println("ERROR templating site:", site, err)
+				return
+			}
+
+			// Seite turücksenden
+			_, err = fmt.Fprintf(w, doc.String())
+			if err != nil {
+				// Fehler
+				fmt.Println("ERROR sending back:", err)
+			}
+			return
+
+			// if err == nil {
+			// 	// Template lesen
+			// 	templFile := ""
+			// 	templName := ""
+			// 	if site.Template != "" {
+			// 		// Nur Datei Name nehmen sonnst kommt ein Fehler beim Parsen
+			// 		templName = filepath.Base(site.Template)
+			// 		templFile = site.Template
+			// 	} else {
+			// 		// Standard Template
+			// 		templFile = "_template.html"
+			// 		templName = "_template.html"
+			// 	}
+
+			// 	// zum Test
+			// 	fmt.Println("Site:", site)
+
+			// 	// Template parsen
+			// 	templ, err := template.New(templName).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
+			// 	if err != nil {
+			// 		fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
+
+			// 		if site.Content != "" {
+			// 			w.Header().Add("Content-Type", "text/html")
+			// 			_, err := fmt.Fprintf(w, site.Content)
+			// 			if err != nil {
+			// 				fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
+			// 			}
+			// 			return
+			// 		}
+			// 	} else {
+			// 		err = templ.Execute(w, site)
+			// 		if err != nil {
+			// 			fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
+			// 		}
+			// 		return
+			// 	}
+			// }
 		}
 	} // else if filetype == ".lidoc" {
 	// hier Liste Parsen und zurückgeben

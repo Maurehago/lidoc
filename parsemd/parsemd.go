@@ -69,7 +69,7 @@ func add_content(text string) {
 // HTML TAGS abschliessen
 func close_htmlTags() {
 	// Listen schliessen
-	close_listTags()
+	close_listTags(true)
 
 	if is_p {
 		add_content("</p>")
@@ -86,7 +86,7 @@ func close_htmlTags() {
 }
 
 // Listen Tags schliessen
-func close_listTags() {
+func close_listTags(all bool) {
 	// Listen Tags schliessen
 	if is_li {
 		add_content("</li>")
@@ -100,6 +100,20 @@ func close_listTags() {
 		add_content("</ol>")
 		is_ol = false
 	}
+
+	if all {
+		for last_list_step > 0 {
+			last_list_step -= 1
+
+			// Listentag lesen
+			listTag := parrent_step_tag[last_list_step]
+			if listTag == "ul" {
+				add_content("</ul>")
+			} else if listTag == "ol" {
+				add_content("</ol>")
+			}
+		} // for alle Einrückungen
+	} // wenn alle Einrückungen schliessen
 }
 
 // Text hinzufügen
@@ -148,7 +162,7 @@ func parse_code(line string) bool {
 			is_code = false
 		} else {
 			// Listtags bei Code schliessen
-			close_listTags()
+			close_listTags(true)
 
 			// Code beginnen
 			if code_param != "" {
@@ -312,11 +326,8 @@ func parse_data(line string) {
 func parse_empty(trim_line string) bool {
 	// Wenn die Zeile leer ist
 	if trim_line == "" {
-		// ist leere Zeile
-		is_empty = true
-
 		// Listen schliessen
-		close_listTags()
+		close_listTags(true)
 
 		// wenn zuvor eine Spaltenzeile
 		if is_colline {
@@ -331,6 +342,16 @@ func parse_empty(trim_line string) bool {
 			add_content("</p>")
 			is_p = false
 		}
+
+		// wenn zuvor schon eine Leerzeile
+		// das ist die 2. Leerzeile
+		// dann alle HTML-Tags schliessen
+		if is_empty {
+			close_htmlTags()
+		}
+
+		// ist leere Zeile
+		is_empty = true
 
 		// rest ignorieren
 		return true
@@ -347,7 +368,7 @@ func parse_column(trim_line string) bool {
 		last_attribute = strings.Replace(trim_line, "---", "", 1)
 
 		// alles schliessen bis auf die Row
-		close_listTags()
+		close_listTags(true)
 		if is_p {
 			add_content("</p>")
 			is_p = false
@@ -456,7 +477,7 @@ func parse_lists(line string) bool {
 	// Wenn Einrückung und keine Listen
 	if step > last_list_step && !is_li {
 		// Es kann keine Liste mit Einrückung beginnen
-		close_listTags()
+		close_listTags(true)
 		return false
 	}
 
@@ -469,14 +490,14 @@ func parse_lists(line string) bool {
 		text = trim_line[2:]
 		listTag = "ul"
 		is_new_item = true
-	} else if strings.Index(trim_line, ".") == 2 {
-		text = trim_line[3:]
+	} else if i := strings.Index(trim_line, ". "); i >= 1 && i <= 3 {
+		text = trim_line[i+2:]
 		listTag = "ol"
 		is_new_item = true
 	} else {
 		// wenn keine Listen abbrechen
 		if !is_ul && !is_ol {
-			close_listTags()
+			close_listTags(true)
 			return false
 		}
 
@@ -493,7 +514,7 @@ func parse_lists(line string) bool {
 			}
 		} else if step < last_list_step {
 			// Liste schliessen
-			close_listTags()
+			close_listTags(false)
 
 			// Listentag lesen
 			listTag = parrent_step_tag[step]
