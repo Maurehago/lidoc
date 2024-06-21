@@ -3,6 +3,7 @@ package infolist
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -16,12 +17,91 @@ type Fields []string
 //	InfoList
 //
 // -----------
+
+// Als JSON
+// {
+// 	"liste1": {
+// 	  "Name": "liste1"
+// 	  , "Fields": ["feld1", "feld2", "feld3", "feld4"]
+// 	  , "Types" : ["bool", "int", "num", "str"]
+// 	  , "Prop": {
+// 		"supa": "Wert von Supa"
+// 	  }
+// 	  , "Data": {
+// 		"id1": [true, 32, 64.5, "1. Text"]
+// 		, "id2": [true, 16, 112.3, "2. Text\nund Text in 2. Zeile"]
+// 		, "id7": [true, 22, null, "3. Text mit excaped \" "]
+// 		, "5": [false, null, 42.42, "Text 2"]
+// 	  }
+// 	}
+// 	, "liste2": {
+
+// 	}
+// }
+
 type InfoList struct {
 	Name   string                   // Name der Liste
 	Prop   map[string]interface{}   // Zusätzliche Eigenschaften der Liste
 	Fields []string                 // FeldNamen von Data
 	Types  []string                 // FeldTypen von Data
 	Data   map[string][]interface{} // Daten der Liste
+}
+
+// Slice an Daten holen - Datensatz Array
+func (il InfoList) Get(id string) Record {
+	return il.Data[id]
+}
+
+// Index einer Spalte holen
+func (il InfoList) GetIndex(field string) int {
+	return slices.Index(il.Fields, field)
+}
+
+// Wert einer Spalte holen
+func (il InfoList) GetValue(id string, field string) any {
+	index := slices.Index(il.Fields, field)
+	if index >= 0 {
+		return il.Data[id][index]
+	} else {
+		return nil
+	}
+}
+
+// Mehrere Daten lesen
+func (il InfoList) GetValues(id string, fields []string) []any {
+	data := make([]any, len(fields))
+	fieldNames := il.Fields
+	dataList := il.Data[id]
+
+	// Alle Felder durchgehen
+	for i, name := range fields {
+		// index der Spalte
+		index := slices.Index(fieldNames, name)
+
+		if index >= 0 {
+			data[i] = dataList[index]
+		} else {
+			data[i] = nil
+		}
+	}
+	return data
+}
+
+// Wert einer Spalte setzen
+func (il InfoList) SetValue(id string, field string, value any) {
+	index := slices.Index(il.Fields, field)
+
+	if index >= 0 {
+		fieldType := il.Types[index]
+
+		// Wert setzen
+		switch fieldType {
+		case "int", "num", "bool":
+			il.Data[id][index] = value
+		default:
+			il.Data[id][index] = fmt.Sprintf("%v", value)
+		}
+	}
 }
 
 // =============================
@@ -45,7 +125,7 @@ func (ils ILists) Marshal() ([]byte, error) {
 
 		// Restliche Eigenschaften
 		for k, v := range il.Prop {
-			data += k + "↔" + fmt.Sprintf("%s▲", v)
+			data += k + "↔" + fmt.Sprintf("%v▲", v)
 		}
 
 		// Daten hinzufügen
@@ -55,9 +135,9 @@ func (ils ILists) Marshal() ([]byte, error) {
 			data += k + "↔"
 			for i, d := range v {
 				if i > 0 {
-					data += fmt.Sprintf("▼%s", d)
+					data += fmt.Sprintf("▼%v", d)
 				} else {
-					data += fmt.Sprintf("%s", d)
+					data += fmt.Sprintf("%v", d)
 				}
 			}
 			data += "▲"
@@ -121,34 +201,10 @@ func (ils ILists) Unmarshal(data []byte) error {
 					case "bool":
 						f[i], err = strconv.ParseBool(item)
 
-					case "int8":
-						f[i], err = strconv.ParseInt(item, 10, 8)
+					case "int":
+						f[i], err = strconv.Atoi(item)
 
-					case "int16":
-						f[i], err = strconv.ParseInt(item, 10, 16)
-
-					case "int32":
-						f[i], err = strconv.ParseInt(item, 10, 32)
-
-					case "int64":
-						f[i], err = strconv.ParseInt(item, 10, 64)
-
-					case "uint8":
-						f[i], err = strconv.ParseUint(item, 10, 8)
-
-					case "uint16":
-						f[i], err = strconv.ParseUint(item, 10, 16)
-
-					case "uint32":
-						f[i], err = strconv.ParseUint(item, 10, 32)
-
-					case "uint64":
-						f[i], err = strconv.ParseUint(item, 10, 64)
-
-					case "num32":
-						f[i], err = strconv.ParseFloat(item, 32)
-
-					case "num64":
+					case "num":
 						f[i], err = strconv.ParseFloat(item, 64)
 
 					default:
