@@ -1,11 +1,10 @@
 package infolist
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
-	"strings"
 )
 
 // Daten haben immer eine GSID und eine Liste von Werten
@@ -47,17 +46,31 @@ type InfoList struct {
 	Data   map[string][]interface{} // Daten der Liste
 }
 
-// Slice an Daten holen - Datensatz Array
+// Diese Funktion liefert ein Array/Slice für einen Datensatz zurück
+// die Feldnamen und die Reihenfolge der Daten bestimmt die "Fields" Eigenschaft von der InfoList
 func (il InfoList) Get(id string) Record {
 	return il.Data[id]
 }
 
-// Index einer Spalte holen
+// Liefert auf Grund des angegebenen Feldnamen(field)
+// die Position/Index der Spalte in der InfoList zurück
 func (il InfoList) GetIndex(field string) int {
 	return slices.Index(il.Fields, field)
 }
 
-// Wert einer Spalte holen
+// Liefert eine Liste an Positionen/Indexes der angegebenen Spaltennamen(fields) zurück.
+func (il InfoList) GetIndexes(fields []string) []int {
+	indexes := make([]int, len(fields))
+	fieldList := il.Fields
+
+	for i, v := range fields {
+		indexes[i] = slices.Index(fieldList, v)
+	}
+
+	return indexes
+}
+
+// Liest den Wert einer Spalte(field) vom angegebenen Datensatz(id) aus.
 func (il InfoList) GetValue(id string, field string) any {
 	index := slices.Index(il.Fields, field)
 	if index >= 0 {
@@ -67,7 +80,7 @@ func (il InfoList) GetValue(id string, field string) any {
 	}
 }
 
-// Mehrere Daten lesen
+// Gibt ein Array/Slice an Werten für die Spalten(fields) eines Datensatzes(id) zurück.
 func (il InfoList) GetValues(id string, fields []string) []any {
 	data := make([]any, len(fields))
 	fieldNames := il.Fields
@@ -87,7 +100,7 @@ func (il InfoList) GetValues(id string, fields []string) []any {
 	return data
 }
 
-// Wert einer Spalte setzen
+// Setzt den Wert(value) einer Spalte(field) im Datensatz(id)
 func (il InfoList) SetValue(id string, field string, value any) {
 	index := slices.Index(il.Fields, field)
 
@@ -109,126 +122,18 @@ func (il InfoList) SetValue(id string, field string, value any) {
 //	Liste von InfoListen
 //
 // -----------------------
-type ILists map[string]InfoList
 
-// Marshal
+type ILists map[string]InfoList // InfoList Auflistung
+
+// liefert einen JsonBlob([]byte) von der InfoList Auflistung zurück.
+// Für Datenübertragung und zum Speichern in eine Datei.
 func (ils ILists) Marshal() ([]byte, error) {
-	var data string
-
-	addList := func(il InfoList) {
-		// Beginn der Liste
-		data += "===↔" + il.Name + "▲"
-
-		// Feldnamen und Typen
-		data += "fields↔" + strings.Join(il.Fields, "▼") + "▲"
-		data += "types↔" + strings.Join(il.Types, "▼") + "▲"
-
-		// Restliche Eigenschaften
-		for k, v := range il.Prop {
-			data += k + "↔" + fmt.Sprintf("%v▲", v)
-		}
-
-		// Daten hinzufügen
-		data += "---▲"
-
-		for k, v := range il.Data {
-			data += k + "↔"
-			for i, d := range v {
-				if i > 0 {
-					data += fmt.Sprintf("▼%v", d)
-				} else {
-					data += fmt.Sprintf("%v", d)
-				}
-			}
-			data += "▲"
-		}
-	}
-
-	for _, il := range ils {
-		addList(il)
-	}
-
-	return []byte(data), nil
+	return json.Marshal(ils)
 } // Marshal
 
-// UnMarshal
+// Liest einen JsonBlob([]byte) in die InfoList Auflistung ein
 func (ils ILists) Unmarshal(data []byte) error {
-	// in einen String umwandeln
-	text := string(data)
-
-	// in Zeilen aufsplitten
-	lines := strings.Split(text, "▲")
-
-	// Speicher für neue Liste
-	var infolist InfoList
-	var isProp bool
-	var err error
-
-	// Alle Zeilen durchgehen
-	for _, line := range lines {
-		// in ID und Daten aufsplitten
-		id, dataLine, found := strings.Cut(line, "↔")
-		if found {
-			// Wenn ID == "===" dann ist es der Listenname
-			if id == "===" {
-				// neue Info list
-				infolist = InfoList{}
-				infolist.Name = dataLine
-				ils[dataLine] = infolist
-				isProp = true
-			} else if isProp {
-				// Fenn felder
-				if id == "fields" {
-					infolist.Fields = strings.Split(dataLine, "▼")
-				} else if id == "types" {
-					infolist.Types = strings.Split(dataLine, "▼")
-				} else if strings.Contains(dataLine, "▼") {
-					// in ein Slice auftrennen
-					infolist.Prop[id] = strings.Split(dataLine, "▼")
-				} else {
-					// Einfache Eigenschaft
-					infolist.Prop[id] = dataLine
-				}
-			} else {
-				// ab Hier sind Daten
-				items := strings.Split(dataLine, "▼")
-				l := len(items)
-				f := make([]interface{}, l)
-				types := infolist.Types
-
-				for i, item := range items {
-					switch types[i] {
-					case "bool":
-						f[i], err = strconv.ParseBool(item)
-
-					case "int":
-						f[i], err = strconv.Atoi(item)
-
-					case "num":
-						f[i], err = strconv.ParseFloat(item, 64)
-
-					default:
-						f[i] = item
-					} // switch
-
-					// bei Fehler Abbrechen
-					if err != nil {
-						return err
-					}
-				} // for Items
-
-				// Zu Daten hinzufügen
-				infolist.Data[id] = f
-			}
-		} else {
-			// keine richtige Datenzeile
-			if id == "---" {
-				isProp = false
-			}
-		} // Wenn Key Value Zeile
-	} // For alle Zeilen
-
-	return nil
+	return json.Unmarshal(data, &ils)
 } // unmarshal
 
 func test() {
