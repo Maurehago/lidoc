@@ -1,5 +1,10 @@
 // Infoliste
 
+// Global Short Identifier
+export function GSID () {
+    return new Date().getTime().toString(36) + crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+}
+
 export class InfoList {
     // Construktion
     constructor(name) {
@@ -17,7 +22,14 @@ export class InfoList {
     // Diese Funktion liefert ein Array/Slice für einen Datensatz zurück
     // die Feldnamen und die Reihenfolge der Daten bestimmt die "Fields" Eigenschaft von der InfoList
     Get(id) {
-        return this.Data[id];
+        return this.Data.get(id);
+    }
+
+    // Setzt einen Datensatz(data) mit der id in der Liste
+    // Wenn vorhanden wird der Datensatz komplett überschrieben.
+    Set(id, data) {
+        // todo: Prüfen auf Array und die richtigen Datentypen
+        this.Data.set(id, data);
     }
 
     // Liefert auf Grund des angegebenen Feldnamen(field)
@@ -35,7 +47,7 @@ export class InfoList {
         let indexes = [];
         let fieldList = this.Fields;
 
-        fieldList.forEach((i,v) => {
+        fieldList.forEach((v,i) => {
             indexes[i] = fieldList.indexOf(v);
         })
 
@@ -46,7 +58,7 @@ export class InfoList {
     GetValue(id, field) {
         let index = this.Fields.indexOf(field);
         if (index >= 0) {
-            return this.Data[id][index];
+            return this.Data.get(id)[index];
         } else {
             return null;
         }
@@ -56,12 +68,15 @@ export class InfoList {
     GetValues(id, fields) {
         let data = [];
         let fieldNames = this.Fields;
-        let dataList = this.Data[id];
+        let dataList = this.Data.get(id);
 
         // Alle Felder durchgehen
-        fields.forEach((i, name) => {
+        fields.forEach((name, i) => {
             // index der Spalte
             let index = fieldNames.indexOf(name);
+
+            // Testen
+            // console.log("name, index: ", name, index);
 
             if (index >= 0) {
                 data[i] = dataList[index];
@@ -78,15 +93,20 @@ export class InfoList {
 
         if (index >= 0) {
             let fieldType = this.Types[index];
+            let dataList = this.Data.get(id);
+            if (!dataList) {
+                dataList = [];
+                this.set(id, dataList);
+            }
 
             // Wert setzen
             switch (fieldType) {
             case "int", "num", "bool":
-                this.Data[id][index] = value;
+                dataList[index] = value;
                 break;
 
             default:
-                this.Data[id][index] = "" + value;
+                dataList[index] = "" + value;
             }
         }
     }
@@ -98,20 +118,57 @@ export class ILists extends Map {
         super();
     }
 
-    // liefert einen JsonBlob([]byte) von der InfoList Auflistung zurück.
+    // liefert einen JSON-String von der InfoList Auflistung zurück.
     // Für Datenübertragung und zum Speichern in eine Datei.
     Marshal() {
-        // todo in JSON Strin umwandeln
+        // in JSON String umwandeln
+        let obj = {};
 
-        return "";
+        // Alle Listen durchgehen
+        this.forEach((value, key) => {
+            // Value ist InfoList
+            if (value instanceof InfoList) {
+                let il = {};
+                il.Name = value.Name;         // Name der Liste
+                il.Prop = Object.fromEntries(value.Prop);  // Zusätzliche Eigenschaften der Liste
+                il.Fields = value.Fields;       // FeldNamen von Data
+                il.Types = value.Types;        // FeldTypen von Data
+                il.Data = Object.fromEntries(value.Data);   // Daten der Liste
+                obj[key] = il;
+            }
+        }) // forEach Infolist
+
+        return JSON.stringify(obj);
     } // Marshal
 
     // Liest einen JsonBlob([]byte) in die InfoList Auflistung ein
-    Unmarshal(data) {
+    Unmarshal(listString, removeAll) {
         // todo: data(JSONstring) in Objekte umwandeln
-        
-        // nur infolist Prop und Data
-        let myObject = new Map(Object.entries(raw_data));
+        if (typeof listString != "string") {
+            return;
+        }
+
+        if (removeAll) {
+            this.clear()
+        }
+
+        // String in Javascript Objekt
+        const obj = JSON.parse(listString);
+
+        // Alle Listen durchgehen
+        Object.entries(obj).forEach(([key, value]) => {
+            // Infoliste 
+            let il = new InfoList(key);
+            Object.assign(il, value);
+
+            // nur infolist Prop und Data
+            //let myObject = new Map(Object.entries(raw_data));
+            il.Prop = new Map(Object.entries(il.Prop));
+            il.Data = new Map(Object.entries(il.Data));
+
+            this.set(key, il);
+        });
+
         return "";
     } // unmarshal
 } // class IList

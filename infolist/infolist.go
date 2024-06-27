@@ -1,10 +1,16 @@
 package infolist
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/big"
 	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
+	"time"
 )
 
 // Daten haben immer eine GSID und eine Liste von Werten
@@ -40,6 +46,7 @@ type Fields []string
 
 type InfoList struct {
 	Name   string                   // Name der Liste
+	Path   string                   // Pfad der Liste im Dateisystem
 	Prop   map[string]interface{}   // Zusätzliche Eigenschaften der Liste
 	Fields []string                 // FeldNamen von Data
 	Types  []string                 // FeldTypen von Data
@@ -50,6 +57,13 @@ type InfoList struct {
 // die Feldnamen und die Reihenfolge der Daten bestimmt die "Fields" Eigenschaft von der InfoList
 func (il InfoList) Get(id string) Record {
 	return il.Data[id]
+}
+
+// Setzt einen Datensatz(data) mit der id in der Liste
+// Wenn vorhanden wird der Datensatz komplett überschrieben.
+func (il InfoList) Set(id string, data Record) {
+	// todo: Prüfen auf Array und die richtigen Datentypen
+	il.Data[id] = data
 }
 
 // Liefert auf Grund des angegebenen Feldnamen(field)
@@ -117,6 +131,132 @@ func (il InfoList) SetValue(id string, field string, value any) {
 	}
 }
 
+// liefert einen JsonBlob([]byte) von der InfoList Auflistung zurück.
+// Für Datenübertragung und zum Speichern in eine Datei.
+func (il InfoList) Marshal() ([]byte, error) {
+	return json.Marshal(il)
+} // Marshal
+
+// Liest einen JsonBlob([]byte) in die InfoList Auflistung ein
+func (il InfoList) Unmarshal(data []byte) error {
+	return json.Unmarshal(data, &il)
+} // unmarshal
+
+// von Speicher laden -> in Adresse von Infolist
+func (il *InfoList) Load(listBasePath string) error {
+	// Prüfen auf Name und Pfad
+	if il.Name == "" {
+		return errors.New("no 'Name' in List")
+	}
+	if il.Path == "" {
+		return errors.New("no 'Path' in List")
+	}
+
+	// Pfad im Homedir suchen
+	if listBasePath == "" {
+		basePath, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		listBasePath = basePath
+	}
+	listPath := filepath.Join(listBasePath, "ilist", il.Path, il.Name+".json")
+
+	// laden
+	data, err := os.ReadFile(listPath)
+	if err != nil {
+		return err
+	}
+
+	//err = il.Unmarshal(data)
+	err = json.Unmarshal(data, &il)
+	if err != nil {
+		return err
+	}
+
+	// Prüfen ob vorhanden
+	return nil
+} // Load
+
+// von Speicher laden -> in Adresse von Infolist
+func (il *InfoList) LoadFrom(listBasePath string, path string, name string) error {
+	// Prüfen auf Name und Pfad
+	if name == "" {
+		return errors.New("no 'Name' in List")
+	}
+	if path == "" {
+		return errors.New("no 'Path' in List")
+	}
+
+	il.Name = name
+	il.Path = path
+
+	// Pfad im Homedir suchen
+	if listBasePath == "" {
+		basePath, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		listBasePath = basePath
+	}
+	listPath := filepath.Join(listBasePath, "ilist", il.Path, il.Name+".json")
+
+	// laden
+	data, err := os.ReadFile(listPath)
+	if err != nil {
+		return err
+	}
+
+	//err = il.Unmarshal(data)
+	err = json.Unmarshal(data, &il)
+	if err != nil {
+		return err
+	}
+
+	// Prüfen ob vorhanden
+	return nil
+} // Load
+
+// in Speicher schreiben
+func (il InfoList) Save(listBasePath string) error {
+	// Prüfen auf Name und Pfad
+	if il.Name == "" {
+		return errors.New("no 'Name' in List")
+	}
+	if il.Path == "" {
+		return errors.New("no 'Path' in List")
+	}
+
+	// Pfad im Homedir erstellen
+	if listBasePath == "" {
+		basePath, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		listBasePath = basePath
+	}
+	listPath := filepath.Join(listBasePath, "ilist", il.Path)
+	if _, err := os.Stat(listPath); os.IsNotExist(err) {
+		os.MkdirAll(listPath, 0700) // Create your file
+	}
+	listFile := filepath.Join(listPath, il.Name+".json")
+
+	// Daten
+	data, err := il.Marshal()
+	if err != nil {
+		return err
+	}
+
+	// Speichern
+	err = os.WriteFile(listFile, data, 0777)
+	if err != nil {
+		return err
+	}
+
+	// Prüfen ob vorhanden
+	return nil
+} // Save
+
 // =============================
 //
 //	Liste von InfoListen
@@ -152,4 +292,23 @@ func test() {
 	//test2 := Data{x["fields"]}
 	//name := slices.Index(test2, "name")
 	//fmt.Println(x["fields"], test2[name])
+}
+
+// GSID Erstellen
+func GSID() string {
+	// Time
+	t := time.Now()
+	unixTime := t.UnixMilli()
+	timestring := strconv.FormatInt(unixTime, 36)
+
+	// Random
+	r, err := rand.Int(rand.Reader, big.NewInt(10000000000))
+	if err != nil {
+		fmt.Println("error:", err)
+		return err.Error()
+	}
+	randstring := strconv.FormatInt(r.Int64(), 36)
+
+	// Time + Random
+	return timestring + randstring
 }

@@ -14,18 +14,18 @@ type KeyValue map[string]interface{}
 
 // Seite Objekt Aufbau
 type Site struct {
-	Err      string   // Bei Fehler die Fehlermeldung
+	Err      string   // Bei Fehler die Fehlermeldung (wird beim Parsen generiert)
 	Title    string   // Titel der Seite
-	Name     string   // Dateiname
+	Name     string   // Dateiname (wird beim Parsen generiert)
 	Date     string   // Datum und Uhrzeit für Sortierung in Listen
 	Author   string   // Autor des Dokumentes
-	Url      string   // Pfad und Dateiname
-	Path     string   // Pfad / Ordner in dem sich die Seite befindet (ohne Dateiname)
+	Url      string   // Pfad und Dateiname (wird beim Parsen generiert)
+	Path     string   // Pfad / Ordner in dem sich die Seite befindet (ohne Dateiname) (wird beim Parsen generiert)
 	Template string   // Template welches für die Anzeige der Seite verwendet wird
 	Tags     []string // Schlüsselwörter um die Seite bei einer Suche zu finden
-	Content  string   // HTML Sourcecode für die Seite
-	Images   []string // Liste Mit Bildern
-	Links    []string // Liste mit Links
+	Content  string   // HTML Sourcecode für die Seite (wird beim Parsen generiert)
+	Images   []string // Liste Mit Bildern(URL) (wird beim Parsen generiert)
+	Links    []string // Liste mit Links(URL) (wird beim Parsen generiert)
 }
 
 // Variablen zum prüfen
