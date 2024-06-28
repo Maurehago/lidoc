@@ -28,6 +28,12 @@ type Site struct {
 	Links    []string // Liste mit Links(URL) (wird beim Parsen generiert)
 }
 
+// Tabellen
+type table struct {
+	titles []string
+	fields []string
+}
+
 // Variablen zum prüfen
 var row_tag string = "f-row"
 var col_tag string = "f-item"
@@ -41,6 +47,11 @@ var is_colline bool
 var is_empty bool
 var is_p bool
 var is_code bool
+
+var is_table bool
+var tHead string
+var colgroup string
+
 var is_ul bool                      // Einfache Liste
 var is_ol bool                      // Sortierte Liste
 var is_li bool                      // Listen Element
@@ -64,6 +75,19 @@ func is_file_exists(file string) bool {
 // Content hinzufügen
 func add_content(text string) {
 	site.Content += text
+}
+
+// Tabellen Daten hinzufügen
+func add_tableData() {
+	if !is_table {
+		return
+	}
+
+	// Spaltengruppe hinzufügen
+	add_content("<colgroup>" + colgroup + "</colgroup>")
+
+	// Head hinzufügen
+	add_content("<thead><tr>" + tHead + "</tr></thead>")
 }
 
 // HTML TAGS abschliessen
@@ -343,6 +367,14 @@ func parse_empty(trim_line string) bool {
 			is_p = false
 		}
 
+		// Wenn Tabelle
+		if is_table {
+			// Tabellen Kopf setzen
+			add_tableData()
+			add_content("</table>")
+			is_table = false
+		}
+
 		// wenn zuvor schon eine Leerzeile
 		// das ist die 2. Leerzeile
 		// dann alle HTML-Tags schliessen
@@ -571,6 +603,42 @@ func parse_lists(line string) bool {
 	return true
 } // parse Lists
 
+// Parse Tabellen
+func parse_table(line string) bool {
+	// ||pfad-listenname
+	// - FeldName1 Überschrift1
+	// - FeldName2 Überschrift2
+	// - FeldName3 Überschrift3
+
+	if !is_table && strings.HasPrefix(line, "||") {
+		// Tabelle start
+		listName := line[2:]
+		add_content("<table id='" + listName + "'>")
+		tHead = ""
+		colgroup = ""
+		is_table = true
+		return true
+	}
+	if !is_table {
+		return false
+	}
+
+	// Spalten lesen
+	if strings.HasPrefix(line, "- ") {
+		fieldName, title, ok := strings.Cut(line[2:], " ")
+		if ok {
+			colgroup += "<col name='" + fieldName + "'/>"
+			tHead += "<th>" + title + "</th>"
+		} else {
+			colgroup += "<col name='" + fieldName + "'/>"
+			tHead += "<th>" + fieldName + "</th>"
+		}
+	} else {
+		return false
+	}
+	return true
+} // parse_table
+
 // Zeile prüfen
 func parse_row(line string) {
 	// Leerzeichen entfernen
@@ -622,6 +690,11 @@ func parse_row(line string) {
 	// auf Links prüfen
 	line = parse_line_link(line)
 
+	// auf Tabellen prüfen
+	if parse_table(line) {
+		return
+	}
+
 	// auf Fett / Italic prüfen
 
 	// auf Listen prüfen
@@ -665,6 +738,7 @@ func Parse(fullPath string) (Site, error) {
 	is_first_line = true
 	is_ul = false
 	is_ol = false
+	is_table = false
 	last_list_step = 0
 	parrent_step_tag = map[int]string{}
 
