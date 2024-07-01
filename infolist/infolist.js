@@ -9,6 +9,7 @@ export class InfoList {
     // Construktion
     constructor(name) {
         this.Name = "";         // Name der Liste
+        this.Path = "";         // Pfad / Gruppe
         this.Prop = new Map();  // Zusätzliche Eigenschaften der Liste
         this.Fields = [];       // FeldNamen von Data
         this.Types = [];        // FeldTypen von Data
@@ -114,17 +115,23 @@ export class InfoList {
         }
     } // setValue
 
-    // Sortierten Index 
+    // Sortierter Index 
     getSortIndex(fields) {
         // Alle Keys von der map
         let dataIndex = Array.from(Map.keys());
-        let fieldIndex = this.getIndexes(fields);
+        let fieldIndex = [];
+
+        if (Array.isArray(fields)) {
+            fieldIndex = this.getIndexes(fields);
+        } else if (typeof fields === "string" && fields != "") {
+            fieldIndex = [this.getIndex(fields)];
+        } else {
+            // Aktuellen nicht sortierten Index zurückgeben
+            return dataIndex;
+        }
         
         // Sortieren
         dataIndex.sort((a,b) =>{
-            let valueA = "";
-            let valueB = "";
-
             let dataA = this.Data.get(a);
             let dataB = this.Data.get(b);
 
