@@ -170,7 +170,7 @@ export class InfoList {
         return dataIndex;
     } // getSortIndex
 
-    // Tabelleen Daten lesen
+    // Tabellen Daten lesen
     getTableDataHTML(fields, index) {
         let fieldList = this.Fields;
         let fieldIndex = [];
@@ -248,6 +248,96 @@ export class InfoList {
 
         return "";
     } // parse
+
+    // Daten von einem Server laden
+    async fetch(path, listName) {
+        if (!path) {
+            path = this.Path;
+        }
+        if (!listName) {
+            listName = this.Name;
+        }
+
+        if (!path || !listName) {
+            return;
+        }
+
+        let url = "";
+
+        path = path.replace("\\", "/");
+        if (path.endsWith("/")) {
+            url = "/ilist/" + path + listName + ".json";
+        } else {
+            url = "/ilist/" + path + "/" + listName + ".json";
+        }
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error("Response Status: " + response.status);
+            }
+
+            // Json lesen
+            const obj = await response.json();
+
+            // Infoliste 
+            Object.assign(this, obj);
+
+            // nur infolist Prop und Data
+            //let myObject = new Map(Object.entries(raw_data));
+            if (this.Prop) {
+                this.Prop = new Map(Object.entries(this.Prop));
+            } else {
+                this.Prop = new Map();
+            }
+            if (this.Data) {
+                this.Data = new Map(Object.entries(this.Data));
+            } else {
+                this.Data = new Map();
+            }
+
+            return;
+        } catch (error) {
+            console.error(error.message);
+        }
+    } // fetch
+
+    // Liste senden
+    async send(path, listName) {
+        if (!path) {
+            path = this.Path;
+        }
+        if (!listName) {
+            listName = this.Name;
+        }
+
+        if (!path || !listName) {
+            return;
+        }
+
+        let url = "";
+
+        path = path.replace("\\", "/");
+        if (path.endsWith("/")) {
+            url = "/ilist/" + path + listName + ".json";
+        } else {
+            url = "/ilist/" + path + "/" + listName + ".json";
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: "POST"
+                , body: this.stringify()
+            });
+            if (!response.ok) {
+                throw new Error("Response Status: " + response.status);
+            }
+
+            return;
+        } catch (error) {
+            console.error(error.message);
+        }
+    } // send
 } // Class InfoList
 
 // Map von Infolisten
@@ -311,3 +401,45 @@ export class ILists extends Map {
     } // unmarshal
 } // class IList
 
+
+// Funktion die alle Tabellen mit Daten füllt
+export function checkTables() {
+    // Alle Tabellen lesen
+    let tables = document.querySelectorAll("table[data-ilist]");
+    
+    // alle Tabellen durchgehen
+    tables.forEach((tableElm) => {
+        let tbodyElm = tableElm.querySelector("tbody");
+        tbodyElm.innerHTML = "";
+
+        // Infolist Information lesen
+        let iListInfo = tableElm.dataset.ilist.split("_"); // iListInfo[0] = Path / iListInfo [1] = Name
+
+        // infoList erzeugen
+        let iList = new InfoList();
+        if (iListInfo.length == 1) {
+            iList.Name = iListInfo[0];
+        } else {
+            iList.Path = iListInfo[0];
+            iList.Name = iListInfo[1];
+        }
+
+        // Alle Kopfspalten
+        let fields = [];
+        let heads = tableElm.querySelectorAll("[data-col]");
+        heads.forEach((headElm) => {
+            // Feldnamen einfügen
+            fields.push(headElm.dataset.col);
+        }) // forEach Head Element
+
+        // Infolist Daten holen
+        iList.fetch().then(() => {
+            // test:
+            console.log("infoList:", iList);
+
+            // HTML Daten von Liste erzeugen und anzeigen
+            let innerHTML = iList.getTableDataHTML(fields);
+            tbodyElm.insertAdjacentHTML("afterbegin", innerHTML);
+        })
+    }) // forEach Table Element
+} // checkTables

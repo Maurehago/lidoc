@@ -371,7 +371,7 @@ func parse_empty(trim_line string) bool {
 		if is_table {
 			// Tabellen Kopf setzen
 			add_tableData()
-			add_content("</table>")
+			add_content("<tbody></tbody></table>")
 			is_table = false
 		}
 
@@ -613,7 +613,7 @@ func parse_table(line string) bool {
 	if !is_table && strings.HasPrefix(line, "||") {
 		// Tabelle start
 		listName := line[2:]
-		add_content("<table id='" + listName + "'>")
+		add_content("<table data-ilist='" + listName + "'>")
 		tHead = ""
 		colgroup = ""
 		is_table = true
@@ -628,10 +628,10 @@ func parse_table(line string) bool {
 		fieldName, title, ok := strings.Cut(line[2:], " ")
 		if ok {
 			colgroup += "<col name='" + fieldName + "'/>"
-			tHead += "<th>" + title + "</th>"
+			tHead += "<th data-col='" + fieldName + "'>" + title + "</th>"
 		} else {
 			colgroup += "<col name='" + fieldName + "'/>"
-			tHead += "<th>" + fieldName + "</th>"
+			tHead += "<th data-col='" + fieldName + "'>" + fieldName + "</th>"
 		}
 	} else {
 		return false
