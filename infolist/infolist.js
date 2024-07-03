@@ -190,7 +190,11 @@ export class InfoList {
 
             // Feldindex durchgehen
             fieldIndex.forEach((index) => {
-                dataString += '<td>' + data[index] + '</td>';
+                let content = data[index];
+                if (typeof content === "string") {
+                    content = content.replaceAll("\n", "</br>");
+                }
+                dataString += '<td>' + content + '</td>';
             })
 
             // Ende Datenzeile
@@ -403,6 +407,11 @@ export class ILists extends Map {
 
 
 // Funktion die alle Tabellen mit Daten füllt
+// tabelle muss ein "data-ilist" Attribut haben, welches den Pfad und Unterstrich getrennt den Namen der Liste angibt
+// z.B.: <table data-ilist="test_liste1">
+// für die Anzuzeigenden Spalten muss die Tabelle Spalten (th oder td) mit dem Attribut "data-col" haben, welches den Spaltennamen angibt
+// z.B.: <tr><th data-col="feld1">Test 1</th><th data-col="feld2">Test 2</th></tr>
+// im <tbody> der Tabelle, werden dann die Daten als HTML eingefügt.
 export function checkTables() {
     // Alle Tabellen lesen
     let tables = document.querySelectorAll("table[data-ilist]");
@@ -435,7 +444,7 @@ export function checkTables() {
         // Infolist Daten holen
         iList.fetch().then(() => {
             // test:
-            console.log("infoList:", iList);
+            // console.log("infoList:", iList);
 
             // HTML Daten von Liste erzeugen und anzeigen
             let innerHTML = iList.getTableDataHTML(fields);
