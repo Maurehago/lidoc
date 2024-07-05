@@ -26,6 +26,12 @@ export class InfoList {
         return this.Data.get(id);
     }
 
+    // Diese Funktion liefert den Datensatz als Objekt zurück
+    getAsObject(id) {
+        
+    }
+
+
     // Setzt einen Datensatz(data) mit der id in der Liste
     // Wenn vorhanden wird der Datensatz komplett überschrieben.
     set(id, data) {
@@ -169,6 +175,20 @@ export class InfoList {
 
         return dataIndex;
     } // getSortIndex
+
+
+    // Index Filtern
+    // Wert == 5 / Wert >= 5 / Wert > 2 && < 7 
+    // Wert: && == 5
+    // Wert: && >= 5
+    // Wert: && > 2 && < 7
+    // Wert: && in [1, 3, 5]
+    // Name == Max || Name like Muster%
+    // Name: && == Max || like Muster%
+    getFilterIndex(filter) {
+        let filterIndex = [];
+    }
+
 
     // Tabellen Daten lesen
     getTableDataHTML(fields, index) {
