@@ -89,22 +89,27 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 	ext := filepath.Ext(path)
 
 	// Alle Dateien oder Ordner mit "_" werden ignoriert
-	if strings.HasPrefix(fileName, "_") {
+	if strings.HasPrefix(fileName, "_") || strings.Contains(dir, ".") {
 		return nil
 	}
 
 	// Wenn Markdown
 	if ext == ".md" {
 		// Parsen
+		fmt.Println("path:", path)
+
 		site, err := parsemd.Parse(path)
 		if err != nil {
 			fmt.Println(site, err)
+			return err
 		}
 
 		htmlName := strings.Replace(fileName, ".md", ".html", 1)
 		htmlPath := filepath.Join(dir, htmlName)
 
 		// Template parsen
+		fmt.Println("site:", site)
+
 		doc, err := parseSite(site)
 		if err != nil {
 			fmt.Println(err)
@@ -150,7 +155,7 @@ func build() {
 		return
 	}
 
-	fmt.Println(fileList)
+	// fmt.Println(fileList)
 }
 
 // Datei Handler
@@ -160,90 +165,76 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Markdown Datei
+	var mdFile string
+
 	// Pfad aus URL
 	relFile := r.URL.Path
-	// wenn keine Datei -> Index.html
-	if strings.HasSuffix(relFile, "/") {
-		relFile += "index.html"
-	}
 
-	file := Static + relFile
-	fmt.Println("file: " + file)
+	file := filepath.Join(Static, relFile)
 
 	// Datei Erweiterung prüfen
 	filetype := filepath.Ext(file)
 
-	if filetype == ".html" {
-		// prüfen ob ein Datei mit markdown existiert
-		mdFile := strings.Replace(file, ".html", ".md", 1)
+	// prüfen
+	fInfo, err := os.Stat(file)
+	if os.IsNotExist(err) {
+		// Console Log
+		fmt.Println("no exist: " + file)
 
-		if is_file_exists(mdFile) {
-			// Hier Marrkdown parsen und zurückgeben
-			site, err := parsemd.Parse(mdFile)
-			if err != nil {
-				// Fehler
-				fmt.Println("ERROR parsing site:", site, err)
-				return
-			}
-
-			// Seite mit Template auflösen
-			doc, err := parseSite(site)
-			if err != nil {
-				// Fehler
-				fmt.Println("ERROR templating site:", site, err)
-				return
-			}
-
-			// Seite turücksenden
-			_, err = fmt.Fprintf(w, doc.String())
-			if err != nil {
-				// Fehler
-				fmt.Println("ERROR sending back:", err)
-			}
-			return
-
-			// if err == nil {
-			// 	// Template lesen
-			// 	templFile := ""
-			// 	templName := ""
-			// 	if site.Template != "" {
-			// 		// Nur Datei Name nehmen sonnst kommt ein Fehler beim Parsen
-			// 		templName = filepath.Base(site.Template)
-			// 		templFile = site.Template
-			// 	} else {
-			// 		// Standard Template
-			// 		templFile = "_template.html"
-			// 		templName = "_template.html"
-			// 	}
-
-			// 	// zum Test
-			// 	fmt.Println("Site:", site)
-
-			// 	// Template parsen
-			// 	templ, err := template.New(templName).Funcs(template.FuncMap{"noescape": noescape}).ParseFiles(templFile)
-			// 	if err != nil {
-			// 		fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
-
-			// 		if site.Content != "" {
-			// 			w.Header().Add("Content-Type", "text/html")
-			// 			_, err := fmt.Fprintf(w, site.Content)
-			// 			if err != nil {
-			// 				fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
-			// 			}
-			// 			return
-			// 		}
-			// 	} else {
-			// 		err = templ.Execute(w, site)
-			// 		if err != nil {
-			// 			fmt.Println("ERROR: Template: " + templFile + " " + err.Error())
-			// 		}
-			// 		return
-			// 	}
-			// }
+		if filetype == "" {
+			file += ".md"
+			mdFile = file
+			filetype = ".md"
+		} else if filetype == ".html" {
+			file = strings.Replace(file, ".html", ".md", 1)
+			mdFile = file
 		}
-	} // else if filetype == ".lidoc" {
-	// hier Liste Parsen und zurückgeben
-	// }
+		fInfo, err = os.Stat(file)
+	}
+	if err != nil {
+		// Fehler
+		fmt.Println("File Error:", err)
+		return
+	} else if filetype == ".html" {
+		// Html Datei existiert
+		mdFile = strings.Replace(file, ".html", ".md", 1)
+	}
+
+	// Wenn Directory
+	if fInfo.IsDir() {
+		mdFile = filepath.Join(file, "index.md")
+		file = filepath.Join(file, "index.html")
+	}
+
+	// Console Log
+	fmt.Println("file: "+file, mdFile)
+
+	if is_file_exists(mdFile) {
+		// Hier Marrkdown parsen und zurückgeben
+		site, err := parsemd.Parse(mdFile)
+		if err != nil {
+			// Fehler
+			fmt.Println("ERROR parsing site:", site, err)
+			return
+		}
+
+		// Seite mit Template auflösen
+		doc, err := parseSite(site)
+		if err != nil {
+			// Fehler
+			fmt.Println("ERROR templating site:", site, err)
+			return
+		}
+
+		// Seite turücksenden
+		_, err = fmt.Fprint(w, doc.String())
+		if err != nil {
+			// Fehler
+			fmt.Println("ERROR sending back:", err)
+		}
+		return
+	}
 
 	// nur die Datei ausliefern
 	http.ServeFile(w, r, file)

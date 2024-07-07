@@ -28,8 +28,18 @@ export class InfoList {
 
     // Diese Funktion liefert den Datensatz als Objekt zurück
     getAsObject(id) {
-        
-    }
+        const obj = {};
+        const fields = this.Fields;
+        const data = this.Data.get(id);
+
+        // Alle Felder durchgehen
+        fields.forEach((name, index) => {
+            obj[name] = data[index];
+        })
+
+        // Objekt zurückgeben
+        return obj;
+    } // getAsObject
 
 
     // Setzt einen Datensatz(data) mit der id in der Liste
@@ -51,8 +61,8 @@ export class InfoList {
             return [];
         }
 
-        let indexes = [];
-        let fieldList = this.Fields;
+        const indexes = [];
+        const fieldList = this.Fields;
 
         fieldList.forEach((v,i) => {
             if (v.indexOf(" ") >= 0) {
@@ -66,7 +76,7 @@ export class InfoList {
 
     // Liest den Wert einer Spalte(field) vom angegebenen Datensatz(id) aus.
     getValue(id, field) {
-        let index = this.Fields.indexOf(field);
+        const index = this.Fields.indexOf(field);
         if (index >= 0) {
             return this.Data.get(id)[index];
         } else {
@@ -76,14 +86,14 @@ export class InfoList {
 
     // Gibt ein Array/Slice an Werten für die Spalten(fields) eines Datensatzes(id) zurück.
     getValues(id, fields) {
-        let data = [];
-        let fieldNames = this.Fields;
-        let dataList = this.Data.get(id);
+        const data = [];
+        const fieldNames = this.Fields;
+        const dataList = this.Data.get(id);
 
         // Alle Felder durchgehen
         fields.forEach((name, i) => {
             // index der Spalte
-            let index = fieldNames.indexOf(name);
+            const index = fieldNames.indexOf(name);
 
             // Testen
             // console.log("name, index: ", name, index);
@@ -99,10 +109,10 @@ export class InfoList {
 
     // Setzt den Wert(value) einer Spalte(field) im Datensatz(id)
     setValue(id, field, value) {
-        let index = this.Fields.indexOf(field);
+        const index = this.Fields.indexOf(field);
 
         if (index >= 0) {
-            let fieldType = this.Types[index];
+            const fieldType = this.Types[index];
             let dataList = this.Data.get(id);
             if (!dataList) {
                 dataList = [];
@@ -124,7 +134,7 @@ export class InfoList {
     // Sortierter Index 
     getSortIndex(fields) {
         // Alle Keys von der map
-        let dataIndex = Array.from(Map.keys());
+        const dataIndex = Array.from(Map.keys());
         let fieldIndex = [];
 
         if (Array.isArray(fields)) {
@@ -138,14 +148,14 @@ export class InfoList {
         
         // Sortieren
         dataIndex.sort((a,b) =>{
-            let dataA = this.Data.get(a);
-            let dataB = this.Data.get(b);
+            const dataA = this.Data.get(a);
+            const dataB = this.Data.get(b);
 
             let sort = 0;
 
             // Prüfen
             fieldIndex.some((d, i) =>{
-                let fieldName = fields[i];
+                const fieldName = fields[i];
 
                 // Wenn Absteigend
                 if (fieldName.endsWith(" DESC")) {
@@ -178,22 +188,37 @@ export class InfoList {
 
 
     // Index Filtern
-    // Wert == 5 / Wert >= 5 / Wert > 2 && < 7 
-    // Wert: && == 5
-    // Wert: && >= 5
-    // Wert: && > 2 && < 7
-    // Wert: && in [1, 3, 5]
-    // Name == Max || Name like Muster%
-    // Name: && == Max || like Muster%
-    getFilterIndex(filter) {
-        let filterIndex = [];
-    }
+    // eine Funktion die True oder False zurückliefert mit übergeben
+    getFilterIndex(filterFunc, ...params) {
+        const filterIndex = [];
+        if (typeof filterFunc !== "function") {
+            return filterIndex;
+        }
+
+        const fields = this.Fields;
+
+        // Alle Daten durchgehen
+        this.Data.forEach((data, id) =>{
+            const obj = {};
+    
+            // Alle Felder durchgehen
+            fields.forEach((name, index) => {
+                obj[name] = data[index];
+            })
+    
+            if (filterFunc(obj, ...params)) {
+                filterIndex.push(id);
+            }
+        })
+
+        return filterIndex;
+    } // get FilterIndex
 
 
     // Tabellen Daten lesen
     getTableDataHTML(fields, index) {
-        let fieldList = this.Fields;
-        let fieldIndex = [];
+        const fieldList = this.Fields;
+        const fieldIndex = [];
         let tableDataString = ""
 
         // Feldindexes lesen
@@ -227,7 +252,7 @@ export class InfoList {
         if (index) {
             // Alle Daten nach Index durchgehen
             index.forEach((value) => {
-                let data = this.Data.get(value);
+                const data = this.Data.get(value);
                 tableDataString += dataToString(data, value);
             })
         } else {
@@ -243,7 +268,7 @@ export class InfoList {
     // Infoliste in einen String umwandeln
     stringify() {
         // in JSON String umwandeln
-        let il = {};
+        const il = {};
         il.Name = this.Name;         // Name der Liste
         il.Prop = Object.fromEntries(this.Prop);  // Zusätzliche Eigenschaften der Liste
         il.Fields = this.Fields;       // FeldNamen von Data
@@ -374,13 +399,13 @@ export class ILists extends Map {
     // Für Datenübertragung und zum Speichern in eine Datei.
     Marshal() {
         // in JSON String umwandeln
-        let obj = {};
+        const obj = {};
 
         // Alle Listen durchgehen
         this.forEach((value, key) => {
             // Value ist InfoList
             if (value instanceof InfoList) {
-                let il = {};
+                const il = {};
                 il.Name = value.Name;         // Name der Liste
                 il.Prop = Object.fromEntries(value.Prop);  // Zusätzliche Eigenschaften der Liste
                 il.Fields = value.Fields;       // FeldNamen von Data
@@ -410,7 +435,7 @@ export class ILists extends Map {
         // Alle Listen durchgehen
         Object.entries(obj).forEach(([key, value]) => {
             // Infoliste 
-            let il = new InfoList(key);
+            const il = new InfoList(key);
             Object.assign(il, value);
 
             // nur infolist Prop und Data
@@ -434,18 +459,18 @@ export class ILists extends Map {
 // im <tbody> der Tabelle, werden dann die Daten als HTML eingefügt.
 export function checkTables() {
     // Alle Tabellen lesen
-    let tables = document.querySelectorAll("table[data-ilist]");
+    const tables = document.querySelectorAll("table[data-ilist]");
     
     // alle Tabellen durchgehen
     tables.forEach((tableElm) => {
-        let tbodyElm = tableElm.querySelector("tbody");
+        const tbodyElm = tableElm.querySelector("tbody");
         tbodyElm.innerHTML = "";
 
         // Infolist Information lesen
-        let iListInfo = tableElm.dataset.ilist.split("_"); // iListInfo[0] = Path / iListInfo [1] = Name
+        const iListInfo = tableElm.dataset.ilist.split("_"); // iListInfo[0] = Path / iListInfo [1] = Name
 
         // infoList erzeugen
-        let iList = new InfoList();
+        const iList = new InfoList();
         if (iListInfo.length == 1) {
             iList.Name = iListInfo[0];
         } else {
@@ -454,8 +479,8 @@ export function checkTables() {
         }
 
         // Alle Kopfspalten
-        let fields = [];
-        let heads = tableElm.querySelectorAll("[data-col]");
+        const fields = [];
+        const heads = tableElm.querySelectorAll("[data-col]");
         heads.forEach((headElm) => {
             // Feldnamen einfügen
             fields.push(headElm.dataset.col);
@@ -467,7 +492,7 @@ export function checkTables() {
             // console.log("infoList:", iList);
 
             // HTML Daten von Liste erzeugen und anzeigen
-            let innerHTML = iList.getTableDataHTML(fields);
+            const innerHTML = iList.getTableDataHTML(fields);
             tbodyElm.insertAdjacentHTML("afterbegin", innerHTML);
         })
     }) // forEach Table Element
