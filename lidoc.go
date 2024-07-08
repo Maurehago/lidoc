@@ -110,7 +110,8 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		// Template parsen
 		fmt.Println("site:", site)
 
-		doc, err := parseSite(site)
+		var doc bytes.Buffer
+		doc, err = parseSite(site)
 		if err != nil {
 			fmt.Println(err)
 			return err
@@ -156,6 +157,9 @@ func build() {
 	}
 
 	// fmt.Println(fileList)
+
+	// Garbage Collector anstoßen
+	runtime.GC()
 }
 
 // Datei Handler
@@ -208,16 +212,22 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Console Log
-	fmt.Println("file: "+file, mdFile)
+	// fmt.Println("file: "+file, mdFile)
 
 	if is_file_exists(mdFile) {
 		// Hier Marrkdown parsen und zurückgeben
+
+		// Console Log
+		fmt.Println("parse:", mdFile)
+
 		site, err := parsemd.Parse(mdFile)
 		if err != nil {
 			// Fehler
 			fmt.Println("ERROR parsing site:", site, err)
 			return
 		}
+
+		fmt.Println("Site after Parsing:", site)
 
 		// Seite mit Template auflösen
 		doc, err := parseSite(site)

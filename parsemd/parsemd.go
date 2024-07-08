@@ -1,7 +1,6 @@
 package parsemd
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -720,13 +719,15 @@ func Parse(fullPath string) (Site, error) {
 	}
 
 	// Datei öffnen
-	file, err := os.Open(fullPath)
+	file, err := os.ReadFile(fullPath)
+
+	// file, err := os.Open(fullPath)
 	if err != nil {
 		fmt.Println("Fehler beim Öffnen der Datei:", err)
 		site.Err = err.Error()
 		return site, err
 	}
-	defer file.Close()
+	// defer file.Close()
 
 	// zurücksetzen
 	is_row = false
@@ -752,32 +753,47 @@ func Parse(fullPath string) (Site, error) {
 	site.Images = []string{}
 	site.Links = []string{}
 
+	// test:
+	// fmt.Println("VOR - site.Content:", site.Content)
+
 	// Zeilenweise lesen
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		//fmt.Println("Zeile:", line)
+	//scanner := bufio.NewScanner(file)
+	//scanner.Split(bufio.ScanLines)
+
+	fileString := string(file)
+	lines := strings.Split(fileString, "\n")
+
+	//for scanner.Scan() {
+	for _, line := range lines {
+		//line := scanner.Text()
+		// fmt.Println("Zeile:", line)
 
 		// wenn erste Zeile Daten
 		if is_first_line && line == "---" {
 			is_data = true
+			//fmt.Println("first:", line)
 		} else if is_data {
 			// Daten prüfen
 			parse_data(line)
+			//fmt.Println("data:", line)
 		} else {
 			// Zeile Parsen
 			parse_row(line)
+			//fmt.Println("row:", line)
 		}
 		is_first_line = false
 	}
 
-	if err := scanner.Err(); err != nil {
-		fmt.Println("Fehler beim Lesen der Datei:", err)
-		return site, err
-	}
+	//if err := scanner.Err(); err != nil {
+	//	fmt.Println("Fehler beim Lesen der Datei:", err)
+	//	return site, err
+	//}
 
 	// Abschliessen
 	close_htmlTags()
+
+	// test:
+	// fmt.Println("Nach - site.Content:", site.Content)
 
 	return site, nil
 } // Parse
