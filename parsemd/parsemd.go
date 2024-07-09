@@ -74,6 +74,8 @@ func is_file_exists(file string) bool {
 // Content hinzufügen
 func add_content(text string) {
 	site.Content += text
+
+	print("add_content:", text)
 }
 
 // Tabellen Daten hinzufügen
@@ -714,6 +716,9 @@ func Parse(fullPath string) (Site, error) {
 	site = Site{}
 
 	// prüfen ob vorhanden
+	if !strings.HasSuffix(fullPath, ".md") {
+		return site, errors.New("File" + fullPath + " not .md!")
+	}
 	if !is_file_exists(fullPath) {
 		return site, errors.New("File" + fullPath + " not found!")
 	}

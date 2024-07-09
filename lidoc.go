@@ -44,7 +44,7 @@ func noescape(s string) template.HTML {
 }
 
 // Template auflösen
-func parseSite(site parsemd.Site) (bytes.Buffer, error) {
+func parseSite(site *parsemd.Site) (bytes.Buffer, error) {
 	var doc bytes.Buffer
 
 	// Template lesen
@@ -96,8 +96,9 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 	// Wenn Markdown
 	if ext == ".md" {
 		// Parsen
-		fmt.Println("path:", path)
+		// fmt.Println("path:", path)
 
+		// var site parsemd.Site
 		site, err := parsemd.Parse(path)
 		if err != nil {
 			fmt.Println(site, err)
@@ -108,10 +109,10 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		htmlPath := filepath.Join(dir, htmlName)
 
 		// Template parsen
-		fmt.Println("site:", site)
+		// fmt.Println("site:", site)
 
 		var doc bytes.Buffer
-		doc, err = parseSite(site)
+		doc, err = parseSite(&site)
 		if err != nil {
 			fmt.Println(err)
 			return err
@@ -218,19 +219,20 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 		// Hier Marrkdown parsen und zurückgeben
 
 		// Console Log
-		fmt.Println("parse:", mdFile)
+		// fmt.Println("parse:", mdFile)
 
-		site, err := parsemd.Parse(mdFile)
+		var site parsemd.Site
+		site, err = parsemd.Parse(mdFile)
 		if err != nil {
 			// Fehler
 			fmt.Println("ERROR parsing site:", site, err)
 			return
 		}
 
-		fmt.Println("Site after Parsing:", site)
+		// fmt.Println("Site after Parsing:", site)
 
 		// Seite mit Template auflösen
-		doc, err := parseSite(site)
+		doc, err := parseSite(&site)
 		if err != nil {
 			// Fehler
 			fmt.Println("ERROR templating site:", site, err)
@@ -266,8 +268,11 @@ func main() {
 	flag.StringVar(&port, "p", Port, "Server Port")
 	flag.Parse()
 
+	// Build beim Start
+	build()
+
 	// Handler
-	go http.HandleFunc("/build", buildFiles)
+	http.HandleFunc("/build", buildFiles)
 	go http.HandleFunc("/", handleFile)
 
 	//Create the server.
@@ -284,6 +289,4 @@ func main() {
 		log.Fatal("Error Starting the HTTP Server :", err)
 		return
 	}
-	// Build beim Start
-	go build()
 }
