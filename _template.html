@@ -20,12 +20,14 @@
   <link rel="apple-touch-icon" href="icon.png">
   -->
   
-  <!--
-  <link rel="stylesheet" href="css/normalize.css">
-  -->
-  <link rel="stylesheet" href="css/flex.css">
-  <link rel="stylesheet" href="css/flex-colors.css">
-  
+  <link rel="stylesheet" href="/flex/flex.css">
+  <link rel="stylesheet" href="/flex/flex-colors.css">
+
+  <!-- Prism Styntax Highlighter -->
+  <link rel="stylesheet" href="/prism/prism.css">
+   
+
+
   <!--
   <link rel="manifest" href="site.webmanifest">
   -->
@@ -34,7 +36,17 @@
 </head>
 
 <body>
-  {{.Content | noescape}}
+  <f-row w-max h-vp>
+    <f-item color-p hide-l no-print style="width: 290px;">
+      <p>Menue</p>
+    </f-item>
+    <f-item pa-l style="width: 732px;"> <!-- ist A4 Breite beim Drucken -->
+      {{.Content | noescape}}
+    </f-item>
+    <f-item hide-xl no-print style="width: 290px;">
+      <p>Menue</p>
+    </f-item>
+  </f-row>
 </body>
-
+<script src="/prism/prism.js"></script>
 </html>

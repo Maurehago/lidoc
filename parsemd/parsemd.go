@@ -27,18 +27,11 @@ type Site struct {
 	Links    []string // Liste mit Links(URL) (wird beim Parsen generiert)
 }
 
-// Tabellen
-type table struct {
-	titles []string
-	fields []string
-}
-
 // Variablen zum prüfen
 var row_tag string = "f-row"
 var col_tag string = "f-item"
 
 var last_attribute string
-var is_first_line bool
 var is_data bool
 var is_row bool
 var is_col bool
@@ -75,7 +68,7 @@ func is_file_exists(file string) bool {
 func add_content(text string) {
 	site.Content += text
 
-	print("add_content:", text)
+	// print("add_content:", text)
 }
 
 // Tabellen Daten hinzufügen
@@ -155,6 +148,7 @@ func add_text(text string) {
 		is_col = true
 	} else {
 		// nur Text hinzufügen
+		// fmt.Println("nur Text:", text)
 		add_content(text)
 	}
 }
@@ -286,18 +280,19 @@ func parse_data(line string) {
 		return
 	}
 
-	// Wenn letze Datenzeile
-	if line == "---" {
-		// todo: ??? Letzten Key Value abschliessen
-		is_data = false
-		return
-	}
-
 	// Verschachtelung feststellen
 	// step := int16(countLeadingSpaces(line))
 
 	// Leerzeichen entfernen
 	trim_line := strings.TrimSpace(line)
+
+	// Wenn letze Datenzeile
+	if trim_line == "---" {
+		// fmt.Println("end Data:", line)
+		// todo: ??? Letzten Key Value abschliessen
+		is_data = false
+		return
+	}
 
 	// Wenn leerzeile
 	if trim_line == "" {
@@ -605,15 +600,15 @@ func parse_lists(line string) bool {
 } // parse Lists
 
 // Parse Tabellen
-func parse_table(line string) bool {
+func parse_table(trimLine string) bool {
 	// ||pfad-listenname
 	// - FeldName1 Überschrift1
 	// - FeldName2 Überschrift2
 	// - FeldName3 Überschrift3
 
-	if !is_table && strings.HasPrefix(line, "||") {
+	if !is_table && strings.HasPrefix(trimLine, "||") {
 		// Tabelle start
-		listName := line[2:]
+		listName := trimLine[2:]
 		add_content("<table data-ilist='" + listName + "'>")
 		tHead = ""
 		colgroup = ""
@@ -625,8 +620,8 @@ func parse_table(line string) bool {
 	}
 
 	// Spalten lesen
-	if strings.HasPrefix(line, "- ") {
-		fieldName, title, ok := strings.Cut(line[2:], " ")
+	if strings.HasPrefix(trimLine, "- ") {
+		fieldName, title, ok := strings.Cut(trimLine[2:], " ")
 		if ok {
 			colgroup += "<col name='" + fieldName + "'/>"
 			tHead += "<th data-col='" + fieldName + "'>" + title + "</th>"
@@ -680,7 +675,7 @@ func parse_row(line string) {
 	is_empty = false
 
 	// wenn Header
-	if parse_header(line) {
+	if parse_header(trim_line) {
 		// Abbrechen für nächste Zeile
 		return
 	}
@@ -692,7 +687,7 @@ func parse_row(line string) {
 	line = parse_line_link(line)
 
 	// auf Tabellen prüfen
-	if parse_table(line) {
+	if parse_table(trim_line) {
 		return
 	}
 
@@ -714,6 +709,9 @@ func parse_row(line string) {
 func Parse(fullPath string) (Site, error) {
 	// neue Seite
 	site = Site{}
+
+	// test:
+	// fmt.Println("VOR - site.Content:", site.Content)
 
 	// prüfen ob vorhanden
 	if !strings.HasSuffix(fullPath, ".md") {
@@ -741,10 +739,10 @@ func Parse(fullPath string) (Site, error) {
 	is_data = false
 	is_colline = false
 	is_empty = false
-	is_first_line = true
 	is_ul = false
 	is_ol = false
 	is_table = false
+	is_code = false
 	last_list_step = 0
 	parrent_step_tag = map[int]string{}
 
@@ -758,9 +756,6 @@ func Parse(fullPath string) (Site, error) {
 	site.Images = []string{}
 	site.Links = []string{}
 
-	// test:
-	// fmt.Println("VOR - site.Content:", site.Content)
-
 	// Zeilenweise lesen
 	//scanner := bufio.NewScanner(file)
 	//scanner.Split(bufio.ScanLines)
@@ -768,13 +763,16 @@ func Parse(fullPath string) (Site, error) {
 	fileString := string(file)
 	lines := strings.Split(fileString, "\n")
 
+	// fmt.Println("fileString:", fileString)
+	// fmt.Println("1st Line:", lines[0])
+
 	//for scanner.Scan() {
-	for _, line := range lines {
+	for i, line := range lines {
 		//line := scanner.Text()
 		// fmt.Println("Zeile:", line)
 
 		// wenn erste Zeile Daten
-		if is_first_line && line == "---" {
+		if i == 0 && strings.TrimSpace(line) == "---" {
 			is_data = true
 			//fmt.Println("first:", line)
 		} else if is_data {
@@ -786,7 +784,6 @@ func Parse(fullPath string) (Site, error) {
 			parse_row(line)
 			//fmt.Println("row:", line)
 		}
-		is_first_line = false
 	}
 
 	//if err := scanner.Err(); err != nil {

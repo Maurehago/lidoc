@@ -172,57 +172,63 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 
 	// Markdown Datei
 	var mdFile string
+	// var htmlFile string
+	checkFolder := false
+	checkMD := false
 
 	// Pfad aus URL
 	relFile := r.URL.Path
 
-	file := filepath.Join(Static, relFile)
+	fullPath := filepath.Join(Static, relFile)
 
 	// Datei Erweiterung prüfen
-	filetype := filepath.Ext(file)
+	filetype := filepath.Ext(fullPath)
 
-	// prüfen
-	fInfo, err := os.Stat(file)
-	if os.IsNotExist(err) {
-		// Console Log
-		fmt.Println("no exist: " + file)
+	// Je nach Dateiendung
+	switch filetype {
+	case "":
+		mdFile = fullPath + ".md"
+		// htmlFile = fullPath + ".html"
+		checkFolder = true
 
-		if filetype == "" {
-			file += ".md"
-			mdFile = file
-			filetype = ".md"
-		} else if filetype == ".html" {
-			file = strings.Replace(file, ".html", ".md", 1)
-			mdFile = file
+	case ".html":
+		mdFile = strings.Replace(fullPath, ".html", ".md", 1)
+		// htmlFile = fullPath
+		checkMD = true
+
+	case ".md":
+		mdFile = fullPath
+		// htmlFile = strings.Replace(fullPath, ".md", ".html", 1)
+		checkMD = true
+
+	default:
+		mdFile = ""
+		// htmlFile = ""
+	}
+
+	// auf Ordner prüfen
+	if checkFolder {
+		fInfo, err := os.Stat(fullPath)
+		if os.IsNotExist(err) {
+			// dann kann es Datei sein
+		} else if fInfo.IsDir() {
+			mdFile = filepath.Join(fullPath, "index.md")
+			// htmlFile = filepath.Join(fullPath, "index.html")
+			checkMD = true
 		}
-		fInfo, err = os.Stat(file)
-	}
-	if err != nil {
-		// Fehler
-		fmt.Println("File Error:", err)
-		return
-	} else if filetype == ".html" {
-		// Html Datei existiert
-		mdFile = strings.Replace(file, ".html", ".md", 1)
-	}
-
-	// Wenn Directory
-	if fInfo.IsDir() {
-		mdFile = filepath.Join(file, "index.md")
-		file = filepath.Join(file, "index.html")
 	}
 
 	// Console Log
 	// fmt.Println("file: "+file, mdFile)
 
-	if is_file_exists(mdFile) {
+	if checkMD && is_file_exists(mdFile) {
 		// Hier Marrkdown parsen und zurückgeben
 
 		// Console Log
 		// fmt.Println("parse:", mdFile)
 
-		var site parsemd.Site
-		site, err = parsemd.Parse(mdFile)
+		// var site parsemd.Site
+		site, err := parsemd.Parse(mdFile)
 		if err != nil {
 			// Fehler
 			fmt.Println("ERROR parsing site:", site, err)
@@ -249,7 +255,7 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// nur die Datei ausliefern
-	http.ServeFile(w, r, file)
+	http.ServeFile(w, r, fullPath)
 }
 
 // HTML Dateien erzeugen
@@ -269,7 +275,7 @@ func main() {
 	flag.Parse()
 
 	// Build beim Start
-	build()
+	// build()
 
 	// Handler
 	http.HandleFunc("/build", buildFiles)

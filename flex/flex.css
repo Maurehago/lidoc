@@ -69,7 +69,7 @@ hr {
 
 /* Überschriften */
 h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
-  margin-top: 0.5rem;
+  margin-top: 2rem;
   margin-bottom: 0.5rem;
   margin-left: 8px;
   font-weight: 500;
@@ -185,7 +185,7 @@ a:not([href]):not([class]), a:not([href]):not([class]):hover
 
 /* Listen */
 ol,ul {
-  padding: 0;
+  /*padding: 0;*/
   /*list-style-type: none;*/
 }
 ol,ul,dl {margin-top: 0;margin-bottom: 1rem;width: 100%;}
@@ -197,8 +197,8 @@ dt{padding-left: 8px;}
 dd{padding-left: 16px;}
 
 ul li {
-  padding: 8px;
-  border-bottom: 1px solid #ddd;
+  /*padding: 8px;*/
+  /*border-bottom: 1px solid #ddd;*/
 }
 
 /* Code */
@@ -584,6 +584,7 @@ f-item,[f-item],.f-item{
 [h-10],.h-10{min-height: 83.33333333%;}
 [h-11],.h-11{min-height: 91.66666667%;}
 [h-12],.h-12,[h-100],.h-100{min-height: 100%;}
+[h-vp],.h-vp{min-height: 100vh;}
 
 
 /* ============================ */
@@ -641,6 +642,22 @@ modal-co,[modal-co],.modal-co {
 }
 
 
+/* Drucken */
+@media print
+{    
+  [no-print], .no-print {
+      display: none !important;
+  }
+  h1 { 
+    break-before: page; 
+  }  
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+  }
+  p,code  {
+    break-inside: avoid;
+  }  
+}
 
 
 /* Media Size */
@@ -679,24 +696,25 @@ modal-co,[modal-co],.modal-co {
 }
 
 /* large */
-@media (max-width: 992px) {
-  [w-max],.w-max,[w-xxl],.w-xxl,[w-xl],.w-xl{max-width: 90%;}
+@media (max-width: 1030px) {
+  [w-max],.w-max,[w-xxl],.w-xxl,[w-xl],.w-xl{min-width: 100%;}
   [w-fit],.w-fit{min-width: 15%;}
 
   [hide-l],.hide-l{display: none !important}
 }
 
 /* x-large */
-@media (max-width: 1200px) {
-  [w-max],.w-max,[w-xxl],.w-xxl{max-width: 90%;}  
+@media (max-width: 1260px) {
+  [w-max],.w-max,[w-xxl],.w-xxl{min-width: 100%;}  
   [w-fit],.w-fit{min-width: 10%;}
   [hide-xl],.hide-xl{display: none !important}
 }
 
 /* xx-large */
 @media (max-width: 1360px) {
-  [w-max],.w-max,[w-xxl],.w-xxl{max-width: 90%;}  
+  [w-max],.w-max,[w-xxl],.w-xxl{min-width: 100%;}  
   [w-fit],.w-fit{min-width: 5%;}
+  [hide-xl],.hide-xxl{display: none !important}
 }
 @media (min-width: 1201px) {
   [hide-xxl],.hide-xxl{display: none !important}
