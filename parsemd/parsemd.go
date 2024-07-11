@@ -746,10 +746,20 @@ func Parse(fullPath string) (Site, error) {
 	last_list_step = 0
 	parrent_step_tag = map[int]string{}
 
+	// Pfad Relativ zum Working Directory
+	workDir, err := os.Getwd()
+	if err != nil {
+		fmt.Println("ERROR WorkingDir:", err)
+		site.Err = err.Error()
+		return site, err
+	}
+
+	relPath := strings.Replace(fullPath, workDir, "", 1)
+
 	// Seiten eigenschaften setzen
-	site.Url = fullPath
-	site.Path = filepath.Dir(fullPath)
-	name, _, _ := strings.Cut(filepath.Base(fullPath), ".")
+	site.Url = relPath
+	site.Path = filepath.Dir(relPath)
+	name, _, _ := strings.Cut(filepath.Base(relPath), ".")
 	site.Title = ""
 	site.Name = name
 	site.Content = ""

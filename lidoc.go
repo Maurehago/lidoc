@@ -144,8 +144,8 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		}
 
 		// Seiten Liste
-		// path, name
-		siteList.Set(site.Path, []any{site.Path, site.Name})
+		// path, name, title, date
+		siteList.Set(site.Path, []any{site.Path, site.Name, site.Title, site.Date})
 		fileList = append(fileList, site.Path)
 	} else {
 		// fileList = append(fileList, path)
@@ -173,7 +173,7 @@ func build() {
 	}
 
 	// Seitenliste speichern
-	fmt.Println("SiteList:", siteList)
+	// fmt.Println("SiteList:", siteList)
 	err = siteList.Save(".")
 	if err != nil {
 		fmt.Println(err)
@@ -309,8 +309,8 @@ func main() {
 	siteList = infolist.InfoList{}
 	siteList.Name = "sites"
 	siteList.Path = "lidoc"
-	siteList.Fields = []string{"path", "name"}
-	siteList.Types = []string{"str", "str"}
+	siteList.Fields = []string{"path", "name", "title", "date"}
+	siteList.Types = []string{"str", "str", "str", "str"}
 
 	// Build beim Start
 	// build()

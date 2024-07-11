@@ -258,20 +258,22 @@ figcaption, caption {
 table {
   caption-side: bottom;
   border-collapse: collapse;
-  border-spacing:0;
-  width:100%;
+  border-spacing:2;
+  /*width:100%;*/
   display:table;
   padding-bottom: 8px;
 }
 th {
   text-align: inherit;
   text-align: -webkit-match-parent;
+  background-color: #ddd;
 }
 thead,tbody,tfoot,tr,td,th {
-  border-color: inherit;
-  border-style: solid;
-  border-width: 0;
+  border: 1px solid #ddd;
 }
+tr:nth-child(even){background-color: #f2f2f2;}
+tr:hover {background-color: #ddd;}
+
 /*thead{border-bottom: 2px solid #c4c4c4;}
 th,td{border-bottom: 1px solid #ddd;padding: 0.5rem;}*/
 
