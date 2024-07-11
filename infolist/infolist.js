@@ -13,7 +13,8 @@ export class InfoList {
         this.Prop = new Map();  // Zusätzliche Eigenschaften der Liste
         this.Fields = [];       // FeldNamen von Data
         this.Types = [];        // FeldTypen von Data
-        this.Data = new Map();   // Daten der Liste
+        this.Data = new Map();  // Daten der Liste
+        this.List = [];         // Wenn Auflistung statt Daten. z.B.: bei ENums
 
         if (name) {
             this.Name = name;
@@ -51,12 +52,12 @@ export class InfoList {
 
     // Liefert auf Grund des angegebenen Feldnamen(field)
     // die Position/Index der Spalte in der InfoList zurück
-    getIndex(field) {
+    getFieldIndex(field) {
         return this.Fields.indexOf(field);
     }
 
     // Liefert eine Liste an Positionen/Indexes der angegebenen Spaltennamen(fields) zurück.
-    getIndexes(fields) {
+    getFieldIndexes(fields) {
         if (!Array.isArray(fields)) {
             return [];
         }
@@ -134,13 +135,13 @@ export class InfoList {
     // Sortierter Index 
     getSortIndex(fields) {
         // Alle Keys von der map
-        const dataIndex = Array.from(Map.keys());
+        const dataIndex = Array.from(this.Data.keys());
         let fieldIndex = [];
 
         if (Array.isArray(fields)) {
-            fieldIndex = this.getIndexes(fields);
+            fieldIndex = this.getFieldIndexes(fields);
         } else if (typeof fields === "string" && fields != "") {
-            fieldIndex = [this.getIndex(fields)];
+            fieldIndex = [this.getFieldIndex(fields)];
         } else {
             // Aktuellen nicht sortierten Index zurückgeben
             return dataIndex;
@@ -217,14 +218,8 @@ export class InfoList {
 
     // Tabellen Daten lesen
     getTableDataHTML(fields, index) {
-        const fieldList = this.Fields;
-        const fieldIndex = [];
+        const fieldIndex = this.getFieldIndexes(fields);
         let tableDataString = ""
-
-        // Feldindexes lesen
-        fields.forEach((name, i) => {
-            fieldIndex[i] = fieldList.indexOf(name);
-        })
 
         // Daten in String
         function dataToString(data, id) {
@@ -348,6 +343,7 @@ export class InfoList {
             return;
         } catch (error) {
             console.error(error.message);
+            return;
         }
     } // fetch
 
@@ -452,8 +448,8 @@ export class ILists extends Map {
 
 
 // Funktion die alle Tabellen mit Daten füllt
-// tabelle muss ein "data-ilist" Attribut haben, welches den Pfad und Unterstrich getrennt den Namen der Liste angibt
-// z.B.: <table data-ilist="test_liste1">
+// tabelle muss ein "data-ilist" Attribut haben, welches den Pfad und Schrägstrich(/) getrennt den Namen der Liste angibt
+// z.B.: <table data-ilist="test/liste1">
 // für die Anzuzeigenden Spalten muss die Tabelle Spalten (th oder td) mit dem Attribut "data-col" haben, welches den Spaltennamen angibt
 // z.B.: <tr><th data-col="feld1">Test 1</th><th data-col="feld2">Test 2</th></tr>
 // im <tbody> der Tabelle, werden dann die Daten als HTML eingefügt.
@@ -467,7 +463,7 @@ export function checkTables() {
         tbodyElm.innerHTML = "";
 
         // Infolist Information lesen
-        const iListInfo = tableElm.dataset.ilist.split("_"); // iListInfo[0] = Path / iListInfo [1] = Name
+        const iListInfo = tableElm.dataset.ilist.split("/"); // iListInfo[0] = Path / iListInfo [1] = Name
 
         // infoList erzeugen
         const iList = new InfoList();

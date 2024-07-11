@@ -1,6 +1,7 @@
 package infolist
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -38,6 +40,7 @@ type Fields []string
 // 		, "id7": [true, 22, null, "3. Text mit excaped \" "]
 // 		, "5": [false, null, 42.42, "Text 2"]
 // 	  }
+//	  , "List": []
 // 	}
 // 	, "liste2": {
 
@@ -51,6 +54,7 @@ type InfoList struct {
 	Fields []string                 // FeldNamen von Data
 	Types  []string                 // FeldTypen von Data
 	Data   map[string][]interface{} // Daten der Liste
+	List   []any                    // Liste von einträgen z.B.: für ENums
 }
 
 // Diese Funktion liefert ein Array/Slice für einen Datensatz zurück
@@ -68,12 +72,12 @@ func (il InfoList) Set(id string, data Record) {
 
 // Liefert auf Grund des angegebenen Feldnamen(field)
 // die Position/Index der Spalte in der InfoList zurück
-func (il InfoList) GetIndex(field string) int {
+func (il InfoList) GetFieldIndex(field string) int {
 	return slices.Index(il.Fields, field)
 }
 
 // Liefert eine Liste an Positionen/Indexes der angegebenen Spaltennamen(fields) zurück.
-func (il InfoList) GetIndexes(fields []string) []int {
+func (il InfoList) GetFieldIndexes(fields []string) []int {
 	indexes := make([]int, len(fields))
 	fieldList := il.Fields
 
@@ -130,6 +134,87 @@ func (il InfoList) SetValue(id string, field string, value any) {
 		}
 	}
 }
+
+// Sortierter Index
+func (il InfoList) GetSortIndex(fields []string) []string {
+	// Alle Keys von der map
+	dataIndex := make([]string, len(il.Data))
+
+	for k, _ := range il.Data {
+		dataIndex = append(dataIndex, k)
+	}
+
+	// Prüfen auf FeLder
+	if len(fields) <= 0 {
+		return dataIndex
+	}
+
+	// Feld/Spalten Positionen ermitteln
+	fieldIndex := il.GetFieldIndexes(fields)
+
+	// Sortieren
+	slices.SortStableFunc(dataIndex, func(a, b string) int {
+		dataA := il.Data[a]
+		dataB := il.Data[b]
+
+		sortValue := 0
+
+		for i, fi := range fieldIndex {
+			fieldName := fields[i]
+			fieldType := il.Types[fi]
+
+			valueA := dataA[fi]
+			valueB := dataB[fi]
+
+			if strings.HasSuffix(fieldName, " DESC") {
+				// Absteigend Sortieren
+				switch fieldType {
+				case "bool":
+					if valueB.(bool) && !valueA.(bool) {
+						sortValue = 1
+						return 1
+					} else if !valueB.(bool) && valueA.(bool) {
+						sortValue = -1
+						return -1
+					}
+				case "int":
+					sortValue = cmp.Compare[int](valueB.(int), valueA.(int))
+				case "num":
+					sortValue = cmp.Compare[float64](valueB.(float64), valueA.(float64))
+				default:
+					sortValue = cmp.Compare[string](valueB.(string), valueA.(string))
+				} // Switch Type
+			} else {
+				// Aufsteigend sortieren
+				switch fieldType {
+				case "bool":
+					if valueA.(bool) && !valueB.(bool) {
+						sortValue = 1
+						return 1
+					} else if !valueA.(bool) && valueB.(bool) {
+						sortValue = -1
+						return -1
+					}
+				case "int":
+					sortValue = cmp.Compare[int](valueA.(int), valueB.(int))
+				case "num":
+					sortValue = cmp.Compare[float64](valueA.(float64), valueB.(float64))
+				default:
+					sortValue = cmp.Compare[string](valueA.(string), valueB.(string))
+				} // Switch Type
+			}
+
+			if sortValue != 0 {
+				return sortValue
+			}
+		} // For jede Spalte
+
+		// Sortierung zurückgeben
+		return sortValue
+	}) // Sortierung
+
+	return dataIndex
+} // getSortIndex
 
 // liefert einen JsonBlob([]byte) von der InfoList Auflistung zurück.
 // Für Datenübertragung und zum Speichern in eine Datei.
@@ -248,6 +333,7 @@ func (il InfoList) Save(listBasePath string) error {
 	}
 
 	// Speichern
+	fmt.Println("List:", listFile)
 	err = os.WriteFile(listFile, data, 0777)
 	if err != nil {
 		return err
@@ -275,24 +361,6 @@ func (ils ILists) Marshal() ([]byte, error) {
 func (ils ILists) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, &ils)
 } // unmarshal
-
-func test() {
-	x := InfoList{Name: "test"}
-	x.Fields = Fields{"gsid", "name", "adresse", "plz"}
-	x.Types = Fields{"str", "str", "str", "str"}
-
-	il := ILists{}
-	il["test"] = x
-
-	data, _ := il.Marshal()
-	os.WriteFile("test.txt", data, 0777)
-	test := Record{"eurwe", 1, 7, false, "hfhf"}
-	x.Data["test"] = test
-
-	//test2 := Data{x["fields"]}
-	//name := slices.Index(test2, "name")
-	//fmt.Println(x["fields"], test2[name])
-}
 
 // GSID Erstellen
 func GSID() string {

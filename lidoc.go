@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/Maurehago/lidoc/infolist"
 	"github.com/Maurehago/lidoc/parsemd"
 )
 
@@ -26,6 +28,7 @@ const (
 
 var port string
 var fileList []string
+var siteList infolist.InfoList
 
 // Datei Vorhanden prüfen
 func is_file_exists(file string) bool {
@@ -36,6 +39,21 @@ func is_file_exists(file string) bool {
 		return false
 	}
 	return false
+}
+
+// Prüfen ob eine URL existiert
+func is_url_exists(url string) error {
+
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		// resp.StatusCode
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return errors.New(resp.Status)
+	}
+	return nil
 }
 
 // Keine HTML Escapen für Templates
@@ -119,22 +137,18 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		}
 
 		// Datei erstellen
-		os.WriteFile(htmlPath, doc.Bytes(), 0777)
-		// var file *os.File
-		// file, err = os.Create(htmlPath)
-		// if err != nil {
-		// 	fmt.Println(err)
-		// 	return err
-		// }
-		// err = templ.Execute(file, site)
-		// if err != nil {
-		// 	fmt.Println(err)
-		// 	return err
-		// }
+		err = os.WriteFile(htmlPath, doc.Bytes(), 0777)
+		if err != nil {
+			fmt.Println("HTML save Error:", err.Error())
+			return err
+		}
 
-		fileList = append(fileList, htmlPath)
+		// Seiten Liste
+		// path, name
+		siteList.Set(site.Path, []any{site.Path, site.Name})
+		fileList = append(fileList, site.Path)
 	} else {
-		fileList = append(fileList, path)
+		// fileList = append(fileList, path)
 	}
 	return nil
 }
@@ -148,6 +162,7 @@ func build() {
 		return
 	}
 
+	siteList.Data = make(map[string][]interface{})
 	fileList = make([]string, 0)
 
 	// Alle Dateien durchgehen
@@ -157,6 +172,18 @@ func build() {
 		return
 	}
 
+	// Seitenliste speichern
+	fmt.Println("SiteList:", siteList)
+	err = siteList.Save(".")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// test:
+	// for _, p := range fileList {
+	// 	fmt.Println("-", p)
+	// }
 	// fmt.Println(fileList)
 
 	// Garbage Collector anstoßen
@@ -261,10 +288,14 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 // HTML Dateien erzeugen
 func buildFiles(w http.ResponseWriter, r *http.Request) {
 	build()
-	_, err := fmt.Fprintf(w, "Dateien erstellt")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
-	}
+
+	// Ausgabe Liste mit Seiten
+	http.ServeFile(w, r, "./_list.html")
+
+	// _, err := fmt.Fprintf(w, "Dateien erstellt")
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "Fprintf: %v\n", err)
+	// }
 }
 
 // Start Funktion
@@ -273,6 +304,13 @@ func main() {
 	// flag.StringVar(zeiger, name, default, beschreibung)
 	flag.StringVar(&port, "p", Port, "Server Port")
 	flag.Parse()
+
+	// Seiten Liste erstellen
+	siteList = infolist.InfoList{}
+	siteList.Name = "sites"
+	siteList.Path = "lidoc"
+	siteList.Fields = []string{"path", "name"}
+	siteList.Types = []string{"str", "str"}
 
 	// Build beim Start
 	// build()

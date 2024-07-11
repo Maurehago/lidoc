@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <title>{{.Title}}</title>
+  <title>Lidoc Build Sites</title>
   <meta name="description" content="">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -36,23 +36,21 @@
 </head>
 
 <body>
-  <f-row w-max h-vp>
-    <f-item color-p hide-l no-print style="width: 290px;">
-      <p>Menue</p>
-    </f-item>
-    <f-item pa-l style="width: 732px;"> <!-- ist A4 Breite beim Drucken -->
-      {{.Content | noescape}}
-    </f-item>
-    <f-item hide-xl no-print style="width: 290px;">
-      <p>Menue</p>
-    </f-item>
-  </f-row>
+    <f-row color-p><p>Sites</p></f-row>
+    <table data-ilist="lidoc/sites">
+        <thead>
+            <tr>
+                <th data-col="path">Path</th>             
+                <th data-col="name">Name</th>             
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 </body>
 <script src="/prism/prism.js"></script>
 
-<!-- INFO Listen -->
 <script type="module">
-  import * as infolist from "/infolist/infolist.js";
-  infolist.checkTables();
+    import * as infolist from "/infolist/infolist.js";
+    infolist.checkTables();
 </script>
 </html>
