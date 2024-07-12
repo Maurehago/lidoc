@@ -65,7 +65,7 @@ export class InfoList {
         const indexes = [];
         const fieldList = this.Fields;
 
-        fieldList.forEach((v,i) => {
+        fields.forEach((v,i) => {
             if (v.indexOf(" ") >= 0) {
                 v = v.split(" ")[0];
             } 
@@ -161,19 +161,19 @@ export class InfoList {
                 // Wenn Absteigend
                 if (fieldName.endsWith(" DESC")) {
                     if (dataA[d] > dataB[d]) {
-                        sort = 1;
+                        sort = -1;
                         return true;
                     } else if (dataA[d] < dataB[d]) {
-                        sort = -1;
+                        sort = 1;
                         return true;
                     }
                 } else {
                     // Aufsteigend
                     if (dataA[d] > dataB[d]) {
-                        sort = -1;
+                        sort = 1;
                         return true;
                     } else if (dataA[d] < dataB[d]) {
-                        sort = 1;
+                        sort = -1;
                         return true;
                     }
                 }
@@ -460,7 +460,12 @@ export function checkTables() {
     // alle Tabellen durchgehen
     tables.forEach((tableElm) => {
         const tbodyElm = tableElm.querySelector("tbody");
-        tbodyElm.innerHTML = "";
+        const sortString = tableElm.getAttribute("data-sort");
+        if (tbodyElm) {
+            tbodyElm.innerHTML = "";
+        } else {
+            tbodyElm = tableElm;
+        }
 
         // Infolist Information lesen
         const iListInfo = tableElm.dataset.ilist.split("/"); // iListInfo[0] = Path / iListInfo [1] = Name
@@ -487,9 +492,15 @@ export function checkTables() {
             // test:
             // console.log("infoList:", iList);
 
+            // Sortierung
+            let sortIndex = null;
+            if (sortString) {
+                sortIndex = iList.getSortIndex(sortString.split(","));
+            }
+
             // HTML Daten von Liste erzeugen und anzeigen
-            const innerHTML = iList.getTableDataHTML(fields);
-            tbodyElm.insertAdjacentHTML("afterbegin", innerHTML);
+            const innerHTML = iList.getTableDataHTML(fields, sortIndex);
+            tbodyElm.insertAdjacentHTML("beforeend", innerHTML);
         })
     }) // forEach Table Element
 } // checkTables

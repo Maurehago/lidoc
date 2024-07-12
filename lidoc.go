@@ -143,9 +143,25 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 			return err
 		}
 
+		// Bilder prüfen ob vorhanden
+		imgErrors := 0
+		for _, imgURL := range site.Images {
+			if err = is_url_exists(imgURL); err != nil {
+				imgErrors += 1
+			}
+		}
+
+		// Links prüfen ob vorhanden
+		linkErrors := 0
+		for _, linkURL := range site.Links {
+			if err = is_url_exists(linkURL); err != nil {
+				linkErrors += 1
+			}
+		}
+
 		// Seiten Liste
-		// path, name, title, date
-		siteList.Set(site.Path, []any{site.Path, site.Name, site.Title, site.Date})
+		// path, name, title, date, imageerror, linkerror
+		siteList.Set(site.Url, []any{site.Path, site.Name, site.Title, site.Date, imgErrors, linkErrors})
 		fileList = append(fileList, site.Path)
 	} else {
 		// fileList = append(fileList, path)
@@ -309,8 +325,8 @@ func main() {
 	siteList = infolist.InfoList{}
 	siteList.Name = "sites"
 	siteList.Path = "lidoc"
-	siteList.Fields = []string{"path", "name", "title", "date"}
-	siteList.Types = []string{"str", "str", "str", "str"}
+	siteList.Fields = []string{"path", "name", "title", "date", "imageerror", "linkerror"}
+	siteList.Types = []string{"str", "str", "str", "str", "int", "int"}
 
 	// Build beim Start
 	// build()
