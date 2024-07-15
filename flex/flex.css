@@ -184,10 +184,6 @@ a:not([href]):not([class]), a:not([href]):not([class]):hover
 
 
 /* Listen */
-ol,ul {
-  /*padding: 0;*/
-  /*list-style-type: none;*/
-}
 ol,ul,dl {margin-top: 0;margin-bottom: 1rem;width: 100%;}
 ol ol,ul ul,ol ul,ul ol {margin-bottom: 0;}
 
@@ -196,10 +192,29 @@ dd {margin-bottom: 0.5rem;margin-left: 0;}
 dt{padding-left: 8px;}
 dd{padding-left: 16px;}
 
-ul li {
-  /*padding: 8px;*/
-  /*border-bottom: 1px solid #ddd;*/
+
+/* Navigation */
+nav ol,nav ul {
+  list-style-type: none;
 }
+nav input[type="checkbox"] {
+  left: -9999px;
+  opacity: 0;
+  position: absolute;  
+}
+nav input[type="checkbox"]:not(:checked) + label + ul {
+  display: none;
+}
+nav input[type="checkbox"]:checked + label + ul {
+  display: block;
+}
+nav label {
+  cursor: pointer;
+}
+nav a {
+  text-decoration: none;
+}
+
 
 /* Code */
 pre,code,kbd,samp {

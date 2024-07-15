@@ -44,6 +44,8 @@ var is_table bool
 var tHead string
 var colgroup string
 
+var is_nav bool // Wenn Navigations-Liste
+
 var is_ul bool                      // Einfache Liste
 var is_ol bool                      // Sortierte Liste
 var is_li bool                      // Listen Element
@@ -587,7 +589,7 @@ func parse_lists(line string) bool {
 	} else {
 		// kein neues element
 
-		// wenn keint ListItem offen
+		// wenn kein ListItem offen
 		if !is_li {
 			return false
 		}
@@ -743,6 +745,7 @@ func Parse(fullPath string) (Site, error) {
 	is_ol = false
 	is_table = false
 	is_code = false
+	is_nav = false
 	last_list_step = 0
 	parrent_step_tag = map[int]string{}
 
