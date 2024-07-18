@@ -1,5 +1,15 @@
 // Infoliste
 
+// ===============================
+//   Constanten
+// --------------
+
+// Hilight CSS class
+const css_color_highlight = "color-h";
+
+
+// ===============================
+
 // Global Short Identifier
 export function GSID() {
     return new Date().getTime().toString(36) +
@@ -384,44 +394,39 @@ export class InfoList {
 } // Class InfoList
 
 //  Info Tabelle
-export class InfoTable {
-    constructor(elm, infolist, cols, colTitles) {
-        // Eigenschaften
-        this.elm = elm;
-        this.infoList = infolist;
-        this.cols = cols;
-        this.colTitles = colTitles || [];
-        this.sortIndex = [];
+export function InfoTable(iList, col_list, col_titles)  {
+    const self = this;
 
-        // todo: Gruppierung
-        // todo: Filter
-        // todo: Formular
+    // Eigenschaften
+    self.infoList = iList;
+    self.cols = col_list;
+    self.colTitles = col_titles || [];
+    self.sortFields = [];
+    self.sortIndex = [];
+    self.elmID = "";
+    self.activeRowID = "";
 
-        // ----- Event Funktionen ------
-        this.#checkKeys.bind(this);
-    }
+    // todo: Gruppierung
+    // todo: Filter
+    // todo: Formular
 
-    //  Setzt das HTML-Element für die Tabelle
-    setElement(elm) {
-        this.elm = elm;
-    };
 
     //  Setzt die InfoListe für die Tabelle
-    setInfoList(infolist) {
-        this.infoList = infolist;
-    };
+    self.setInfoList = function(iList) {
+        self.infoList = iList;
+    }
 
     // Setzt die Spalten
-    setCols(cols, colTitles) {
-        this.cols = cols;
-        if (colTitles) {
-            this.colTitles = colTitles;
+    self.setCols = function(col_list, col_titles) {
+        self.cols = col_list;
+        if (col_titles) {
+            self.colTitles = col_titles;
         }
-    };
+    }
 
     // Sortierung
-    setSortIndex(sortIndex) {
-        this.sortIndex = sortIndex;
+    self.setSortIndex = function(sortIndex) {
+        self.sortIndex = sortIndex;
     }
 
     // todo: Gruppierungen
@@ -430,10 +435,11 @@ export class InfoTable {
 
     // todo: Formular
 
-        // Tabellen Daten lesen
-    #getDataHTML() {
+    // Tabellen Daten lesen
+    let getDataHTML = function() {
         let tableDataString = "";
-        const fieldIndex = this.infoList.getFieldIndexes(this.cols);
+        const fieldIndex = self.infoList.getFieldIndexes(self.cols);
+        const fieldTypes = self.infoList.Types;
 
         // console.log("#getDataHTML");
 
@@ -447,10 +453,16 @@ export class InfoTable {
             // Feldindex durchgehen
             fieldIndex.forEach((index) => {
                 let content = data[index];
-                if (typeof content === "string") {
+                let attr = "";
+                const type = fieldTypes[index];
+                if (type == "int" || type == "num") {
+                    attr = " text-r"; // Leerzeichen davor
+                } else if (type == "bool") {
+                    attr = " text-c"; // Leerzeichen davor
+                } else if (type == "str") {
                     content = content.replaceAll("\n", "</br>");
                 }
-                dataString += "<td>" + content + "</td>";
+                dataString += "<td" + attr + ">" + content + "</td>";
             });
 
             // Ende Datenzeile
@@ -460,15 +472,15 @@ export class InfoTable {
         } // dataToString
 
         // wenn Index
-        if (this.sortIndex && this.sortIndex.length > 0) {
+        if (self.sortIndex && self.sortIndex.length > 0) {
             // Alle Daten nach Index durchgehen
-            this.sortIndex.forEach((value) => {
-                const data = this.infoList.Data.get(value);
+            self.sortIndex.forEach((value) => {
+                const data = self.infoList.Data.get(value);
                 tableDataString += dataToString(data, value);
             });
         } else {
             // Alle Einträge in der map
-            this.infoList.Data.forEach((data, key) => {
+            self.infoList.Data.forEach((data, key) => {
                 tableDataString += dataToString(data, key);
             });
         }
@@ -476,52 +488,93 @@ export class InfoTable {
         // console.log("tableDataString");
 
         return tableDataString;
-    }; // getTableDataHTML
+    } // getTableDataHTML
 
     // Daten Anzeigen
-    showData() {
+    self.showData = function(elm) {
         // Prüfen
-        if (!this.elm instanceof HTMLTableElement) {
+        if (!elm && self.elmID != "") {
+            elm = document.body.querySelector(self.elmID);
+        }
+        if (elm instanceof HTMLTableElement) {
+            self.elmID = elm.id;
+        } else {
             return;
         }
-        if (!this.infoList instanceof InfoList) {
+        if ((!self.infoList) instanceof InfoList) {
             return;
         }
-        if (!Array.isArray(this.cols)) {
+        if (!Array.isArray(self.cols)) {
             return;
         }
 
         // console.log("showData:");
 
         // Body Element
-        const tbodyElm = this.elm.querySelector("tbody");
+        const tbodyElm = elm.querySelector("tbody");
         if (!tbodyElm) {
             tbodyElm = document.createElement("tbody");
-            this.elm.appendChild(tbodyElm);
+            elm.appendChild(tbodyElm);
         }
 
         // console.log("tbodyElm:", tbodyElm);
 
         // HTML Daten von Liste erzeugen und anzeigen
-        const innerHTML = this.#getDataHTML();
+        const innerHTML = getDataHTML();
         // console.log("innerHTML:", innerHTML);
-        tbodyElm.insertAdjacentHTML("beforeend", innerHTML);        
+        tbodyElm.insertAdjacentHTML("beforeend", innerHTML);
     } // schowData
+
+    // Aktive Zeile festlegen
+    let setActive = function(id) {
+        let newElm = document.body.getElementById(id);
+        let oldElm = document.body.getElementById(self.activeRowID);
+        if (oldElm) {
+            oldElm.classList.remove(css_color_highlight);
+        }
+        if (newElm) {
+            newElm.classList.add(css_color_highlight);
+            self.activeRowID = id;
+        }
+    } // setActive
 
     // ====================
     //   Events
     // ---------
 
     // Auf Taste prüfen
-    #checkKeys(e) {
+    let checkKeys = function(e) {
         console.log("keycode:", e.code);
         switch (e.code) {
-          case "ArrowUp":
-            // some code here…
-            break;
-          case "ArrowDown":
-            // some code here…
-            break;
+            case "ArrowUp":
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                // Navigation prüfen
+                checkNav(self, "up");
+                //e.preventDefault();
+                break;
+            case "ArrowDown":
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                // Navigation prüfen
+                checkNav(self, "down");
+                //e.preventDefault();
+                break;
+            case "ArrowRight":
+                // some code here…
+                break;
+            case "ArrowLeft":
+                // some code here…
+                break;
+            case "Enter":
+                // some code here…
+                break;
+            case "Insert":
+                // some code here…
+                break;
+            case "Delete":
+                // some code here…
+                break;
         }
     }
 
@@ -529,17 +582,67 @@ export class InfoTable {
     // -------------------------
 
     // Events Registrieren
-    registerEvents() {
-        window.addEventListener("keyup", this.#checkKeys);
+    self.registerEvents = function(elm) {
+        window.addEventListener("keydown", checkKeys, false);
+        // window.addEventListener("keyup", this.#checkKeys, false);
     }
 
     // Events entfernen
-    unregisterEvents() {
-        window.removeEventListener("keyup", this.#checkKeys);
+    self.unregisterEvents = function(elm) {
+        window.removeEventListener("keydown", checkKeys, false);
+        // window.removeEventListener("keyup", this.#checkKeys, false);
     }
-
 } // class InfoTable
 
+// aktuelles Datensatz Element holen
+function getActiveRow(infoTable) {
+    let currentElm;
+    
+    // Wenn eine Aktive Row festgelegt
+    if (infoTable.activeRowID) {
+        currentElm = document.querySelector("#" + infoTable.activeRowID);
+    } else {
+        let tableElm = document.querySelector("#" + infoTable.elmID);
+        if (!tableElm) {return null;}
+        let tbody = tableElm.querySelector("tbody");
+        if (tbody) {
+            currentElm = tbody.querySelector("tr");
+            if (!currentElm) {return null;}
+        }
+    }
+    return currentElm;
+} // getActiveRow
+
+
+// Navigation Prüfung
+function checkNav(infoTable, direction) {
+    // console.log(infoTable);
+    if (!infoTable) {return;}
+
+    let currentElm = getActiveRow(infoTable);
+    if (!currentElm) {return;}
+
+    // console.log("currentElm2:", currentElm);
+    if (direction == "down") {
+        // Next Element
+        let nextElm = currentElm.nextElementSibling;
+        if (nextElm) {
+            currentElm.classList.remove(css_color_highlight);
+            nextElm.classList.add(css_color_highlight);
+            infoTable.activeRowID = nextElm.id;
+            nextElm.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });    // { behavior: "smooth", block: "end", inline: "nearest" }
+        }
+    } else if (direction == "up") {
+        // Voriges Element
+        let prevElm = currentElm.previousElementSibling;
+        if (prevElm) {
+            currentElm.classList.remove(css_color_highlight);
+            prevElm.classList.add(css_color_highlight);
+            infoTable.activeRowID = prevElm.id;
+            prevElm.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        }
+    }
+} // checkNav
 
 // Funktion die alle Tabellen mit Daten füllt
 // tabelle muss ein "data-ilist" Attribut haben, welches den Pfad und Schrägstrich(/) getrennt den Namen der Liste angibt
@@ -560,7 +663,6 @@ export function checkTables() {
         // } else {
         //     tbodyElm = tableElm;
         // }
-
 
         // Infolist Information lesen
         const iListInfo = tableElm.dataset.ilist.split("/"); // iListInfo[0] = Path / iListInfo [1] = Name
@@ -583,7 +685,7 @@ export function checkTables() {
         }); // forEach Head Element
 
         // InfoTabelle erstellen
-        const infoTable = new InfoTable(tableElm, iList, fields);
+        const infoTable = new InfoTable(iList, fields);
         tableElm.infoTable = infoTable;
 
         // Infolist Daten holen
@@ -596,13 +698,15 @@ export function checkTables() {
             if (sortString) {
                 sortIndex = iList.getSortIndex(sortString.split(","));
             }
-
             infoTable.setSortIndex(sortIndex);
 
             // HTML Daten von Tabelle erzeugen und anzeigen
-            infoTable.showData();
+            infoTable.showData(tableElm);
             // const innerHTML = iList.getTableDataHTML(fields, sortIndex);
             // tbodyElm.insertAdjacentHTML("beforeend", innerHTML);
+
+            // Events registrieren
+            infoTable.registerEvents(tableElm);
         });
     }); // forEach Table Element
 } // checkTables

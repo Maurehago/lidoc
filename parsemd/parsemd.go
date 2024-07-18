@@ -13,6 +13,7 @@ type KeyValue map[string]interface{}
 
 // Seite Objekt Aufbau
 type Site struct {
+	ID       string   // GSID eindeutige ID der Seite wird beim einfügen in eine Liste generiert
 	Err      string   // Bei Fehler die Fehlermeldung (wird beim Parsen generiert)
 	Title    string   // Titel der Seite
 	Name     string   // Dateiname (wird beim Parsen generiert)

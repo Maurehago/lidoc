@@ -160,8 +160,10 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		}
 
 		// Seiten Liste
-		// path, name, title, date, imageerror, linkerror
-		siteList.Set(site.Url, []any{site.Path, site.Name, site.Title, site.Date, imgErrors, linkErrors})
+		// ID, path, name, title, date, imageerror, linkerror
+		siteID := infolist.GSID()
+		site.ID = siteID
+		siteList.Set(siteID, []any{siteID, site.Path, site.Name, site.Title, site.Date, imgErrors, linkErrors})
 		fileList = append(fileList, site.Path)
 	} else {
 		// fileList = append(fileList, path)
@@ -325,8 +327,8 @@ func main() {
 	siteList = infolist.InfoList{}
 	siteList.Name = "sites"
 	siteList.Path = "lidoc"
-	siteList.Fields = []string{"path", "name", "title", "date", "imageerror", "linkerror"}
-	siteList.Types = []string{"str", "str", "str", "str", "int", "int"}
+	siteList.Fields = []string{"ID", "path", "name", "title", "date", "imageerror", "linkerror"}
+	siteList.Types = []string{"str", "str", "str", "str", "str", "int", "int"}
 
 	// Build beim Start
 	// build()

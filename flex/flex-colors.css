@@ -138,8 +138,8 @@ body {
   
   /* Highlight Color */
   [color-h],.color-h {
-    color: #000 !important;background-color: #59e673 !important;
-    border-left: #4CAF50 2px solid;
+    color: #000 !important;background-color: #c3ffc9 !important;
+    border-left: #4CAF50 5px solid;
   }
 
   
