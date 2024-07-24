@@ -403,7 +403,7 @@ export function InfoNav(iList) {
     self.infoList = iList;
     self.sortFields = [];
     self.sortIndex = null;
-    self.sortFields = ["path", "date", "title", "name"];
+    self.sortFields = ["path", "date DESC", "title", "name"];
     self.elmID = "";
 
     let pathIndex = -1;
@@ -540,6 +540,7 @@ export function InfoNav(iList) {
             let dirObj = getDirObj(path);
 
             if (name == "index") {
+                dirObj.title = title;
                 return;
             }
 
@@ -583,14 +584,15 @@ export function InfoNav(iList) {
             if (navObj.isDir) {
                 if (navObj.active) {
                     navText = "-&nbsp;" + navText;
-                    attr = " style='background-color: rgb(255 255 255 /0.2);'";
+                    //attr = " style='background-color: rgb(255 255 255 /0.2);'";
                 } else {
                     navText = "+&nbsp;" + navText;
                 }
             } else {
                 // kein Ordner
                 if (navObj.active) {
-                    attr = " class='" + css_color_highlight + "'";
+                    attr = " style='background-color: rgb(255 255 255 /0.2);'";
+                    //attr = " class='" + css_color_highlight + "'";
                 }
             }
 

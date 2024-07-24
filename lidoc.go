@@ -29,6 +29,7 @@ const (
 var port string
 var fileList []string
 var siteList infolist.InfoList
+var homePath string
 
 // Datei Vorhanden prüfen
 func is_file_exists(file string) bool {
@@ -105,9 +106,10 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 	fileName := info.Name()
 	dir := filepath.Dir(path)
 	ext := filepath.Ext(path)
+	relPath := strings.Replace(path, homePath, "", 1)
 
 	// Alle Dateien oder Ordner mit "_" werden ignoriert
-	if strings.HasPrefix(fileName, "_") || strings.Contains(dir, ".") {
+	if strings.Contains(relPath, "/_") || strings.Contains(relPath, "\\_") || strings.HasPrefix(fileName, "_") || strings.Contains(dir, ".") {
 		return nil
 	}
 
@@ -173,7 +175,8 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 
 // Alle Dateien und Ordner in durchgehen
 func build() {
-	homePath, err := os.Getwd()
+	var err error
+	homePath, err = os.Getwd()
 	fmt.Println("Path:", homePath)
 	if err != nil {
 		fmt.Println(homePath, err)
