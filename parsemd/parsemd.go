@@ -759,10 +759,11 @@ func Parse(fullPath string) (Site, error) {
 	}
 
 	relPath := strings.Replace(fullPath, workDir, "", 1)
+	relPath = strings.Replace(relPath, "\\", "/", -1)
 
 	// Seiten eigenschaften setzen
 	site.Url = relPath
-	site.Path = filepath.Dir(relPath)
+	site.Path = strings.Replace(filepath.Dir(relPath), "\\", "/", -1)
 	name, _, _ := strings.Cut(filepath.Base(relPath), ".")
 	site.Title = ""
 	site.Name = name

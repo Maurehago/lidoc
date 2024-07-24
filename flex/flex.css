@@ -197,6 +197,7 @@ dd{padding-left: 16px;}
 /* Navigation */
 nav ol,nav ul {
   list-style-type: none;
+  padding-left: 8px;
 }
 nav input[type="checkbox"] {
   left: -9999px;
@@ -214,6 +215,7 @@ nav label {
 }
 nav a {
   text-decoration: none;
+  display: flex;
 }
 
 

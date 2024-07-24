@@ -393,6 +393,237 @@ export class InfoList {
     } // send
 } // Class InfoList
 
+
+// Seiten Navigation
+// path, name, title, date
+export function InfoNav(iList) {
+    const self = this;
+
+    // Eigenschaften
+    self.infoList = iList;
+    self.sortFields = [];
+    self.sortIndex = null;
+    self.sortFields = ["path", "date", "title", "name"];
+    self.elmID = "";
+
+    let pathIndex = -1;
+    let nameIndex = -1;
+    let titleIndex = -1;
+    let dateIndex = -1;
+
+    function setIndexes() {
+        if (self.infoList instanceof InfoList) {
+            pathIndex = self.infoList.getFieldIndex("path");
+            nameIndex = self.infoList.getFieldIndex("name");
+            titleIndex = self.infoList.getFieldIndex("title");
+            dateIndex = self.infoList.getFieldIndex("date");
+
+            self.sortIndex = self.infoList.getSortIndex(self.sortFields);
+        } else {
+            pathIndex = -1;
+            nameIndex = -1;
+            titleIndex = -1;
+            dateIndex = -1;
+        }
+    }
+
+    // bei Start ausführen
+    setIndexes()
+
+    //  Setzt die InfoListe für die Tabelle
+    self.setInfoList = function(iList) {
+        self.infoList = iList;
+        setIndexes();
+    }
+
+    // Sortierung
+    self.setSortIndex = function(sortIndex) {
+        if (Array.isArray(sortIndex)) {
+            self.sortIndex = sortIndex;
+        }
+    }
+
+    self.showNav = function(elm) {
+        // Prüfen
+        if (!elm && self.elmID != "") {
+            elm = document.body.querySelector(self.elmID);
+        }
+        if (elm instanceof HTMLElement) {
+            self.elmID = elm.id;
+        } else {
+            return;
+        }
+        if ((!self.infoList) instanceof InfoList) {
+            return;
+        }
+
+        // Feldindex aktualisiern
+        setIndexes();
+
+        // Navigation Objekt
+        function NavObj() {
+            const self = this;
+            
+            self.active = false;
+            self.title = "";
+            self.path = "";
+            self.isDir = false;
+            self.children = [];
+        };
+
+        let dirList = new Map();
+
+        // // Basis Navigation Objekt
+        let baseNav = new NavObj();
+        baseNav.url = "/";
+        baseNav.isDir = true;
+        dirList.set("/", baseNav);
+
+        // Aktuellen Pfad lesen
+        const fullPath = window.location.pathname;
+
+        // Eltern Navigations Objekt holen
+        function getDirObj(path) {
+            let lastPos = path.lastIndexOf("/");
+            let parentPath = path.substring(0, lastPos);
+            if (parentPath == "") {
+                parentPath = "/";
+            }
+
+            // test:
+            console.log("dirPath:", path);
+
+            let obj = dirList.get(parentPath);
+            if (!obj) {
+                obj = new NavObj();
+                obj.title = parentPath.substring(parentPath.lastIndexOf("/") + 1);
+                obj.path = parentPath;
+                obj.isDir = true;
+                dirList.set(parentPath, obj);
+
+                // in Eltern Element hinzufügen
+                parent = getDirObj(parentPath);
+                parent.children.push(obj);
+            }
+
+            // aktiv prüfen
+            if (fullPath.startsWith(parentPath)) {
+                obj.active = true;
+            }
+            return obj;
+        } // getDirObj
+
+        // ListItem
+        function dataToNavList(data) {
+            if (!data) {return;}
+            
+            // Pfad lesen
+            let path = data[pathIndex];
+            if (!path) {
+                return "";
+            }
+
+            // Titel festlegen
+            let title = data[titleIndex];
+            let name = data[nameIndex];
+            if (!title) {
+                title = name;
+            }
+
+            // Pfade
+            if (path.endsWith("/")) {
+                path += name + ".html";
+            } else {
+                path += "/" + name + ".html";
+            }
+
+            let dirObj = getDirObj(path);
+
+            if (name == "index") {
+                return;
+            }
+
+            let obj = new NavObj();
+            obj.path = path;
+            obj.title = title;
+
+            // auf aktiv prüfen
+            if (path == fullPath) {
+                obj.active = true;
+            }
+
+            // In Directory einfügen
+            dirObj.children.push(obj);
+        } // dataToNavList
+
+
+        // wenn Index
+        if (self.sortIndex && self.sortIndex.length > 0) {
+            // Alle Daten nach Index durchgehen
+            self.sortIndex.forEach((value) => {
+                const data = self.infoList.Data.get(value);
+                dataToNavList(data);
+            });
+        } else {
+            // Alle Einträge in der map
+            self.infoList.Data.forEach((data, key) => {
+                dataToNavList(data);
+            });
+        }
+
+        // HTML zusammenbauen
+        let navString = "<ul>";
+
+        // liste aller KindElemente prüfen
+        function setNavString(navObj) {
+            if (!navObj instanceof NavObj) {return;}
+            
+            let navText = navObj.title;
+            let attr = "";
+            if (navObj.isDir) {
+                if (navObj.active) {
+                    navText = "-&nbsp;" + navText;
+                    attr = " style='background-color: rgb(255 255 255 /0.2);'";
+                } else {
+                    navText = "+&nbsp;" + navText;
+                }
+            } else {
+                // kein Ordner
+                if (navObj.active) {
+                    attr = " class='" + css_color_highlight + "'";
+                }
+            }
+
+            let navLink = "<a href='" + navObj.path + "'>" + navText + "</a>";
+            navString += "<li" + attr + "'>" + navLink;
+            
+            // wenn Directory
+            if (navObj.active && navObj.isDir) {
+                navString += "<ul>";
+                navObj.children.forEach(setNavString);
+                navString += "</ul>";
+            }
+
+            // Listen Element abschliessen
+            navString += "</li>"
+        } // setNavString
+
+        // test:
+        console.log("dirList:", dirList);        
+
+        // Alle Kindelemente vom Basis Nav durchgehen
+        baseNav.children.forEach(setNavString);
+
+        // abschliessen
+        navString += "</ul>";
+
+        // navigation erzeugen
+        elm.insertAdjacentHTML("beforeend", navString);        
+    } // showNav
+} // InfoNav
+
+
+
 //  Info Tabelle
 export function InfoTable(iList, col_list, col_titles)  {
     const self = this;
@@ -550,14 +781,14 @@ export function InfoTable(iList, col_list, col_titles)  {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 // Navigation prüfen
-                checkNav(self, "up");
+                checkKeyNav(self, "up");
                 //e.preventDefault();
                 break;
             case "ArrowDown":
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 // Navigation prüfen
-                checkNav(self, "down");
+                checkKeyNav(self, "down");
                 //e.preventDefault();
                 break;
             case "ArrowRight":
@@ -592,7 +823,7 @@ export function InfoTable(iList, col_list, col_titles)  {
         window.removeEventListener("keydown", checkKeys, false);
         // window.removeEventListener("keyup", this.#checkKeys, false);
     }
-} // class InfoTable
+} // InfoTable
 
 // aktuelles Datensatz Element holen
 function getActiveRow(infoTable) {
@@ -614,8 +845,8 @@ function getActiveRow(infoTable) {
 } // getActiveRow
 
 
-// Navigation Prüfung
-function checkNav(infoTable, direction) {
+// Tastatur Navigation Prüfung
+function checkKeyNav(infoTable, direction) {
     // console.log(infoTable);
     if (!infoTable) {return;}
 
@@ -642,7 +873,7 @@ function checkNav(infoTable, direction) {
             prevElm.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
         }
     }
-} // checkNav
+} // checkKeyNav
 
 // Funktion die alle Tabellen mit Daten füllt
 // tabelle muss ein "data-ilist" Attribut haben, welches den Pfad und Schrägstrich(/) getrennt den Namen der Liste angibt
@@ -705,8 +936,60 @@ export function checkTables() {
             // const innerHTML = iList.getTableDataHTML(fields, sortIndex);
             // tbodyElm.insertAdjacentHTML("beforeend", innerHTML);
 
-            // Events registrieren
+            // Events registrieren todo: eventuell Optional?
             infoTable.registerEvents(tableElm);
         });
     }); // forEach Table Element
 } // checkTables
+
+
+// Funktion die alle NavigationsElemente mit Daten füllt
+// nav muss ein "data-ilist" Attribut haben, welches den Pfad und Schrägstrich(/) getrennt den Namen der Liste angibt
+// optional kann noch eine Sortierung nach den Feldern path,date,title,name angegeben werden
+// z.B.: <nav data-ilist="lidoc/sites" data-sort="path,date,title,name">
+export function checkNav() {
+    // Alle Tabellen lesen
+    const navs = document.querySelectorAll("nav[data-ilist]");
+
+    // alle gefunden NavigationsElemente durchgehen
+    navs.forEach((navElm) => {
+        // const tbodyElm = tableElm.querySelector("tbody");
+        const sortString = navElm.getAttribute("data-sort");
+
+        // Infolist Information lesen
+        const iListInfo = navElm.dataset.ilist.split("/"); // iListInfo[0] = Path / iListInfo [1] = Name
+
+        // infoList erzeugen
+        const iList = new InfoList();
+        if (iListInfo.length == 1) {
+            iList.Name = iListInfo[0];
+        } else {
+            iList.Path = iListInfo[0];
+            iList.Name = iListInfo[1];
+        }
+
+        // InfoTabelle erstellen
+        const infoNav = new InfoNav(iList);
+        navElm.infoNav = infoNav;
+
+        // Infolist Daten holen
+        iList.fetch().then(() => {
+            // test:
+            // console.log("infoList:", iList);
+
+            // Sortierung
+            let sortIndex = null;
+            if (sortString) {
+                sortIndex = iList.getSortIndex(sortString.split(","));
+                infoNav.setSortIndex(sortIndex);
+            } else {
+                sortIndex = iList.getSortIndex("path", "date", "title", "name");
+                infoNav.setSortIndex(sortIndex);
+            }
+            
+
+            // HTML Daten von Navigation erzeugen und anzeigen
+            infoNav.showNav(navElm);
+        });
+    }); // forEach Nav Element
+} // checkNav
