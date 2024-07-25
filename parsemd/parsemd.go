@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -27,6 +28,9 @@ type Site struct {
 	Images   []string // Liste Mit Bildern(URL) (wird beim Parsen generiert)
 	Links    []string // Liste mit Links(URL) (wird beim Parsen generiert)
 }
+
+// Regular Expressions
+var rFett *regexp.Regexp // für **Fett** Markdown
 
 // Variablen zum prüfen
 var row_tag string = "f-row"
@@ -498,6 +502,12 @@ func parse_line_link(line string) string {
 	return parse_line_link(new_line)
 } // Parse_line_link
 
+// Auf Fettschrift prüfen
+func parse_bold(line string) string {
+	newLine := rFett.ReplaceAllString(line, "<b>${1}</b>")
+	return newLine
+} // parse_bold
+
 // Listen Prüfen
 func parse_lists(line string) bool {
 	trim_line := strings.TrimLeft(line, " ")
@@ -695,6 +705,7 @@ func parse_row(line string) {
 	}
 
 	// auf Fett / Italic prüfen
+	line = parse_bold(line)
 
 	// auf Listen prüfen
 	if parse_lists(line) {
@@ -712,6 +723,8 @@ func parse_row(line string) {
 func Parse(fullPath string) (Site, error) {
 	// neue Seite
 	site = Site{}
+
+	rFett = regexp.MustCompile("\\*\\*(.+?)\\*\\*")
 
 	// test:
 	// fmt.Println("VOR - site.Content:", site.Content)
