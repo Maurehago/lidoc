@@ -785,17 +785,41 @@ export function InfoTable(iList, col_list, col_titles)  {
                 // Navigation prüfen
                 checkKeyNav(self, "up");
                 //e.preventDefault();
-                break;
+            break;
             case "ArrowDown":
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 // Navigation prüfen
                 checkKeyNav(self, "down");
                 //e.preventDefault();
-                break;
+            break;
+            case "PageDown":
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                // Navigation prüfen
+                checkKeyNav(self, "pageDown");
+            break;
+            case "PageUp":
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                // Navigation prüfen
+                checkKeyNav(self, "pageUp");
+            break;
+            case "Home":
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                // Navigation prüfen
+                checkKeyNav(self, "pos1");
+            break;
+            case "End":
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                // Navigation prüfen
+                checkKeyNav(self, "end");
+            break;
             case "ArrowRight":
-                // some code here…
-                break;
+            // some code here…
+            break;
             case "ArrowLeft":
                 // some code here…
                 break;
@@ -811,6 +835,21 @@ export function InfoTable(iList, col_list, col_titles)  {
         }
     }
 
+    // auf click prüfen
+    let checkClick = function(e) {
+        if (!e) {
+            return;
+        }
+
+        let target = e.target;
+        if (target && target.tagName == "TD") {
+            // todo: Spalte und Zeile Merken
+
+            // todo: auf aktiv setzen
+        } 
+
+    }
+
     //   Event Handler
     // -------------------------
 
@@ -818,12 +857,16 @@ export function InfoTable(iList, col_list, col_titles)  {
     self.registerEvents = function(elm) {
         window.addEventListener("keydown", checkKeys, false);
         // window.addEventListener("keyup", this.#checkKeys, false);
+
+        // todo: click Event
     }
 
     // Events entfernen
     self.unregisterEvents = function(elm) {
         window.removeEventListener("keydown", checkKeys, false);
         // window.removeEventListener("keyup", this.#checkKeys, false);
+
+        // todo: click Event
     }
 } // InfoTable
 
@@ -847,6 +890,8 @@ function getActiveRow(infoTable) {
 } // getActiveRow
 
 
+
+
 // Tastatur Navigation Prüfung
 function checkKeyNav(infoTable, direction) {
     // console.log(infoTable);
@@ -855,25 +900,84 @@ function checkKeyNav(infoTable, direction) {
     let currentElm = getActiveRow(infoTable);
     if (!currentElm) {return;}
 
+    // nächstes Element
+    let nextElm;
+    let count = 10; // Anzahl der nächsten elemente -1
+    let elm = currentElm;
+
     // console.log("currentElm2:", currentElm);
+    switch (direction) {
+        case "down":
+            // Next Element
+            nextElm = currentElm.nextElementSibling;
+        break;
+
+        case "up":
+            // Voriges Element
+            nextElm = currentElm.previousElementSibling;
+        break;
+
+        case "end":
+            // letztes Element
+            nextElm = currentElm.parentNode.lastElementChild;
+        break;
+
+        case "pos1":
+            // Voriges Element
+            nextElm = currentElm.parentNode.firstElementChild;
+        break;
+
+        case "pageDown":
+            while (elm && count) {
+                nextElm = elm;
+                elm = elm.nextElementSibling;
+                count -= 1;
+            }
+        break;
+
+        case "pageUp":
+            while (elm && count) {
+                nextElm = elm;
+                elm = elm.previousElementSibling;
+                count -= 1;
+            }
+        break;
+
+        default:
+        break;
+    }
+
+
     if (direction == "down") {
         // Next Element
-        let nextElm = currentElm.nextElementSibling;
-        if (nextElm) {
-            currentElm.classList.remove(css_color_highlight);
-            nextElm.classList.add(css_color_highlight);
-            infoTable.activeRowID = nextElm.id;
-            nextElm.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });    // { behavior: "smooth", block: "end", inline: "nearest" }
-        }
+        nextElm = currentElm.nextElementSibling;
     } else if (direction == "up") {
         // Voriges Element
-        let prevElm = currentElm.previousElementSibling;
-        if (prevElm) {
-            currentElm.classList.remove(css_color_highlight);
-            prevElm.classList.add(css_color_highlight);
-            infoTable.activeRowID = prevElm.id;
-            prevElm.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        nextElm = currentElm.previousElementSibling;
+    } else if (direction == "pageDown") {
+        let count = 10; // Anzahl der nächsten elemente -1
+        let elm = currentElm;
+        while (elm && count) {
+            nextElm = elm;
+            elm = elm.nextElementSibling;
+            count -= 1;
         }
+    } else if (direction == "pageUp") {
+        let count = 10; // Anzahl der nächsten elemente -1
+        let elm = currentElm;
+        while (elm && count) {
+            nextElm = elm;
+            elm = elm.previousElementSibling;
+            count -= 1;
+        }
+    }
+
+    // wenn neues Next Element
+    if (nextElm) {
+        currentElm.classList.remove(css_color_highlight);
+        nextElm.classList.add(css_color_highlight);
+        infoTable.activeRowID = nextElm.id;
+        nextElm.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });    // { behavior: "smooth", block: "end", inline: "nearest" }
     }
 } // checkKeyNav
 
