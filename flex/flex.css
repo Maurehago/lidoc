@@ -290,7 +290,7 @@ thead,tbody,tfoot,tr,td,th {
   border: 1px solid #ddd;
 }
 tr:nth-child(even){background-color: #f2f2f2;}
-tr:hover {background-color: #ddd;}
+/*tr:hover {background-color: #ddd;}*/
 
 /*thead{border-bottom: 2px solid #c4c4c4;}
 th,td{border-bottom: 1px solid #ddd;padding: 0.5rem;}*/
