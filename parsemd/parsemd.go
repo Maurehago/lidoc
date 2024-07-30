@@ -783,7 +783,11 @@ func Parse(fullPath string) (Site, error) {
 	site.Content = ""
 	site.Images = []string{}
 	site.Links = []string{}
-
+	if site.Path == "/" {
+		site.ID = site.Path + site.Name
+	} else {
+		site.ID = site.Path + "/" + site.Name
+	}
 	// Zeilenweise lesen
 	//scanner := bufio.NewScanner(file)
 	//scanner.Split(bufio.ScanLines)
@@ -821,6 +825,11 @@ func Parse(fullPath string) (Site, error) {
 
 	// Abschliessen
 	close_htmlTags()
+
+	// Wenn Kein Seiten Titel und Name ist Index
+	if site.Name == "index" && site.Title == "" {
+		site.Title = filepath.Base(site.Path)
+	}
 
 	// test:
 	// fmt.Println("Nach - site.Content:", site.Content)

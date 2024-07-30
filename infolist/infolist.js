@@ -597,7 +597,7 @@ export function InfoNav(iList) {
             }
 
             let navLink = "<a href='" + navObj.path + "'>" + navText + "</a>";
-            navString += "<li" + attr + "'>" + navLink;
+            navString += "<li" + attr + ">" + navLink;
             
             // wenn Directory
             if (navObj.active && navObj.isDir) {
@@ -620,7 +620,7 @@ export function InfoNav(iList) {
         navString += "</ul>";
 
         // navigation erzeugen
-        elm.insertAdjacentHTML("beforeend", navString);        
+        elm.insertAdjacentHTML("beforeend", navString);
     } // showNav
 } // InfoNav
 
