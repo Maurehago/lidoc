@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Maurehago/lidoc/infolist"
 	"github.com/Maurehago/lidoc/parsemd"
@@ -30,6 +31,9 @@ var port string
 var fileList []string
 var siteList infolist.InfoList
 var homePath string
+var lastCheck time.Time
+var lastDoc bytes.Buffer
+var is_lastDoc bool
 
 // Datei Vorhanden prüfen
 func is_file_exists(file string) bool {
@@ -98,14 +102,37 @@ func parseSite(site *parsemd.Site) (bytes.Buffer, error) {
 
 // Datei Prüfung
 func buildFile(path string, info fs.DirEntry, err error) error {
+	is_lastDoc = false
 	// Verzeichnisse werden nicht berücksichtigt
 	if info.IsDir() {
 		return nil
 	}
+	if err != nil {
+		return err
+	}
+
+	// test:
+	fmt.Println("buildfile:", path)
+
+	// Dateinamenserweiterung Markdown (.md)
+	ext := filepath.Ext(path)
+	if ext != ".md" {
+		return nil
+	}
+
+	// ÄnderungsZeitpunkt prüfen
+	var fileInfo fs.FileInfo
+	fileInfo, err = info.Info()
+	if err == nil {
+		modTime := fileInfo.ModTime()
+		if modTime.Before(lastCheck) {
+			fmt.Println("Ignore:", path)
+			return nil
+		}
+	}
 
 	fileName := info.Name()
 	dir := filepath.Dir(path)
-	ext := filepath.Ext(path)
 	relPath := strings.Replace(path, homePath, "", 1)
 
 	// Alle Dateien oder Ordner mit "_" werden ignoriert
@@ -114,62 +141,60 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 	}
 
 	// Wenn Markdown
-	if ext == ".md" {
-		// Parsen
-		// fmt.Println("path:", path)
+	// Parsen
+	// fmt.Println("path:", path)
 
-		// var site parsemd.Site
-		site, err := parsemd.Parse(path)
-		if err != nil {
-			fmt.Println(site, err)
-			return err
-		}
-
-		htmlName := strings.Replace(fileName, ".md", ".html", 1)
-		htmlPath := filepath.Join(dir, htmlName)
-
-		// Template parsen
-		// fmt.Println("site:", site)
-
-		var doc bytes.Buffer
-		doc, err = parseSite(&site)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-
-		// Datei erstellen
-		err = os.WriteFile(htmlPath, doc.Bytes(), 0777)
-		if err != nil {
-			fmt.Println("HTML save Error:", err.Error())
-			return err
-		}
-
-		// Bilder prüfen ob vorhanden
-		imgErrors := 0
-		for _, imgURL := range site.Images {
-			if err = is_url_exists(imgURL); err != nil {
-				imgErrors += 1
-			}
-		}
-
-		// Links prüfen ob vorhanden
-		linkErrors := 0
-		for _, linkURL := range site.Links {
-			if err = is_url_exists(linkURL); err != nil {
-				linkErrors += 1
-			}
-		}
-
-		// Seiten Liste
-		// ID, path, name, title, date, imageerror, linkerror
-		siteID := infolist.GSID()
-		site.ID = siteID
-		siteList.Set(siteID, []any{siteID, site.Path, site.Name, site.Title, site.Date, imgErrors, linkErrors})
-		fileList = append(fileList, site.Path)
-	} else {
-		// fileList = append(fileList, path)
+	// var site parsemd.Site
+	site, err := parsemd.Parse(path)
+	if err != nil {
+		fmt.Println(site, err)
+		return err
 	}
+
+	htmlName := strings.Replace(fileName, ".md", ".html", 1)
+	htmlPath := filepath.Join(dir, htmlName)
+
+	// Template parsen
+	// fmt.Println("site:", site)
+
+	var doc bytes.Buffer
+	doc, err = parseSite(&site)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	is_lastDoc = true
+
+	// Datei erstellen
+	err = os.WriteFile(htmlPath, doc.Bytes(), 0777)
+	if err != nil {
+		fmt.Println("HTML save Error:", err.Error())
+		return err
+	}
+
+	// Bilder prüfen ob vorhanden
+	imgErrors := 0
+	for _, imgURL := range site.Images {
+		if err = is_url_exists(imgURL); err != nil {
+			imgErrors += 1
+		}
+	}
+
+	// Links prüfen ob vorhanden
+	linkErrors := 0
+	for _, linkURL := range site.Links {
+		if err = is_url_exists(linkURL); err != nil {
+			linkErrors += 1
+		}
+	}
+
+	// Seiten Liste
+	// ID, path, name, title, date, imageerror, linkerror
+	// siteID := infolist.GSID()
+	// site.ID = siteID
+	siteList.Set(site.ID, []any{site.ID, site.Path, site.Name, site.Title, site.Date, imgErrors, linkErrors})
+	fileList = append(fileList, site.Path)
+
 	return nil
 }
 
@@ -192,6 +217,8 @@ func build() {
 		fmt.Println(err)
 		return
 	}
+
+	lastCheck = time.Now()
 
 	// Seitenliste speichern
 	// fmt.Println("SiteList:", siteList)
@@ -268,37 +295,94 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 
 	// Console Log
 	// fmt.Println("file: "+file, mdFile)
+	fileInfo, err := os.Stat(mdFile)
 
-	if checkMD && is_file_exists(mdFile) {
+	if err == nil && checkMD {
 		// Hier Marrkdown parsen und zurückgeben
 
 		// Console Log
-		// fmt.Println("parse:", mdFile)
+		fmt.Println("parse:", mdFile)
 
-		// var site parsemd.Site
-		site, err := parsemd.Parse(mdFile)
+		// buildFile
+		err = buildFile(mdFile, fs.FileInfoToDirEntry(fileInfo), err)
 		if err != nil {
 			// Fehler
-			fmt.Println("ERROR parsing site:", site, err)
+			fmt.Println("ERROR buildFile:", err)
 			return
 		}
 
-		// fmt.Println("Site after Parsing:", site)
+		// // var site parsemd.Site
+		// // fullPath := filepath.Join(homePath, mdFile)
+		// site, err := parsemd.Parse(filepath.Join(homePath, mdFile))
+		// if err != nil {
+		// 	// Fehler
+		// 	fmt.Println("ERROR parsing site:", site, err)
+		// 	return
+		// }
 
-		// Seite mit Template auflösen
-		doc, err := parseSite(&site)
-		if err != nil {
-			// Fehler
-			fmt.Println("ERROR templating site:", site, err)
-			return
-		}
+		// // Bilder prüfen ob vorhanden
+		// imgErrors := 0
+		// for _, imgURL := range site.Images {
+		// 	if err = is_url_exists(imgURL); err != nil {
+		// 		imgErrors += 1
+		// 	}
+		// }
+
+		// // Links prüfen ob vorhanden
+		// linkErrors := 0
+		// for _, linkURL := range site.Links {
+		// 	if err = is_url_exists(linkURL); err != nil {
+		// 		linkErrors += 1
+		// 	}
+		// }
+
+		// // bestehende Seite Laden
+		// for id, data := range siteList.Data {
+		// 	// Auf pfad(1) und Namen Prüfen(2)
+		// 	if data[1] == site.Path && data[2] == site.Name {
+		// 		site.ID = id
+		// 		break
+		// 	}
+		// }
+
+		// if site.ID == "" {
+		// 	site.ID = infolist.GSID()
+		// }
+
+		// // Seiten Info in Liste
+		// // "ID", "path", "name", "title", "date", "imageerror", "linkerror"
+		// siteList.Set(site.ID, []any{site.ID, site.Path, site.Name, site.Title, site.Date, imgErrors, linkErrors})
+
+		// // Seitenliste Speichern
+		// //err = siteList.Save(".")
+		// //if err != nil {
+		// //	fmt.Println(err)
+		// //}
+		// // fmt.Println("Site after Parsing:", site)
+
+		// // Seite mit Template auflösen
+		// doc, err := parseSite(&site)
+		// if err != nil {
+		// 	// Fehler
+		// 	fmt.Println("ERROR templating site:", site, err)
+		// 	return
+		// }
 
 		// Seite turücksenden
-		_, err = fmt.Fprint(w, doc.String())
-		if err != nil {
-			// Fehler
-			fmt.Println("ERROR sending back:", err)
-		}
+		// if is_lastDoc {
+		// 	_, err = fmt.Fprint(w, lastDoc.String())
+		// 	if err != nil {
+		// 		// Fehler
+		// 		fmt.Println("ERROR sending back:", err)
+		// 	}
+		// 	return
+		// }
+	}
+
+	// Wenn Seitenliste
+	if strings.HasSuffix(relFile, "ilist/lidoc/sites.json") {
+		data, _ := siteList.Marshal()
+		fmt.Fprint(w, string(data))
 		return
 	}
 
@@ -330,6 +414,13 @@ func main() {
 	siteList = infolist.InfoList{}
 	siteList.Name = "sites"
 	siteList.Path = "lidoc"
+
+	// Laden probieren
+	err := siteList.Load("")
+	if err != nil {
+		fmt.Println("siteList:", err.Error())
+	}
+
 	siteList.Fields = []string{"ID", "path", "name", "title", "date", "imageerror", "linkerror"}
 	siteList.Types = []string{"str", "str", "str", "str", "str", "int", "int"}
 
@@ -349,7 +440,7 @@ func main() {
 	fmt.Println("...")
 
 	// Server starten
-	err := http.ListenAndServe(serverURL, nil)
+	err = http.ListenAndServe(serverURL, nil)
 	if err != nil {
 		log.Fatal("Error Starting the HTTP Server :", err)
 		return
