@@ -32,8 +32,7 @@ var fileList []string
 var siteList infolist.InfoList
 var homePath string
 var lastCheck time.Time
-var lastDoc bytes.Buffer
-var is_lastDoc bool
+var is_build bool
 
 // Datei Vorhanden prüfen
 func is_file_exists(file string) bool {
@@ -102,7 +101,6 @@ func parseSite(site *parsemd.Site) (bytes.Buffer, error) {
 
 // Datei Prüfung
 func buildFile(path string, info fs.DirEntry, err error) error {
-	is_lastDoc = false
 	// Verzeichnisse werden nicht berücksichtigt
 	if info.IsDir() {
 		return nil
@@ -112,7 +110,7 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 	}
 
 	// test:
-	fmt.Println("buildfile:", path)
+	// fmt.Println("buildfile:", path)
 
 	// Dateinamenserweiterung Markdown (.md)
 	ext := filepath.Ext(path)
@@ -126,7 +124,7 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 	if err == nil {
 		modTime := fileInfo.ModTime()
 		if modTime.Before(lastCheck) {
-			fmt.Println("Ignore:", path)
+			// fmt.Println("Ignore:", path)
 			return nil
 		}
 	}
@@ -163,7 +161,6 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		fmt.Println(err)
 		return err
 	}
-	is_lastDoc = true
 
 	// Datei erstellen
 	err = os.WriteFile(htmlPath, doc.Bytes(), 0777)
@@ -171,6 +168,9 @@ func buildFile(path string, info fs.DirEntry, err error) error {
 		fmt.Println("HTML save Error:", err.Error())
 		return err
 	}
+
+	// Datei erstellt
+	is_build = true
 
 	// Bilder prüfen ob vorhanden
 	imgErrors := 0
@@ -208,8 +208,8 @@ func build() {
 		return
 	}
 
-	siteList.Data = make(map[string][]interface{})
-	fileList = make([]string, 0)
+	// Build zurüksetzen
+	is_build = false
 
 	// Alle Dateien durchgehen
 	err = filepath.WalkDir(homePath, buildFile)
@@ -220,19 +220,15 @@ func build() {
 
 	lastCheck = time.Now()
 
-	// Seitenliste speichern
-	// fmt.Println("SiteList:", siteList)
-	err = siteList.Save(".")
-	if err != nil {
-		fmt.Println(err)
-		return
+	if is_build {
+		// Seitenliste speichern
+		// fmt.Println("SiteList:", siteList)
+		err = siteList.Save(".")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
-
-	// test:
-	// for _, p := range fileList {
-	// 	fmt.Println("-", p)
-	// }
-	// fmt.Println(fileList)
 
 	// Garbage Collector anstoßen
 	runtime.GC()
@@ -247,7 +243,6 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 
 	// Markdown Datei
 	var mdFile string
-	// var htmlFile string
 	checkFolder := false
 	checkMD := false
 
@@ -263,22 +258,18 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 	switch filetype {
 	case "":
 		mdFile = fullPath + ".md"
-		// htmlFile = fullPath + ".html"
 		checkFolder = true
 
 	case ".html":
 		mdFile = strings.Replace(fullPath, ".html", ".md", 1)
-		// htmlFile = fullPath
 		checkMD = true
 
 	case ".md":
 		mdFile = fullPath
-		// htmlFile = strings.Replace(fullPath, ".md", ".html", 1)
 		checkMD = true
 
 	default:
 		mdFile = ""
-		// htmlFile = ""
 	}
 
 	// auf Ordner prüfen
@@ -288,95 +279,22 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 			// dann kann es Datei sein
 		} else if fInfo.IsDir() {
 			mdFile = filepath.Join(fullPath, "index.md")
-			// htmlFile = filepath.Join(fullPath, "index.html")
 			checkMD = true
 		}
 	}
 
 	// Console Log
 	// fmt.Println("file: "+file, mdFile)
-	fileInfo, err := os.Stat(mdFile)
 
-	if err == nil && checkMD {
+	// Wenn Markdown zu prüfen
+	if checkMD && mdFile != "" {
 		// Hier Marrkdown parsen und zurückgeben
 
 		// Console Log
-		fmt.Println("parse:", mdFile)
+		// fmt.Println("parse:", mdFile)
 
 		// buildFile
-		err = buildFile(mdFile, fs.FileInfoToDirEntry(fileInfo), err)
-		if err != nil {
-			// Fehler
-			fmt.Println("ERROR buildFile:", err)
-			return
-		}
-
-		// // var site parsemd.Site
-		// // fullPath := filepath.Join(homePath, mdFile)
-		// site, err := parsemd.Parse(filepath.Join(homePath, mdFile))
-		// if err != nil {
-		// 	// Fehler
-		// 	fmt.Println("ERROR parsing site:", site, err)
-		// 	return
-		// }
-
-		// // Bilder prüfen ob vorhanden
-		// imgErrors := 0
-		// for _, imgURL := range site.Images {
-		// 	if err = is_url_exists(imgURL); err != nil {
-		// 		imgErrors += 1
-		// 	}
-		// }
-
-		// // Links prüfen ob vorhanden
-		// linkErrors := 0
-		// for _, linkURL := range site.Links {
-		// 	if err = is_url_exists(linkURL); err != nil {
-		// 		linkErrors += 1
-		// 	}
-		// }
-
-		// // bestehende Seite Laden
-		// for id, data := range siteList.Data {
-		// 	// Auf pfad(1) und Namen Prüfen(2)
-		// 	if data[1] == site.Path && data[2] == site.Name {
-		// 		site.ID = id
-		// 		break
-		// 	}
-		// }
-
-		// if site.ID == "" {
-		// 	site.ID = infolist.GSID()
-		// }
-
-		// // Seiten Info in Liste
-		// // "ID", "path", "name", "title", "date", "imageerror", "linkerror"
-		// siteList.Set(site.ID, []any{site.ID, site.Path, site.Name, site.Title, site.Date, imgErrors, linkErrors})
-
-		// // Seitenliste Speichern
-		// //err = siteList.Save(".")
-		// //if err != nil {
-		// //	fmt.Println(err)
-		// //}
-		// // fmt.Println("Site after Parsing:", site)
-
-		// // Seite mit Template auflösen
-		// doc, err := parseSite(&site)
-		// if err != nil {
-		// 	// Fehler
-		// 	fmt.Println("ERROR templating site:", site, err)
-		// 	return
-		// }
-
-		// Seite turücksenden
-		// if is_lastDoc {
-		// 	_, err = fmt.Fprint(w, lastDoc.String())
-		// 	if err != nil {
-		// 		// Fehler
-		// 		fmt.Println("ERROR sending back:", err)
-		// 	}
-		// 	return
-		// }
+		build()
 	}
 
 	// Wenn Seitenliste
@@ -392,6 +310,13 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 
 // HTML Dateien erzeugen
 func buildFiles(w http.ResponseWriter, r *http.Request) {
+	// Startwerte setzen
+	lastCheck = lastCheck.AddDate(-1, 0, 0)
+
+	// Seitenliste Daten leeren
+	siteList.Data = make(map[string][]interface{})
+	fileList = make([]string, 0)
+
 	build()
 
 	// Ausgabe Liste mit Seiten
@@ -421,11 +346,15 @@ func main() {
 		fmt.Println("siteList:", err.Error())
 	}
 
+	// SeitenListe Felder und Typen
 	siteList.Fields = []string{"ID", "path", "name", "title", "date", "imageerror", "linkerror"}
 	siteList.Types = []string{"str", "str", "str", "str", "str", "int", "int"}
 
+	// Daten in Seitenliste leeren
+	siteList.Data = make(map[string][]interface{})
+
 	// Build beim Start
-	// build()
+	build()
 
 	// Handler
 	http.HandleFunc("/build", buildFiles)
