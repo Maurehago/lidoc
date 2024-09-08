@@ -1,429 +1,439 @@
-// deno-lint-ignore-file no-explicit-any
-// lidoc Markdown Parser
+// ===========================
+//   Markdown Dateien Parsen
+// 2024-08-27
+// ===========================
 
-import { existsSync } from "@std/fs/exists";
-import { Site } from "./parse.ts";
+type Data = {
+    [key: string]: string | string[];
+};
 
-let is_first_line: boolean = false;
-let is_data: boolean = false;
-let data: any = {};
-let last_obj: any = {};
-let last_key: string = "";
-let last_step: number = 0;
-let data_path: string = "";
-let step_path: any = {};
+// Informationen zu der geparsten Seite
+export interface SiteInfo {
+    html: string;
+    data: Data;
+    imageList: string[];
+    linkList: string[];
+}
 
+// Optionen für den Parser
+export interface ParseOptions {
+    rowTag: string; // HTML-TagName einer Zeile
+    colTag: string; // HTML-TagName einer Spalte
+}
 
-// Markdown
-const row_tag: string = "r_float";
-const col_tag: string = "c_float";
-let is_row: boolean = false;
-let is_col: boolean = false;
-let is_p: boolean = false;
-let is_code: boolean = false;
-let is_multiline = false;
+// Erzeugt aus dem Inhalt einer Markdown Datei
+// eine Seiten Information, mit geparstem html
+export function parseMd(mdString: string, options?: ParseOptions): SiteInfo {
+    // ====================
+    //   Tag namen
+    // ------------------
+    const rowTag: string = options?.rowTag || "f-row";
+    const colTag: string = options?.colTag || "f-item";
 
-// neuer Text zum anzeigen
-let new_text: string = "";
+    // Regular Expression
 
+    // Fettschrift
+    const regularBold = new RegExp("\*\*(.*?)\*\*");
 
-/**
- * Trennt einen Text beim ersten Vorkommen des Trennzeichens
- * und gibt ein String-Array mit 3 Werten zurück.
- * ["erster Teil", "zweiter Teil", "ok"/"value"/"nok"]
- * "ok" = wurde getrennt / "value" = kein erster wert Vorhanden / "nok" = Trennzeichen nicht gefunden
- * @param s {string} Der Text der getrennt wird
- * @param sep {string} Trennzeichen
- * @returns {string[]}
- */
-function cut_string(s: string, sep: string): string[] {
-    const pos1: number = s.indexOf(sep);
-    if (pos1 < 0) {
-        return [s, "", ""];
-    } else if (pos1 == 0) {
-        return ["", s.substring(1), "value"];
-    }
+    // ====================
+    //   basis Variablen
+    // ------------------
 
-    // Auftrennen
-    const key: string = s.substring(0, pos1);
-    const value: string = s.substring(pos1 +1);
+    // neue Seite
+    let site: SiteInfo = {
+        html: "",
+        data: {},
+        imageList: [],
+        linkList: [],
+    };
 
-    return [key, value, "ok"];
-} // cut_string
+    let newAttribute: string = "";
+    let isData: boolean = false;
+    let isCode: boolean = false;
+    let isRow: boolean = false;
+    let isRowCol: boolean = false;
+    let isList: boolean = false;
+    let isLi: boolean = false;
+    let isP: boolean = false;
+    let isTable: boolean = false;
 
-/**
- * Liefert einen Wert von einem Datenobjekt mit angegebenen Pfad zurück.
- * Der Pfad muss dabei mit "." getrennt angegeben werden
- * @param obj {object} Daten-Objekt
- * @param path {string} Pfad zu der Eigenschaft von obj. Wird mit "." getrennt
- * @returns {any} Wert vom obj[path]
- */
-function get_data_value(obj: any, path: string): any {
-    const len: number = path.length;
-    if (len < 1) {
-        return obj;
-    }
+    // HTML String
+    let htmlString: string = "";
+    let trimLine: string = "";
+    let lastLine: string = "";
+    let step: number = 0;
+    let lastStep: number = 0;
+    let listTag: string = "ul";
+    let lastKey: string = "";
+    let dataList: string[] = [];
 
-    // Aufsplitten
-    const s: string[] = cut_string(path, ".");
-    const key: string = s[0];
-    const next_path:string = s[1];
-    const ok: string = s[2];
+    // Text aufsplitten
+    let lines: string[] = mdString.split("\n");
 
-    if (ok == "nok") {
-        return obj[path];
-    } else if (ok == "value") {
-        return obj[next_path];
-    }
-    return get_data_value(obj[key], next_path);
-} // get_data_value
-
-
-// Daten parsen
-function parse_data(line: string) {
-    // Wenn keine Daten zum Parsen
-    if (!is_data) {
-        return;
-    }
-
-    // Wenn letzte Datenzeile
-    if (line.startsWith("---")) {
-        // todo: eventuell letzte Daten abschliessen
-        is_data = false;
-        return;
-    }
-
-    const step: number = line.search(/\S|$/);
-
-    // Zeile ohne Leerzeichen am Beginn und Ende
-    const trim_line: string = line.trim();
-
-    // Wenn Zeile Leer
-    if (trim_line == "") {
-        // Wenn letzte Zeile Text war
-        if (last_obj) {
-            let v: any = last_obj[last_key];
-            if (typeof(v) == "string") {
-                last_obj[last_key] += "\n";
-            }
+    // Alle Tags schliessen
+    let closeAllTags = function () {
+        if (isP) {
+            htmlString += "</p>";
+            isP = false;
         }
-        return;
-    } // wenn Leere Zeile
+        if (isLi) {
+            htmlString += "</li>";
+            isLi = false;
+        }
+        if (isList) {
+            htmlString += "</" + listTag + ">";
+            isList = false;
+        }
+        if (isTable) {
+            htmlString += "</tr></thead><tbody></tbody></table>";
+            isTable = false;
+        }
+        if (isRowCol) {
+            htmlString += "</" + colTag + ">";
+            isRowCol = false;
+        }
+        if (isRow) {
+            htmlString += "</" + rowTag + ">";
+            isRow = false;
+        }
+    };
 
-    // Zeile mit ":" auftrennen
-    let kv: string[] = cut_string(trim_line, ":")   // 0 = Key / 1 = value / 2 = "ok" wurde getrennt
-    let key: string = kv[0];
-    let value: string = kv[1].trim();
-    let ok:string = kv[2];
-    
-    // Wenn an der Basis
-    if (step == 0) {
-        data_path = "";
-        last_key = "";  // ???
-        last_obj = data;
-    } else if (step > last_step) {
-        // nächster pfad wenn kein Text
-        if (typeof(last_obj[last_key]) == "object") {
-            // neues Objekt merken
-            last_obj = last_obj[last_key];
-            
-            // Pfad zu Objekt erhöhen
-            if (data_path) {
-                data_path += "." + last_key;
+    // Alle Tags schliessen
+    let closeRowCol = function () {
+        if (isP) {
+            htmlString += "</p>";
+            isP = false;
+        }
+        if (isLi) {
+            htmlString += "</li>";
+            isLi = false;
+        }
+        if (isList) {
+            htmlString += "</" + listTag + ">";
+            isList = false;
+        }
+        if (isTable) {
+            htmlString += "</tr></thead><tbody></tbody></table>";
+            isTable = false;
+        }
+        if (isRowCol) {
+            htmlString += "</" + colTag + ">";
+            isRowCol = false;
+        }
+    };
+
+    // Text prüfen
+    let checkText = function (text: string): string {
+        let newText: string = text;
+
+        // Auf Link oder Bild prüfen
+        let linkPos2: number = newText.indexOf("](");
+        while (linkPos2 > 0) {
+            const bildPos1: number = newText.indexOf("![");
+            const linkPos1: number = newText.indexOf("[");
+            const endPos: number = newText.indexOf(")", linkPos2);
+            if (bildPos1 >= 0 && bildPos1 < linkPos2) {
+                // Bild
+                const part1: string = newText.substring(0, bildPos1);
+                const part2: string = newText.substring(bildPos1 + 2, linkPos2);
+                const part3: string = newText.substring(linkPos2 + 2, endPos);
+                const part4: string = newText.substring(endPos + 1);
+
+                // BildLink
+                newText = part1 + "<img tag='" + part2 + "' src='" + part3 +
+                    "'>" + part4;
+                site.imageList.push(part3);
+            } else if (linkPos1 >= 0 && linkPos1 < linkPos2) {
+                // Link
+                const part1: string = newText.substring(0, linkPos1);
+                const part2: string = newText.substring(linkPos1 + 1, linkPos2);
+                const part3: string = newText.substring(linkPos2 + 2, endPos);
+                const part4: string = newText.substring(endPos + 1);
+
+                // Link
+                newText = part1 + "<a href='" + part3 + "'>" + part2 + "</a>" +
+                    part4;
+                site.linkList.push(part3);
             } else {
-                data_path = last_key;
+                // Abbrechen bei keinem Gültigen Link oder Bild
+                break;
             }
+
+            linkPos2 = newText.indexOf("](");
+        } // while linkPos2
+
+        // Auf Fettschrift prüfen
+        newText = newText.replaceAll(regularBold, "<b>$1</b>");
+
+        return newText;
+    };
+
+    // Liste prüfen
+    let checkListe = function (isSorted: boolean) {
+        if (!trimLine || !trimLine.startsWith("- ")) return;
+
+        // ListTag
+        listTag = "ul";
+        if (isSorted) {
+            listTag = "ol";
         }
 
-        // Daten-Pfad für Stufe merken
-        step_path[step] = data_path;
-    } else if (step < last_step) {
-        // voriges Objekt - im Pfad einen schritt zurück
-        //let pos1: number = data_path.lastIndexOf(".");
-        //data_path = data_path.substring(0, pos1);
-        data_path = step_path[step];
-        last_obj = get_data_value(data, data_path);
-    }
+        // Text
+        let text: string = trimLine.substring(2);
+        text = checkText(text);
 
-    // Stufe merken
-    last_step = step;
+        // Wenn noch keine Liste oder Unterliste beginn
+        if (!isList || step > lastStep) {
+            htmlString += "<" + listTag + ">";
+            isList = true;
+        }
 
-    // Wenn Key/Value / ist Objekt
-    if (ok == "ok") {
-        // multiline
-        if (is_multiline) {
-            if (step == 0) {
-                is_multiline = false;
-            } else if (typeof last_obj[last_key] == "string") {
-                // wenn String
-                last_obj[last_key] += trim_line + "\n";
+        // wenn Einrückung kleiner voriger Einrückung
+        if (step < lastStep) {
+            // Wenn bereits ein List-Item
+            if (isLi) {
+                htmlString += "</li></" + listTag + ">";
             }
+        } else if (isLi && step == lastStep) {
+            htmlString += "</li>";
+            isLi = false;
+        }
+
+        // neues ListenElement
+        htmlString += "<li>" + text;
+        isLi = true;
+
+        // Stufe merken
+        lastStep = step;
+    }; // checkListe
+
+    // Zeile prüfen
+    let checkLine = function () {
+        // Wenn Attribute Zeile
+        if (trimLine.startsWith("[") && trimLine.endsWith("]")) {
+            newAttribute = " " + trimLine.substring(1, trimLine.length - 1);
             return;
         }
 
-        // Wenn Key ein Item
-        if (key.startsWith("- ")) {
-            // Ist Objekt Item -> Letztes Objekt muss ein Array sein
-            key = key.replace("- ", "");
-
-            // Wenn kein Array dann letztes Objekt in ein Array
-            if (!Array.isArray(last_obj)) {
-                // Vorletztes Objekt lesen
-                let pos1: number = data_path.lastIndexOf(".");
-                let path = data_path.substring(0, pos1);
-                let obj = get_data_value(data, path);
-                obj[last_key] = [];
-                last_obj = obj[last_key];
-            }
-
-            // neues Objekt hinzufügen
-            let new_obj: any = {};
-            new_obj[key] = value;
-            let new_key: number = last_obj.push(new_obj) -1;
-            last_key = new_key.toString();
-        } else if (value == "|") {
-            // Es folgt mehrzeiliger Text
-            last_obj[key] = "";
-            last_key = key;
-            is_multiline = true;
-        } else if (value == "") {
-            // Ist Objekt
-            last_obj[key] = {};
-            
-            // neue Merken
-            last_key = key;
-        } else {
-            // Nur Key Value
-            last_obj[key] = value;
-        }
-    } else {
-        // Zeile ist Wert
-        value = trim_line;
-
-        // auf Item prüfen
-        if (value.startsWith("- ")) {
-            // ist Item
-            value = value.replace("- ", "");
-
-            // Wenn kein Array dann letztes Objekt in ein Array
-            if (!Array.isArray(last_obj)) {
-                // Vorletztes Objekt lesen
-                let pos1: number = data_path.lastIndexOf(".");
-                let path = data_path.substring(0, pos1);
-                let obj = get_data_value(data, path);
-                obj[last_key] = [];
-                last_obj = obj[last_key];
-            }
-
-            // neues Objekt hinzufügen
-            last_obj.push(value);
-        } else if (typeof last_obj[last_key] == "string") {
-            // wenn String
-            last_obj[last_key] += trim_line + "\n";
-        }
-    } // if else ok
-} // parse_data
-
-
-// Zeile zu neuen Text hinzufügen
-function add_text(text: string) {
-    // Prüfen auf Zeile und Spalte
-    if (!is_row) {
-        // noch keine Zeile
-        new_text += "<" + row_tag + "><" + col_tag + ">" + text;
-        is_row = true;
-        is_col = true; 
-    } else if (!is_col) {
-        // noch keine Spalte
-        new_text += "<" + col_tag + ">" + text;
-    } else {
-        // nur Text hinzufügen
-        new_text += text;
-    }
-} // add_text
-
-// Absatz prüfen
-function parse_p(line: string): boolean {
-    let text: string = "";
-    if (!is_p) {
-        text = "<p>" + line;
-        is_p = true;
-    } else {
-        text = "</br>" + line;
-    }
-    add_text(text);
-    return true;
-} // parse_p
-
-// Code prüfen
-function parse_code(line: string): boolean {
-    if (line.startsWith("```")) {
-        let code_param: string = line.replace("```", "");
-        if (code_param) {
-            // todo: Code Parameter prüfen
-        }
-
-        let text: string = "";
-
-        // Wenn schon ein Codeblock
-        if (is_code) {
-            text += "</code></pre>";
-            is_code = false;
-        } else {
-            // Code beginnen
-            text += "<pre><code>";
-            is_code = true;
-        }
-
-        // Text hinzufügen
-        add_text(text);
-        return true;
-    } // wenn Code Beginn / ende
-
-    if (is_code) {
-        // zeile hinzufügen
-        new_text += line + "</br>";
-        return true;
-    }
-
-    // kein Code
-    return false;
-} // parse_code
-
-// Header Zeilen prüfen
-function parse_header(line: string): boolean {
-    if (!line.startsWith("#")) {
-        // kein header
-        return false;
-    }
-
-    let text: string = "";
-    let tag: string = "";
-
-    // Anzahl Header Zeichen "#"
-    let header = cut_string(line, " ");
-
-    // Wenn richtig gecuttet
-    if (header[2] == "ok") {
-        let anz: number = header[0].length;
-        tag = "h" + anz;
-        text = header[1];
-    }
-
-    if (!tag) {
-        // kein header
-        return false;
-    }
-
-    // todo: Header attribute
-
-    // Wenn noch ein Absatz offen
-    if (is_p) {
-        new_text += "</p>";
-        is_p = false;
-    }
-
-    // Text hinzufügen
-    add_text("<" + tag + ">" + text + "</" + tag + ">");
-
-    // OK
-    return true;
-} // parse_header
-
-
-// Markdown parsen
-function parse_row(line:string) {
-    let trim_line: string = line.trim();
-
-    // Wenn zeile leer ist
-    if (trim_line == "") {
-        // Wenn Absatz
-        if (is_p) {
-            // Absatz schliessen
-            new_text += "</p>";
-            is_p = false;
-
-            // todo: prüfen auf 2. Leerzeile
-
+        // Bei Leerzeilen alles schliessen
+        if (trimLine == "") {
+            closeAllTags();
             return;
         }
-    } // if leere Zeile
 
-    // Code Parsen
-    if (parse_code(line)) {
-        return;
-    }
-
-    // Header Parsen
-    if (parse_header(line)) {
-        return;
-    }
-
-    // Absatz
-    if (parse_p(line)) {
-        return;
-    }
-} // parse_row
-
-
-async function fetch_text(filePath: string): Promise<string> {
-    const res = await fetch(filePath);
-    return await res.text();
-} // fetch_string
-
-
-// Parse Funktion
-export function parse(filePath: string): Site|null {
-    // Wenn die Datei nicht existiert
-    if (!existsSync(filePath, {isReadable: true, isFile: true})) {
-        return null;
-    }
-
-    // Datei laden
-    //let file = Deno.readTextFileSync(filePath);
-    let fileString: string;
-    fetch_text(filePath).then(value =>{
-        fileString = value;
-
-        // in Zeilen aufsplitten
-        const lines = fileString.split("\n");
-        is_first_line = true;
-
-        // Alle Zeilen durchgehen
-        lines.forEach((line: string, index: number) => {
-        // console.log(is_first_line, is_data, line);
-
-            // wenn erste Zeile
-            if (is_first_line && line.startsWith("---")) {
-                // Datenzeile
-                is_data = true;
-
-                // Daten zurücksetzen
-                data = {};
-                data_path = "";
-                last_key = "";
-                last_step = 0;
-
-            } else if (is_data) {
-                // Daten Parsen
-                parse_data(line);
-            } else {
-                // Zeile als Markdown parsen
-                parse_row(line);
-            }
-
-            // erste Zeile zurücksetzen
-            is_first_line = false;
-        })
-
-        // console.log(data);
-
-        // Rückgabe
-        let site_data: Site = {
-            data: data
-            , content: new_text
+        if (trimLine == "%") {
+            // Zeilenumbruch / Leerzeile
+            htmlString += "</br>";
+            return;
         }
 
-        return site_data;
+        // Ab hier ist keine Leerzeile
+
+        // Auf Attribute prüfen
+        let tagAttribute: string = "";
+        if (trimLine.endsWith("]")) {
+            const pos1: number = trimLine.lastIndexOf(" [");
+            if (pos1 >= 0) {
+                tagAttribute = " " +
+                    trimLine.substring(pos1 + 2, trimLine.length - 1);
+                trimLine = trimLine.substring(0, pos1);
+            }
+        }
+
+        // Wenn Überschriften
+        const pos1: number = trimLine.indexOf("# ");
+        if (pos1 >= 0) {
+            const praefix: string = trimLine.substring(0, pos1 + 1);
+            const text: string = trimLine.substring(pos1 + 2);
+            if (praefix == "#") {
+                // H1
+                htmlString += "<h1" + tagAttribute + ">" + text + "</h1>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "##") {
+                // H6
+                htmlString += "<h2" + tagAttribute + ">" + text + "</h2>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "###") {
+                // H6
+                htmlString += "<h3" + tagAttribute + ">" + text + "</h3>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "####") {
+                // H4
+                htmlString += "<h4" + tagAttribute + ">" + text + "</h4>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "#####") {
+                // H5
+                htmlString += "<h5" + tagAttribute + ">" + text + "</h5>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "######") {
+                // H6
+                htmlString += "<h6" + tagAttribute + ">" + text + "</h6>";
+                tagAttribute = "";
+                return;
+            }
+
+            return;
+        } // Überschriften Header
+
+        if (trimLine == "---") {
+            // Spalten schliessen
+            closeRowCol();
+            return;
+        }
+
+        // Wenn zuvor ein Spaltenbeginn
+        if (lastLine == "---") {
+            // Prüfen auf Zeile
+            if (!isRow) {
+                htmlString + "<" + rowTag + newAttribute + ">";
+                isRow = true;
+                newAttribute = "";
+            }
+
+            // Spalte anlegen
+            if (!isRowCol) {
+                htmlString += "<" + colTag + tagAttribute + ">";
+                isRowCol = true;
+                tagAttribute = "";
+            }
+        } // Spalten Beginn
+
+        // Liste
+        if (trimLine.startsWith("- ")) {
+            // Liste prüfen
+            checkListe(false);
+            return;
+        }
+        if (trimLine.indexOf(". ") <= 2) {
+            // Sortierte Liste prüfen
+            checkListe(true);
+            return;
+        }
+
+        // Tabelle
+        if (trimLine.startsWith("| ")) {
+            // Tabelle prüfen
+            if (!isTable) {
+                htmlString += "<table" + newAttribute + "><thead><tr>";
+                isTable = true;
+                newAttribute = "";
+            }
+
+            // Tabellen Spalte
+            let text = trimLine.substring(2);
+            htmlString += "<td" + tagAttribute + ">" + text + "</td>";
+            return;
+        }
+
+        // =============================
+        //   nur Text
+        // -----------
+
+        let text: string = checkText(trimLine);
+
+        if (!isP) {
+            htmlString += "<p" + tagAttribute + ">" + text;
+            isP = true;
+        } else {
+            htmlString += "</br>" + text;
+        }
+    }; // checkLine
+
+    // Code prüfen
+    let checkCode = function (line: string) {
+        // Code beenden
+        if (isCode && trimLine == "```") {
+            htmlString += "</code></pre>";
+            isCode = false;
+            return;
+        }
+
+        // Code Starten
+        if (!isCode && trimLine.startsWith("```")) {
+            let codeParam = trimLine.substring(3);
+
+            if (codeParam != "") {
+                // code Parameter setzen
+                htmlString += "<pre><code class='language-" + codeParam + "' >";
+            } else {
+                htmlString += "<pre><code>";
+            }
+            isCode = true;
+            return;
+        }
+
+        // CodeZeile hinzufügen
+        if (isCode) {
+            let newLine = line.replaceAll("<", "&lt;"); // < HTML-TAG Zeichen müssen umgewandelt werden
+            htmlString += newLine + "\n";
+        }
+    }; // checkCode
+
+    // Daten prüfen
+    let checkData = function () {
+        // auf Listen Eintrag prüfen
+        if (trimLine.startsWith("- ")) {
+            dataList.push(trimLine.substring(2));
+            return;
+        }
+
+        // Auf Liste prüfen
+        if (trimLine.endsWith(":")) {
+            lastKey = trimLine.substring(0, trimLine.length - 1);
+            dataList = [];
+            site.data[lastKey] = dataList;
+            return;
+        }
+
+        // Auf Text prüfen
+        let pos1: number = trimLine.indexOf(": ");
+        if (pos1 > 0) {
+            lastKey = trimLine.substring(0, pos1);
+            let text: string = trimLine.substring(pos1 + 2);
+            site.data[lastKey] = text;
+        } else if (pos1 < 0) {
+            site.data[lastKey] += "\n" + trimLine;
+        }
+    }; // checkData
+
+    // Alle Zeilen durchgehen
+    lines.forEach((line, index) => {
+        trimLine = line.trim();
+        step = line.length - trimLine.length;
+
+        // Data
+        if (index == 0 && trimLine == "---") {
+            // Daten prüfen
+            isData = true;
+            return;
+        } else if (isData) {
+            if (trimLine == "---") {
+                isData = false;
+                return;
+            }
+
+            checkData();
+        } else if (isCode || trimLine.startsWith("```")) {
+            // Code prüfen
+            checkCode(line);
+        } else {
+            // Zeilen prüfen
+            checkLine();
+            lastLine = trimLine;
+        }
     });
-} // parse
+
+    // geparsten HTML String zurückgeben
+    site.html = htmlString;
+    return site;
+} // parseMd

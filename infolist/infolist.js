@@ -397,7 +397,7 @@ export class InfoList {
 // Seiten Navigation
 // path, name, title, date
 export function InfoNav(iList) {
-    const self = this;
+    const self = InfoNav;
 
     // Eigenschaften
     self.infoList = iList;
@@ -628,7 +628,7 @@ export function InfoNav(iList) {
 
 //  Info Tabelle
 export function InfoTable(iList, col_list, col_titles)  {
-    const self = this;
+    const self = InfoTable;
 
     // Eigenschaften
     self.infoList = iList;
