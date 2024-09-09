@@ -1,3 +1,6 @@
+---
+template: /template/home
+---
 # Das ist Index
 
 Eine Index Seite
@@ -23,5 +26,5 @@ Spalte 3
 - item 3
 
 Mit einem Link
-[ORF](http://orf.at)
+[Home](#/index)
 

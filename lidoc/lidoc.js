@@ -11,7 +11,16 @@ import { parseMd } from "./parsemd.js";
 // Hash von URL lesen, um Seiteninhalte nachladen zu können
 let siteUrl = window.location.hash;
 if (!siteUrl) {
-    siteUrl = "#/index.html";
+    siteUrl = "#/index.md";
+}
+if (siteUrl.endsWith("/")) {
+    siteUrl += "index.md";
+}
+if (siteUrl.endsWith(".html")) {
+    siteUrl = siteUrl.replace(".html", ".md");
+}
+if (!siteUrl.endsWith(".md")) {
+    siteUrl += ".md";
 }
 
 // Listen Laden
@@ -35,7 +44,7 @@ async function fetchText(url) {
  */
 async function showSite(siteUrl) {
     if (!siteUrl) {return;}
-    if (!siteUrl.endsWith(".html")) {return;}
+    if (!siteUrl.endsWith(".md")) {return;}
 
     console.log("siteURL:", siteUrl);
 
@@ -44,7 +53,7 @@ async function showSite(siteUrl) {
     if (!body) {return;}
 
     // URL für Markdown vom Server
-    let mdUrl = siteUrl.replace(".html", ".md");
+    let mdUrl = siteUrl;
 
     // Seitenurl ausbessern wenn absolut
     if (mdUrl.startsWith("#/")) {
@@ -65,6 +74,8 @@ async function showSite(siteUrl) {
     console.log("siteData:", siteData);
 
     // todo: Links mit HashTag ausbessern
+
+    // todo: Template mit Inhalt zusammenführen
 
     // HTML im Body anzeigen
     body.innerHTML = "";

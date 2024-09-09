@@ -166,6 +166,7 @@ export function parseMd(mdString, options) {
         } // while linkPos2
 
         // Auf Fettschrift prüfen
+        // @ts-ignore
         newText = newText.replaceAll(regularBold, "<b>$1</b>");
         return newText;
     };
@@ -392,6 +393,7 @@ export function parseMd(mdString, options) {
         // CodeZeile hinzufügen
         if (isCode) {
             /** @type {string} */
+            // @ts-ignore
             let newLine = line.replaceAll("<", "&lt;"); // < HTML-TAG Zeichen müssen umgewandelt werden
             htmlString += newLine + "\n";
         }
