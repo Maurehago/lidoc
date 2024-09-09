@@ -1,18 +1,18 @@
-// @ts-check
 // ===========================
 //   Markdown Dateien Parsen
 // 2024-09-08
 // ===========================
+// @ts-check
 
-/** @typedef {import("./types.d").ParseOptions} ParseOptions */
-/** @typedef {import("./types.d").SiteInfo} SiteInfo */
+/** @typedef {import("./types.d.ts").ParseOptions} ParseOptions */
+/** @typedef {import("./types.d.ts").SiteInfo} SiteInfo */
 
 
 /**
  * Erzeugt aus dem Inhalt einer Markdown Datei
  * eine Seiten Information, mit geparstem html
  * @param {string} mdString 
- * @param {ParseOptions} options 
+ * @param {ParseOptions} [options] 
  * @returns {SiteInfo}
  */
 export function parseMd(mdString, options) {
@@ -25,7 +25,7 @@ export function parseMd(mdString, options) {
     // Regular Expression
 
     // Fettschrift
-    const regularBold = new RegExp("\*\*(.*?)\*\*");
+    const regularBold = new RegExp("\\*\\*(.*?)\\*\\*","g");
 
     // ====================
     //   basis Variablen
@@ -41,6 +41,7 @@ export function parseMd(mdString, options) {
     };
 
     let newAttribute = "";
+    let newColAttribute = "";
     let isData = false;
     let isCode = false;
     let isRow = false;
@@ -58,6 +59,7 @@ export function parseMd(mdString, options) {
     let lastStep = 0;
     let listTag = "ul";
     let lastKey = "";
+    /** @type {string[]} */
     let dataList = [];
 
     // Text aufsplitten
@@ -165,7 +167,6 @@ export function parseMd(mdString, options) {
 
         // Auf Fettschrift prüfen
         newText = newText.replaceAll(regularBold, "<b>$1</b>");
-
         return newText;
     };
 
@@ -297,6 +298,7 @@ export function parseMd(mdString, options) {
         if (trimLine == "---") {
             // Spalten schliessen
             closeRowCol();
+            newColAttribute = tagAttribute;
             return;
         }
 
@@ -304,16 +306,17 @@ export function parseMd(mdString, options) {
         if (lastLine == "---") {
             // Prüfen auf Zeile
             if (!isRow) {
-                htmlString + "<" + rowTag + newAttribute + ">";
+                htmlString += "<" + rowTag + newAttribute + ">";
                 isRow = true;
                 newAttribute = "";
             }
 
             // Spalte anlegen
             if (!isRowCol) {
-                htmlString += "<" + colTag + tagAttribute + ">";
+                htmlString += "<" + colTag + newColAttribute + ">";
                 isRowCol = true;
                 tagAttribute = "";
+                newColAttribute = "";
             }
         } // Spalten Beginn
 
@@ -323,7 +326,8 @@ export function parseMd(mdString, options) {
             checkListe(false);
             return;
         }
-        if (trimLine.indexOf(". ") <= 2) {
+        const pos2 = trimLine.indexOf(". ");
+        if (pos2 > 0 && pos2 <= 2) {
             // Sortierte Liste prüfen
             checkListe(true);
             return;
@@ -450,6 +454,8 @@ export function parseMd(mdString, options) {
         }
     });
 
+    // Alles schiessen
+    closeAllTags();
 
     // geparsten HTML String zurückgeben
     site.html = htmlString;
