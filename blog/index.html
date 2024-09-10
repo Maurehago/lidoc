@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Website</title>
+    <title>Blog</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="" />
     <link rel="icon" href="favicon.png">
@@ -13,17 +13,18 @@
 
 <body>
     <div id="header" pos-t pos-sticky></div>
-    <div id="content"><h1>Lade ...</h1></div>
+    <nav id="menue" color-s style="position: fixed; width: 250px; top:50px; bottom: 0px;">Menue</nav>
+    <div id="content" style="margin-left: 250px;"><h1>Lade ...</h1></div>
 </body>
 
 <script type="module">
-    import {showSite, showContent} from "./lidoc/lidoc.js";
+    import {showSite, showContent} from "/lidoc/lidoc.js";
 
     const $ = document.querySelector.bind(document);
     const $$ = document.querySelectorAll.bind(document);
 
     showContent($("#header"), "/src/_header.md");
-    showSite($("#content"));
+    showContent($("#content"), "/blog/index.md");
 </script>
 
 </html>

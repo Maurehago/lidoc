@@ -2,34 +2,64 @@
 //   lidoc APP
 // 2024-09-08
 // ====================
-// @ts-check
 
 // Erstellt aus Markdown Dateien und Templates HTML-Seiten
 
+// @ts-check
+
+// ==================
+//   Imports
+// -----------
 import { parseMd } from "./parsemd.js";
 
-// Hash von URL lesen, um Seiteninhalte nachladen zu können
-let siteUrl = window.location.hash;
-if (!siteUrl) {
-    siteUrl = "#/index.md";
-}
-if (siteUrl.endsWith("/")) {
-    siteUrl += "index.md";
-}
-if (siteUrl.endsWith(".html")) {
-    siteUrl = siteUrl.replace(".html", ".md");
-}
-if (!siteUrl.endsWith(".md")) {
-    siteUrl += ".md";
-}
 
-// Listen Laden
+// ==================
+//   Types
+// -----------
+
+//** @typedef {import("lib.dom.d.ts").HTMLElement} HTMLElement */
+
+
+// ===============================
+//   Parameter
+// ------------
+
+const sourcePath = "/src/"; // Pfad in dem die Markdown Sourse Dateien liegen
+
+
+// Hash von URL lesen, um Seiteninhalte nachladen zu können
+
+
+// ===============================
+//   Funktionen
+// -------------
+
+/**
+ * Hash von URL lesen, um Seiteninhalte nachladen zu können
+ * @returns {string} - URL der Markdownseite
+ */
+export function getHashUrl() {
+    let siteUrl = window.location.hash;
+    if (!siteUrl) {
+        siteUrl = "#/index.md";
+    }
+    if (siteUrl.endsWith("/")) {
+        siteUrl += "index.md";
+    }
+    if (siteUrl.endsWith(".html")) {
+        siteUrl = siteUrl.replace(".html", ".md");
+    }
+    if (!siteUrl.endsWith(".md")) {
+        siteUrl += ".md";
+    }
+    return siteUrl;
+}
 
 /**
  * Text aus Datei vom Server
  * @param {string} url - URL für Text basierte Datei vom Server
  * @returns {Promise<string>} 
- */
+*/
 async function fetchText(url) {
     const res = await fetch(url);
     const text = await res.text();
@@ -37,27 +67,27 @@ async function fetchText(url) {
 }
 
 
-// Seite Parsen und anzeigen
+// Listen Laden
+
 /**
- * 
- * @param {string} siteUrl - URL zu der Seite die angezeigt wird
+ * Läd und Parsed Content aus einer Markdown Datei
+ * Und Zeigt den Inhalt im Element an.
+ * @param {any} elm - HTMLElement
+ * @param {string} url - Pfad zur MD Datei die geladen wird
+ * @returns {Promise<void>}
  */
-async function showSite(siteUrl) {
-    if (!siteUrl) {return;}
-    if (!siteUrl.endsWith(".md")) {return;}
+export async function showContent(elm, url) {
+    if (!url) { return; }
+    if (!url.endsWith(".md")) { return; }
 
-    console.log("siteURL:", siteUrl);
-
-    // @ts-ignore
-    const body = window.document.body;
-    if (!body) {return;}
+    console.log("siteURL:", url);
 
     // URL für Markdown vom Server
-    let mdUrl = siteUrl;
+    let mdUrl = url;
 
     // Seitenurl ausbessern wenn absolut
     if (mdUrl.startsWith("#/")) {
-        mdUrl = mdUrl.replace("#/", "/src/");
+        mdUrl = mdUrl.replace("#/", sourcePath);
     } else {
         mdUrl = mdUrl.replace("#", "");
     }
@@ -78,9 +108,20 @@ async function showSite(siteUrl) {
     // todo: Template mit Inhalt zusammenführen
 
     // HTML im Body anzeigen
-    body.innerHTML = "";
-    body.insertAdjacentHTML("afterbegin", siteData.html);
-} // 
+    elm.innerHTML = "";
+    elm.insertAdjacentHTML("afterbegin", siteData.html.get("content"));
+} // showSite
+
+
+
+/**
+ * Seite Parsen und anzeigen
+ * @param {any} elm - URL zu der Seite die angezeigt wird
+ */
+export function showSite(elm) {
+    const siteUrl = getHashUrl();
+    showContent(elm, siteUrl);
+} // showSite
 
 // Seite Anzeigen
-showSite(siteUrl);
+// showSite();

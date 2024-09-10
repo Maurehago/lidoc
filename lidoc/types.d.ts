@@ -10,7 +10,7 @@ export type Data = {
 
 // Informationen zu der geparsten Seite
 export interface SiteInfo {
-    html: string;
+    html: Map<string, string>;
     data: Data;
     imageList: string[];
     linkList: string[];

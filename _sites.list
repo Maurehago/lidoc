@@ -1,0 +1,9 @@
+/index.html#header: /src/_header.md
+/index.html#content: /src/_index.md
+
+/blog/index.html#header: /src/_header.md
+/blog/index.html#nav: /blog/nav.md
+/blog/index.html#content: /blog/index.md
+
+/blog/index.html#/blog/godot_43: /blog/godot43.md
+

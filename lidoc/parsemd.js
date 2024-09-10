@@ -34,7 +34,7 @@ export function parseMd(mdString, options) {
     // neue Seite
     /** @type {SiteInfo} */
     let site = {
-        html: "",
+        html: new Map(),
         data: {},
         imageList: [],
         linkList: [],
@@ -191,8 +191,9 @@ export function parseMd(mdString, options) {
 
         // Wenn noch keine Liste oder Unterliste beginn
         if (!isList || step > lastStep) {
-            htmlString += "<" + listTag + ">";
+            htmlString += "<" + listTag + newAttribute + ">";
             isList = true;
+            newAttribute = "";
         }
 
         // wenn Einrückung kleiner voriger Einrückung
@@ -251,50 +252,6 @@ export function parseMd(mdString, options) {
             }
         }
 
-        // Wenn Überschriften
-        const pos1 = trimLine.indexOf("# ");
-        if (pos1 >= 0) {
-            const praefix = trimLine.substring(0, pos1 + 1);
-            const text = trimLine.substring(pos1 + 2);
-            if (praefix == "#") {
-                // H1
-                htmlString += "<h1" + tagAttribute + ">" + text + "</h1>";
-                tagAttribute = "";
-                return;
-            }
-            if (praefix == "##") {
-                // H6
-                htmlString += "<h2" + tagAttribute + ">" + text + "</h2>";
-                tagAttribute = "";
-                return;
-            }
-            if (praefix == "###") {
-                // H6
-                htmlString += "<h3" + tagAttribute + ">" + text + "</h3>";
-                tagAttribute = "";
-                return;
-            }
-            if (praefix == "####") {
-                // H4
-                htmlString += "<h4" + tagAttribute + ">" + text + "</h4>";
-                tagAttribute = "";
-                return;
-            }
-            if (praefix == "#####") {
-                // H5
-                htmlString += "<h5" + tagAttribute + ">" + text + "</h5>";
-                tagAttribute = "";
-                return;
-            }
-            if (praefix == "######") {
-                // H6
-                htmlString += "<h6" + tagAttribute + ">" + text + "</h6>";
-                tagAttribute = "";
-                return;
-            }
-
-            return;
-        } // Überschriften Header
 
         if (trimLine == "---") {
             // Spalten schliessen
@@ -348,6 +305,51 @@ export function parseMd(mdString, options) {
             htmlString += "<td" + tagAttribute + ">" + text + "</td>";
             return;
         }
+
+        // Wenn Überschriften
+        const pos1 = trimLine.indexOf("# ");
+        if (pos1 >= 0) {
+            const praefix = trimLine.substring(0, pos1 + 1);
+            const text = trimLine.substring(pos1 + 2);
+            if (praefix == "#") {
+                // H1
+                htmlString += "<h1" + tagAttribute + ">" + text + "</h1>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "##") {
+                // H6
+                htmlString += "<h2" + tagAttribute + ">" + text + "</h2>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "###") {
+                // H6
+                htmlString += "<h3" + tagAttribute + ">" + text + "</h3>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "####") {
+                // H4
+                htmlString += "<h4" + tagAttribute + ">" + text + "</h4>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "#####") {
+                // H5
+                htmlString += "<h5" + tagAttribute + ">" + text + "</h5>";
+                tagAttribute = "";
+                return;
+            }
+            if (praefix == "######") {
+                // H6
+                htmlString += "<h6" + tagAttribute + ">" + text + "</h6>";
+                tagAttribute = "";
+                return;
+            }
+
+            return;
+        } // Überschriften Header
 
         // =============================
         //   nur Text
@@ -460,6 +462,6 @@ export function parseMd(mdString, options) {
     closeAllTags();
 
     // geparsten HTML String zurückgeben
-    site.html = htmlString;
+    site.html.set("content", htmlString);
     return site;
 } // parseMd

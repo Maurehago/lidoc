@@ -72,7 +72,7 @@ hr {
 h6, .h6, h5, .h5, h4, .h4, h3, .h3, h2, .h2, h1, .h1 {
   margin-top: 2rem;
   margin-bottom: 0.5rem;
-  margin-left: 8px;
+  padding-left: 8px;
   font-weight: 500;
   line-height: 1.2;
   color: inherit;
@@ -183,6 +183,18 @@ a:not([href]):not([class]), a:not([href]):not([class]):hover
   text-decoration: none;
 }
 
+a:link, a:visited {
+  /*background-color: #f44336;
+  color: white; */
+  padding: 0.5em 1em;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+
+a:hover, a:active {
+  background-color: red;
+}
 
 /* Listen */
 ol,ul,dl {margin-top: 0;margin-bottom: 1rem;width: 100%;}
@@ -213,9 +225,11 @@ nav input[type="checkbox"]:checked + label + ul {
 nav label {
   cursor: pointer;
 }
-nav a {
+nav a, ul a {
   text-decoration: none;
   display: flex;
+  text-align: left !important;
+  width: 100%;
 }
 
 
@@ -484,6 +498,7 @@ progress {vertical-align: baseline;}
 
 /* Positionierung */
 pos-rel,[pos-rel],.pos-rel{position: relative;}
+pos-t,[pos-t],.pos-t{top:0px}
 pos-t-l,[pos-t-l],.pos-t-l{position: absolute;top:0;left:0}
 pos-t-m,[pos-t-m],.pos-t-m{position: absolute;top:0;left:50%;transform: translate(-50%,0%)}
 pos-t-r,[pos-t-r],.pos-t-r{position: absolute;top:0;right:0}
@@ -589,21 +604,21 @@ f-item,[f-item],.f-item{
 [w-12],.w-12,[w-100],.w-100{min-width: 100%;}
 
 /* Höhen */
-[h-1],.h-1{min-height: 8.33333333%;}
-[h-2],.h-2{min-height: 16.66666667%;}
-[h-20],.h-20{min-height: 20%;}
-[h-3],.h-3,[h-25],.h-25{min-height: 25%;}
-[h-4],.h-4,[h-33],.h-33{min-height: 33.33333333%;}
-[h-5],.h-5{max-height: 41.66666667%;}
-[h-6],.h-6,[h-50],.h-50{min-height: 50%;}
-[h-7],.h-7{min-height: 58.33333333%;}
-[h-60],.h-60{min-height: 60%;}
-[h-8],.h-8,[h-66],.h-66{min-height: 66.66666667%; }
-[h-9],.h-9,[h-75],.h-75{min-height: 75%;}
-[h-80],.h-80{min-height: 80%;}
-[h-10],.h-10{min-height: 83.33333333%;}
-[h-11],.h-11{min-height: 91.66666667%;}
-[h-12],.h-12,[h-100],.h-100{min-height: 100%;}
+[h-1],.h-1{min-height: 8.33333333vh;}
+[h-2],.h-2{min-height: 16.66666667vh;}
+[h-20],.h-20{min-height: 20vh;}
+[h-3],.h-3,[h-25],.h-25{min-height: 25vh;}
+[h-4],.h-4,[h-33],.h-33{min-height: 33.33333333vh;}
+[h-5],.h-5{min-height: 41.66666667vh;}
+[h-6],.h-6,[h-50],.h-50{min-height: 50vh;}
+[h-7],.h-7{min-height: 58.33333333vh;}
+[h-60],.h-60{min-height: 60vh;}
+[h-8],.h-8,[h-66],.h-66{min-height: 66.66666667vh; }
+[h-9],.h-9,[h-75],.h-75{min-height: 75vh;}
+[h-80],.h-80{min-height: 80vh;}
+[h-10],.h-10{min-height: 83.33333333vh;}
+[h-11],.h-11{min-height: 91.66666667vh;}
+[h-12],.h-12,[h-100],.h-100{min-height: 100vh;}
 [h-vp],.h-vp{min-height: 100vh;}
 
 
@@ -698,6 +713,7 @@ modal-co,[modal-co],.modal-co {
 
 /* medium */
 @media (max-width: 768px) {
+  f-row,[f-row],.f-row{flex-direction: column;}
   [w-max],.w-max,[w-xxl],.w-xxl,[w-xl],.w-xl
   ,[w-l],.w-l{min-width: 100%;margin:0!important;}
 
