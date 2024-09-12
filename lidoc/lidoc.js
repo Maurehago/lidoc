@@ -24,7 +24,7 @@ import { parseMd } from "./parsemd.js";
 //   Parameter
 // ------------
 
-const sourcePath = "/src/"; // Pfad in dem die Markdown Sourse Dateien liegen
+const sourcePath = "/"; // Pfad in dem die Markdown Sourse Dateien liegen
 
 
 // Hash von URL lesen, um Seiteninhalte nachladen zu können
