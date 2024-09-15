@@ -1,0 +1,6 @@
+- [**Blog**](#/blog/)
+    - [News 1](#/blog/news1)
+    - [News 2](#/blog/news2)
+- [**Info**](#/info/)
+    - [Info 2](#/info/info2)
+        [Info 2.1](#/info/info22)

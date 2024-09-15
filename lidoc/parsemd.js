@@ -25,7 +25,7 @@ export function parseMd(mdString, options) {
     // Regular Expression
 
     // Fettschrift
-    const regularBold = new RegExp("\\*\\*(.*?)\\*\\*","g");
+    const regularBold = new RegExp("\\*\\*(.*?)\\*\\*", "g");
 
     // ====================
     //   basis Variablen
@@ -143,7 +143,7 @@ export function parseMd(mdString, options) {
                 const part4 = newText.substring(endPos + 1);
 
                 // BildLink
-                newText = part1 + "<img tag='" + part2 + "' src='" + part3 +
+                newText = part1 + "<img" + newAttribute + " tag='" + part2 + "' src='" + part3 +
                     "'>" + part4;
                 site.imageList.push(part3);
             } else if (linkPos1 >= 0 && linkPos1 < linkPos2) {
@@ -191,7 +191,11 @@ export function parseMd(mdString, options) {
 
         // Wenn noch keine Liste oder Unterliste beginn
         if (!isList || step > lastStep) {
-            htmlString += "<" + listTag + newAttribute + ">";
+            if (step > 2 && step > lastStep) {
+                htmlString += "<" + listTag + " sub-list" + newAttribute + ">";
+            } else {
+                htmlString += "<" + listTag + newAttribute + ">";
+            }
             isList = true;
             newAttribute = "";
         }

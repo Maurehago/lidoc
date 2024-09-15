@@ -12,7 +12,7 @@
 article,aside,details,figcaption,footer,header,main,menu,nav,section{display:block}summary{display:list-item}
 audio,canvas,progress,video{display:inline-block}progress{vertical-align:baseline}
 audio:not([controls]){display:none;height:0}[hidden],template{display:none}
-a{background-color:transparent}a:active,a:hover{outline-width:0}
+a{background-color:transparent}a:active,a:hover{outline-width:0px;}
 abbr[title]{border-bottom:none;text-decoration:underline;text-decoration:underline dotted}
 dfn{font-style:italic}
 sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}
@@ -143,7 +143,7 @@ blockquote {margin: 0 0 1rem;}
 
 
 /* Text Formatierung */
-b,strong {font-weight: bolder;}
+b,strong, .b {font-weight: bolder;}
 small, .small {font-size: 0.875em;}
 mark, .mark {
   padding: 0.1875em;
@@ -186,14 +186,14 @@ a:not([href]):not([class]), a:not([href]):not([class]):hover
 a:link, a:visited {
   /*background-color: #f44336;
   color: white; */
-  padding: 0.5em 1em;
+  padding: 4px;
   text-align: center;
   text-decoration: none;
   display: inline-block;
 }
 
-a:hover, a:active {
-  background-color: red;
+.active, a:active {
+  background-color: rgba(230, 251, 235, 0.201);
 }
 
 /* Listen */
@@ -211,6 +211,11 @@ nav ol,nav ul {
   list-style-type: none;
   padding-left: 8px;
 }
+/*
+nav [sub-list] li {
+  display: none;
+}
+*/
 nav input[type="checkbox"] {
   left: -9999px;
   opacity: 0;
@@ -346,7 +351,7 @@ textarea,[type=text],[type=password],[type=email],[type=file],[type=image],[type
 
 button:hover,a:hover {
   color: #000 !important;
-  background-color: #ccc !important
+  background-color: #ffffff90 !important
 }
 button,select {text-transform: none;}
 [role=button] {cursor: pointer;}
@@ -595,7 +600,7 @@ f-item,[f-item],.f-item{
 [w-20],.w-20{min-width: 20%;}
 [w-3],.w-3,[w-25],.w-25{min-width: 25%;}
 [w-4],.w-4,[w-33],.w-33{min-width: 33.33333333%;}
-[w-5],.w-5{max-width: 41.66666667%;}
+[w-5],.w-5{min-width: 41.66666667%;}
 [w-6],.w-6,[w-50],.w-50{min-width: 50%;}
 [w-7],.w-7{min-width: 58.33333333%;}
 [w-60],.w-60{min-width: 60%;}

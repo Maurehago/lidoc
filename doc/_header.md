@@ -2,9 +2,7 @@
 ---
 [Home](/)
 ---
-[Blog](/blog/)
+[Blog](#/blog/)
 ---
-[Godot](#/godot/)
----
-[Infos](#/infos/)
+[Info](#/info/)
 ---
