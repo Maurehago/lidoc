@@ -1,2 +1,2 @@
 # lidoc
-Listen und Dokument Server und Statische Dateien Generator
+Listen und Dokument Server und statische Dateien Generator
