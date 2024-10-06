@@ -10,68 +10,26 @@
     <link rel="stylesheet" type="text/css" href="/flex/flex.css" />
     <link rel="stylesheet" type="text/css" href="/flex/flex-colors.css" />
     <link rel="stylesheet" type="text/css" href="/prism/prism.css" />
-    <style>
-        #menue {position: fixed; width: 300px; top:50px; bottom: 0px; overflow-y: auto; display: none;}
-        .showmenue { display: block !important;}
-        .showmenue ~ #content {margin-left: 350px; max-width: 796px;}
-        .showmenue ~ #footer {margin-left: 300px;}
+    <link rel="stylesheet" type="text/css" href="/index.css" />
 
-        a::before ~ ul ul {content: "+ ";}
-        /* ul ul{background-color: #5387BF;} */
-
-        #content {min-height: 90vh;}
-        #footer {color: #fff !important;background-color: #222 !important}
-
-
-        @media print {
-            #content {margin-left: 0!important;}
-            #menue {display: none!important;}
-        }
-    </style>
-    
     <script src="/prism/prism.js"></script>
 </head>
 
 <body>
-    <div id="header" pos-t pos-sticky no-print></div>
-    <nav id="menue" color-p2 hide-s no-print class="">Menue</nav>
-    <div id="content"><h1>Lade ...</h1></div>
-    <div id="footer" h-1 no-print>Footer</div>
+    <f-grid>
+        <div id="header" no-print></div>
+        <nav id="menue" color-p2 no-print></nav>
+        <div id="content" w-max></div>
+        <div id="footer" color-darkgrey no-print></div>
+    </f-grid>
+    <div id="toggle_menue" color-p2 no-print hide-m hide-l hide-xl hide-xxl>+</div>
 </body>
 
 <script type="module">
-    import {showSite, showContent, setSublist} from "./lidoc/lidoc.js";
+    import { main, setEvents } from "./index.js";
 
-    // Selectoren
-    const $ = document.querySelector.bind(document);
-    const $$ = document.querySelectorAll.bind(document);
-
-    // Elemente lesen
-    const menueElm = $("#menue");
-
-    // Events
-    addEventListener("hashchange", (e) => {
-        menueElm.classList.add("showmenue");
-        showSite($("#content"));
-        Prism.highlightAll();
-    });
-
-    // Header u. Footer laden
-    showContent($("#header"), "/doc/_header.md");
-    showContent($("#footer"), "/doc/_footer.md");
-
-    // Menue Anzeigen wenn Hash
-    if (window.location.hash?.length > 2) {
-        $("#menue").classList.add("showmenue");
-    }
-
-    // Menues laden und Seite anzeigen
-    showContent($("#menue"), "/doc/_menue.md").then(() =>{
-        // [sub-list] Erstellen
-        setSublist();
-        showSite($("#content"));
-    });
-
+    setEvents();
+    main();
 </script>
 
 </html>
