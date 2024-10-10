@@ -12,8 +12,10 @@ f-grid {
 #header {
     grid-column: 1 / 3;
     grid-row: 1;
-    position: sticky;
+    position: fixed;
     top: 0px;
+    z-index: 1;
+    width: 100%;
 }
 
 #menue {
@@ -24,6 +26,7 @@ f-grid {
     width: 300px;
     bottom: 0px;
     overflow-y: auto;
+    z-index: 3;
 }
 #toggle_menue {
     position: fixed;
@@ -34,6 +37,7 @@ f-grid {
     font-size: 2em;
     text-align: center;
     cursor: pointer;
+    z-index: 2;
 }
 
 #content {
