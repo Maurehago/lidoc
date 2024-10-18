@@ -211,8 +211,10 @@ export function parseMd(mdString, options) {
 
         // Wenn noch keine Liste oder Unterliste beginn
         if (!isList || step > lastStep) {
-            // Letzte Stufe in die Liste
-            stepList.push(lastStep);
+            // Letzte Stufe in die Liste wenn noch nicht vorhanden
+            if (stepList.indexOf(lastStep) < 0) {
+                stepList.push(lastStep);
+            }
 
             if (step > 2 && step > lastStep) {
                 htmlString += "<" + listTag + " sub-list" + newAttribute + ">";
