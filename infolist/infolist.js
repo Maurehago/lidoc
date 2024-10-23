@@ -1,160 +1,318 @@
-// Infoliste
+// ==================
+//   Info Liste
+// ==================
+// @ts-check
+
+
+// ===============================
+//   Typen
+// --------------
+
+/**
+ * @typedef {object} InfoObject
+ * @property {string} [name]
+ * @property {string[]} fields
+ * @property {string[]} types
+ * @property {string[]} [formats]
+ * @property {any[]} data
+ */
+
+/**
+ * @typedef {object} InfoList2
+ * @property {string} [name]
+ * @property {string[]} fields
+ * @property {string[]} types
+ * @property {string[]} [formats]
+ * @property {Map<string,any[]>} data
+ */
 
 // ===============================
 //   Constanten
 // --------------
 
-// Hilight CSS class
-const css_color_highlight = "color-h";
-
 
 // ===============================
-
-// Global Short Identifier
-export function GSID() {
-    return new Date().getTime().toString(36) +
-        crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-}
+//   Klasse
+// --------------
 
 export class InfoList {
-    // Construktion
-    constructor(name) {
-        this.Name = ""; // Name der Liste
-        this.Path = ""; // Pfad / Gruppe
-        this.Prop = new Map(); // Zusätzliche Eigenschaften der Liste
-        this.Fields = []; // FeldNamen von Data
-        this.Types = []; // FeldTypen von Data
-        this.Data = new Map(); // Daten der Liste
-        this.List = []; // Wenn Auflistung statt Daten. z.B.: bei ENums
+    // Parameter
+    self = this;
+    name = "";
+    
+    /** @type {string[]} */
+    fields = [];
+    
+    /** @type {string[]} */
+    types = [];
+    
+    /** @type {string[]} */
+    formats = [];
+    
+    /** @type {Map<string|number,any[]>} */
+    data = new Map();
+    
+    /** @type {Map<string,any>} */
+    prop = new Map();
 
-        if (name) {
-            this.Name = name;
+
+    /**
+     * Ersetzt alle Daten mit einem neuen InfoObject
+     * @param {InfoObject & [any]} newData 
+     * @returns {void}
+     */
+    setData(newData) {
+        if (!newData) {return;}
+
+        // Standard Eigenschaften
+        this.name = newData.name || "";
+        this.fields = newData.fields;
+        this.types = newData.types;
+        this.formats = newData.formats || [];
+
+        // Daten in Map
+        this.data = new Map();
+        const dataLength = newData.data.length;
+        for (let i = 0; i < dataLength; i++) {
+            this.data.set(newData[i][0], newData[i][1]);
+            // todo: indexes ????
         }
+
+        // alle anderen Eigensaften
+        this.prop = new Map();
+        const objKeys = Object.keys(newData);
+        for (let i = 0; i < objKeys.length; i++) {
+            const key = objKeys[i];
+
+            // Klassen Parameter ignorieren
+            if (" name fields types formats data ".indexOf(key) > -1) {continue;}
+
+            this.prop.set(key, newData[key]);
+        }
+    } // setData()
+
+
+    /**
+     * Konstruktion
+     * @param {InfoObject & [any]} newData 
+     */
+    constructor(newData) {
+        this.setData(newData);
     }
 
-    // Diese Funktion liefert ein Array/Slice für einen Datensatz zurück
-    // die Feldnamen und die Reihenfolge der Daten bestimmt die "Fields" Eigenschaft von der InfoList
-    get(id) {
-        return this.Data.get(id);
+
+
+    /**
+     * Diese Funktion liefert ein Array/Slice für einen Datensatz zurück
+     * die Feldnamen und die Reihenfolge der Daten bestimmt die "Fields" Eigenschaft von der InfoList
+     * @param {string|number} id - ID Des Datensatzes 
+     * @returns {any[]|undefined}
+     */
+    getDataRow(id) {
+        return this.data.get(id);
     }
 
-    // Diese Funktion liefert den Datensatz als Objekt zurück
-    getAsObject(id) {
+
+    /**
+     * Setzt einen Datensatz(any[]) mit der id in der Liste.
+     * Wenn vorhanden wird der Datensatz komplett überschrieben.
+     * @param {string|number} id - ID des Datensatzes
+     * @param {any[]} dataRow - Datenliste, die Feld Reihenfolge und type muss der von der InfoList entsprechen.
+     */
+    setDataRow(id, dataRow) {
+        // todo: Prüfen auf Array und die richtigen Datentypen
+        this.data.set(id, dataRow);
+    }
+
+
+    /**
+     * Diese Funktion liefert den Datensatz als neues Objekt zurück.
+     * Wenn kein Datensatz gefunden, wird ein neues leeres Objekt zurück geliefert.
+     * @param {string|number} id 
+     * @returns {object}
+     */
+    getObject(id) {
         const obj = {};
-        const fields = this.Fields;
-        const data = this.Data.get(id);
+        const fields = this.fields;
+        const dataRow = this.data.get(id);
+        if (!dataRow) {return obj;}
 
         // Alle Felder durchgehen
         fields.forEach((name, index) => {
-            obj[name] = data[index];
+            obj[name] = dataRow[index];
         });
 
         // Objekt zurückgeben
         return obj;
     } // getAsObject
 
-    // Setzt einen Datensatz(data) mit der id in der Liste
-    // Wenn vorhanden wird der Datensatz komplett überschrieben.
-    set(id, data) {
-        // todo: Prüfen auf Array und die richtigen Datentypen
-        this.Data.set(id, data);
+
+    /**
+     * Schreibt die Daten des angegebenen Objektes in die Infoliste.
+     * Ist bereits ein Eintrag mit der selben ID vorhanden, so wird diese überschrieben.
+     * @param {string|number} id - ID des Datensatzes
+     * @param {object} obj - Daten Objekt
+     * @returns {void}
+     */
+    setObject(id, obj) {
+        if (!id) {return;}
+        if (!obj || typeof obj != "object") {return;}
+
+        const dataRow = new Array(this.fields.length);
+
+        const objKeys = Object.keys(obj);
+        for (let i = 0; i < objKeys.length; i++) {
+            const key = objKeys[i];
+            const index = this.fields.lastIndexOf(key);
+            if (index > -1) {
+                dataRow[index] = obj[key];
+            }
+        }
+
+        this.data.set(id, dataRow);
     }
 
-    // Liefert auf Grund des angegebenen Feldnamen(field)
-    // die Position/Index der Spalte in der InfoList zurück
+
+    /**
+     * Liefert auf Grund des angegebenen Feldnamen(field)
+     * die Position/Index der Spalte in der InfoList zurück
+     * @param {string} field - Name des gesuchten Feldes
+     * @returns {number} - Index Position des gesuchten Feldes. -1 wenn nicht gefunden.
+     */
     getFieldIndex(field) {
-        return this.Fields.indexOf(field);
+        return this.fields.indexOf(field);
     }
 
-    // Liefert eine Liste an Positionen/Indexes der angegebenen Spaltennamen(fields) zurück.
-    getFieldIndexes(fields) {
-        if (!Array.isArray(fields)) {
+
+    /**
+     * Liefert eine Liste an Positionen/Indexes der angegebenen Spaltennamen(fieldList) zurück.
+     * Für Feldnamen die nicht in der InfoListe gefunden werden, wird -1 als Position zurück gegeben.
+     * @param {string[]} fieldList - Liste mit Feldnamen
+     * @returns {number[]} - Liste mit Index-Positionen der gesuchten Felder. -1 wenn das Feld nicht in der Infoliste gefunden wurde.
+     */
+    getFieldIndexList(fieldList) {
+        if (!fieldList || !Array.isArray(fieldList)) {
             return [];
         }
 
-        const indexes = [];
-        const fieldList = this.Fields;
-
-        fields.forEach((v, i) => {
-            if (v.indexOf(" ") >= 0) {
-                v = v.split(" ")[0];
+        const fieldListLength = fieldList.length;
+        const indexes = new Array(fieldListLength);
+    
+        for (let i = 0; i < fieldListLength; i++) {
+            let field = fieldList[i];
+            if (field.indexOf(" ") >= 0) {
+                field = field.split(" ")[0];
             }
-            indexes[i] = fieldList.indexOf(v);
-        });
+            indexes[i] = this.fields.indexOf(field);
+        };
 
         return indexes;
     }
 
-    // Liest den Wert einer Spalte(field) vom angegebenen Datensatz(id) aus.
+
+    /**
+     * Liest den Wert einer Spalte(field) vom angegebenen Datensatz(id) aus.
+     * @param {string|number} id - ID des Datensatzes
+     * @param {string} field - Feldname von dem der Wert gelesen wird
+     * @returns {any|undefined} Wert vom angegebenen Datensatz-Feld 
+     */
     getValue(id, field) {
-        const index = this.Fields.indexOf(field);
-        if (index >= 0) {
-            return this.Data.get(id)[index];
+        if (!id) {return undefined;}
+        if (!field) {return undefined;}
+
+        const index = this.fields.indexOf(field);
+        if (index > -1) {
+            const dataRow = this.data.get(id);
+            if (dataRow) {
+                return dataRow[index];
+            } 
+            return undefined;
         } else {
-            return null;
+            return undefined;
         }
     }
 
-    // Gibt ein Array/Slice an Werten für die Spalten(fields) eines Datensatzes(id) zurück.
-    getValues(id, fields) {
-        const data = [];
-        const fieldNames = this.Fields;
-        const dataList = this.Data.get(id);
 
-        // Alle Felder durchgehen
-        fields.forEach((name, i) => {
-            // index der Spalte
-            const index = fieldNames.indexOf(name);
-
-            // Testen
-            // console.log("name, index: ", name, index);
-
-            if (index >= 0) {
-                data[i] = dataList[index];
-            } else {
-                data[i] = null;
-            }
-        });
-        return data;
-    }
-
-    // Setzt den Wert(value) einer Spalte(field) im Datensatz(id)
+    /**
+     * Setzt den Wert(value) einer Spalte(field) im Datensatz(id)
+     * @param {string|number} id - ID des Datensatzes
+     * @param {string} field - Feldname
+     * @param {any} value - Wert der für das angegebene Feld gesetzt wird
+     * @returns {void}
+     */
     setValue(id, field, value) {
-        const index = this.Fields.indexOf(field);
+        if (id == undefined || !field) {return;}
 
-        if (index >= 0) {
-            const fieldType = this.Types[index];
-            let dataList = this.Data.get(id);
-            if (!dataList) {
-                dataList = [];
-                this.set(id, dataList);
-            }
+        let dataRow = this.Data.get(id);
+        if (!dataRow) {
+            dataRow = new Array(this.fields.length);
+            this.data.set(id, dataRow);
+        }
+
+        const index = this.fields.indexOf(field);
+
+        if (index > -1) {
+            const fieldType = this.types[index];
 
             // Wert setzen
             switch (fieldType) {
-                case "int", "num", "bool":
-                    dataList[index] = value;
+                case "str":
+                    dataRow[index] = "" + value;
                     break;
-
+                    
                 default:
-                    dataList[index] = "" + value;
+                    dataRow[index] = value;
             }
         }
     } // setValue
 
-    // Sortierter Index
-    getSortIndex(fields) {
-        // Alle Keys von der map
-        const dataIndex = Array.from(this.Data.keys());
-        let fieldIndex = [];
 
-        if (Array.isArray(fields)) {
-            fieldIndex = this.getFieldIndexes(fields);
-        } else if (typeof fields === "string" && fields != "") {
-            fieldIndex = [this.getFieldIndex(fields)];
-        } else {
-            // Aktuellen nicht sortierten Index zurückgeben
-            return dataIndex;
+    /**
+     * Gibt ein Array an Werten für die Spalten(fieldList) eines Datensatzes(id) zurück.
+     * @param {string|number} id - ID des Datensatzes
+     * @param {string[]} fieldList - List mit Feldnamen
+     * @returns {any[]} Liste mit Werten der angegebenen Feldnamen
+     */
+    getFieldValueList(id, fieldList) {
+        if (id == undefined) {return [];}
+        if (!fieldList || !Array.isArray(fieldList)) {
+            return [];
+        }
+
+        const dataRow = this.data.get(id);
+        if (!dataRow) {return [];}
+
+        const fieldListLength = fieldList.length;
+        const valueList = new Array(fieldListLength);
+    
+        for (let i = 0; i < fieldListLength; i++) {
+            let field = fieldList[i];
+            if (field.indexOf(" ") >= 0) {
+                field = field.split(" ")[0];
+            }
+            const index = this.fields.indexOf(field);
+            valueList[i] = dataRow[index];
+        };
+
+        return valueList;
+    }
+
+
+
+    // Sortierter Index
+    getSortIndexList(sortFields) {
+        // Alle Keys von der map
+        const dataKeys = this.data.keys();
+        const keysLength = this.data.size;
+        
+        const indexList = new Array(keysLength);
+        for (let i = 0; i < keysLength; i++) {
+            indexList[i] = dataKeys[i];
+        }
+
+
+        if (!Array.isArray(sortFields)) {
+            return indexList;
         }
 
         // Sortieren
@@ -392,6 +550,18 @@ export class InfoList {
         }
     } // send
 } // Class InfoList
+
+
+// ===============================
+//   Funktionen
+// --------------
+
+// Global Short Identifier
+export function GSID() {
+    return new Date().getTime().toString(36) +
+        crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+}
+
 
 
 // Seiten Navigation
