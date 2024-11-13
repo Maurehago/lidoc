@@ -1,11 +1,27 @@
 // ===========================
 //   Markdown Dateien Parsen
-// 2024-09-08
+// 2024-11-12
 // ===========================
 // @ts-check
 
-/** @typedef {import("./types.d.ts").ParseOptions} ParseOptions */
-/** @typedef {import("./types.d.ts").SiteInfo} SiteInfo */
+// =====================================
+//   Typen
+// --------
+
+/**
+ * @typedef {object} ParseOptions
+ * @property {string} [rowTag] - TagName für die Zeilen
+ * @property {string} [colTag] - TagName für sie Spalten
+ */
+
+/**
+ * @typedef {object} SiteInfo
+ * @property {Map<string,string>} html - Map mit HTML-String's nach dem Parsen. Der Standard Key ist "content"
+ * @property {object} data - Objekt Mit Header Daten der Seite
+ * @property {string[]} imageList - Liste mit allen Bild-URL's der Seite
+ * @property {string[]} linkList - Liste mit allen Links der Seite
+ */
+
 
 
 /**
@@ -54,6 +70,7 @@ export function parseMd(mdString, options) {
     let isLi = false;
     let isP = false;
     let isTable = false;
+    let isHTML = false;
 
     // HTML String
     let htmlString = "";
@@ -73,6 +90,7 @@ export function parseMd(mdString, options) {
 
     // Alle Tags schliessen
     let closeAllTags = function () {
+        isHTML = false;
         if (isP) {
             htmlString += "</p>";
             isP = false;
@@ -273,6 +291,15 @@ export function parseMd(mdString, options) {
         }
 
         // Ab hier ist keine Leerzeile
+        
+        // Wenn HTML Code
+        if (isHTML || (trimLine.startsWith("<") && trimLine.endsWith(">"))) {
+            isHTML = true;
+            htmlString += trimLine + "\n";
+            return;
+        }
+        
+        // Neue Attribute für folgende zeilen
         if (trimLine.startsWith("[") && trimLine.endsWith("]")) {
             newAttribute = " " + trimLine.substring(1, trimLine.length - 1);
             return;
