@@ -8,12 +8,33 @@
 //   Typen
 // --------------
 
+// [date|special(30){>0;10}/regex/=default]
+
+/**
+ * @typedef {object} InfoFormat
+ * @property {boolean} [optional] - Wenn der Wert NULL sein Kann oder nicht angegeben
+ * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
+ * @property {string} [subtype] - Name eines Speziellen Types 
+ * @property {string|number|boolean} [default] - Defaultwert, der beim Anlegen gesetzt wird
+ * @property {number} [size] - Größe (gesamt)
+ * @property {number} [decimals] - Anzahl der Dezimalstellen 
+ * @property {number} [min] - Minimalwert
+ * @property {number} [max] - Maimalwert
+ * @property {number} [greater] - Größer als angegeben (exklusive der angegebenen zahl)
+ * @property {number} [lower] - Kleiner als angegeben (kleiner der angegeben zahl)
+ * @property {string} [regex] - Regular Expression zum Testen eines Wertes
+ * @property {any} [defaultValue] - Standard-Wert der Eigenschafft
+ * @property {boolean} [charToBool] - true wenn der Charakter "J" in "true" umgewandelt werden soll.
+ */
+
+/** @typedef {"string"|"number"|"boolean"|"object"|"list"} InfoTypes */
+
 /**
  * @typedef {object} InfoObject
  * @property {string} [name]
  * @property {string[]} fields
- * @property {string[]} types
- * @property {string[]} [formats]
+ * @property {InfoTypes[]} types
+ * @property {InfoFormat[]} [formats]
  * @property {any[]} data
  */
 
@@ -53,7 +74,7 @@ export class InfoList {
     /** @type {string[]} */
     types = [];
 
-    /** @type {string[]} */
+    /** @type {InfoFormat[]} */
     formats = [];
 
     /** @type {Map<string|number,any[]>} */
@@ -61,6 +82,60 @@ export class InfoList {
 
     /** @type {Map<string,any>} */
     prop = new Map();
+
+
+    /**
+     * Setzt die Feldnamen der InfoListe
+     * Der Typ des neuen Feldes wird auf "string" gesetzt, außer es wird nach dem Feldnamen mit einem Leerzeichen getrennt, der Typ angegeben.
+     * Der Typ darf nur einen der folgenden Texte enthalten:
+     * "string" | "number" | "boolean" | "object" | "list"
+     * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
+     * @param {string|string[]} fieldList - Liste Mit Feldnamen, oder String mit Trennzeichen getrennt
+     * @param {string} [seperator] - Trennzeichen muss angegeben werden wenn fieldList ein String mit Trennzeichen ist
+     * @returns {void}
+     */
+    setFields(fieldList, seperator) {
+        if (!fieldList) {return;}
+        let newFields = [];
+
+        if (Array.isArray(fieldList)) {
+            newFields = fieldList;
+        } else if (typeof fieldList == "string" && seperator) {
+            newFields = fieldList.split(seperator);
+        }
+
+        // bestehende Felder löschen
+        // todo: Eventuell mit bestehenden Feldern zusammenmergen ????
+        this.fields = [];
+        this.types = [];
+
+        // alle neuen felder durchgehen
+        for (let i = 0; i < newFields.length; i++) {
+            let name = newFields[i];
+            let type = "string";
+
+            // Wenn ein leerzeichen im Namen
+            if (name.indexOf(" ") > -1) {
+                // Type steht nach namen
+                const nameType = name.split(" ");
+
+                this.fields.push(nameType[0]);
+
+                // auf richtige Typen prüfen
+                if ("|string|number|boolean|object|list|".indexOf(nameType[1]) > -1) {
+                    this.types.push(nameType[1]);
+                } else {
+                    this.types.push("string");
+                }
+            } else {
+                this.fields.push(name);
+                this.types.push(type);
+            }
+        }
+
+        // Daten passen dann nicht mehr zu Feldern und werden gelöscht
+        this.data = new Map();
+    } // setFields
 
 
     /**
@@ -526,15 +601,20 @@ export class InfoList {
     } // parse
 
 
+
+
     /**
      * Konstruktor mit InfoList Objekt oder JSON-String
-     * @param {InfoObject & [any]|string} newData 
+     * @param {InfoObject & [any]|string} [newData] - Javascript Objekt oder JSON-String
      */
     constructor(newData) {
-        if (typeof newData == "string") {
-            this.parse(newData);
-        } else {
-            this.setData(newData);
+        // Wenn InizialisierungsDaten
+        if (newData) {
+            if (typeof newData == "string") {
+                this.parse(newData);
+            } else {
+                this.setData(newData);
+            }
         }
     }
 } // Class InfoList
