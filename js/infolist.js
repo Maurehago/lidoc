@@ -54,10 +54,20 @@
  * @param {InfoList} [infoList]
  */
 
+/**
+ * @callback FilterFieldFunc
+ * @param {string} [name]
+ * @param {number} [index]
+ * @param {InfoList} [infoList]
+ */
+
+
 // ===============================
 //   Constanten
 // --------------
 
+const regexTemplate = /{{(.*?)}}/g;
+const regexFor = /{{(for)}}/g;
 
 // ===============================
 //   Klasse
@@ -540,39 +550,55 @@ export class InfoList {
 
 
     /**
-     * Geht alle Datensätze in der InfoList durch
+     * Geht alle Datensätze, oder die in der Angegeben Keylist, durch 
      * und führt für jeden Datensatz die angegebene Funktion aus.
-     * @param {FilterFunc} func
+     * @param {FilterFunc} func - Callback Funktion die bei jedem Datensatz aufgerufen wird
+     * @param {(string|number)[]} [keyList] - Liste mit Datensatz Keys
      */
-    forEach(func) {
+    forEach(func, keyList) {
         if (typeof func != "function") {return;}
-        const dataKeys = this.data.keys();
-        const keysLength = this.data.size;
+        
+        // Wenn ein Key Index angegeben
+        if (keyList && Array.isArray(keyList)) {
+            const keysLength = keyList.length;
 
-        for (let i = 0; i < keysLength; i++) {
-            // Funktion ausführen
-            func(this.getObject(dataKeys[i]), dataKeys[i], this);
+            for (let i = 0; i < keysLength; i++) {
+                // Funktion ausführen
+                func(this.getObject(keyList[i]), keyList[i], this);
+            }
+        } else {
+            const dataKeys = this.data.keys();
+            let dataKesyLength = this.data.size;
+
+            for (let i = 0; i < dataKesyLength; i++) {
+                // Funktion ausführen
+                func(this.getObject(dataKeys[i]), dataKeys[i], this);
+            }
         }
     }
 
 
     /**
-     * Führt die Angegebene Funktion für jeden Datensatz der angegebenen Keys aus
-     * @param {(string|number)[]} keyList - Liste mit Datensatz Keys
-     * @param {FilterFunc} func - Funktion die bei jedem Datensatz aufgerufen wird
+     * 
+     * @param {FilterFieldFunc} func - Callback Funktion für jedes Feld 
+     * @param {string[]} [fieldList] - Optional Liste mit Feldnamen 
      * @returns {void}
      */
-    forEachKey(keyList, func) {
-        if (!Array.isArray(keyList)) {return;}
+    forEachField(func, fieldList) {
         if (typeof func != "function") {return;}
         
-        const keysLength = keyList.length;
+        let fields = this.fields;
+        if (fieldList && Array.isArray(fieldList)) {fields = fieldList;}
+        
+        const fieldsLength = fields.length;
 
-        for (let i = 0; i < keysLength; i++) {
+        for (let i = 0; i < fieldsLength; i++) {
             // Funktion ausführen
-            func(this.getObject(keyList[i]), keyList[i], this);
+            func(fields[i], i, this);
         }
     }
+
+
 
     // Infoliste in einen String umwandeln
     /**
@@ -629,6 +655,13 @@ export function GSID() {
     return new Date().getTime().toString(36) +
         crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
 }
+
+function templateMe(template, obj) {
+    var regex = /{{(.*?)}}/g;
+    return template.replace(regex, function(match, capture) {
+      return obj[capture] || "";
+    });
+  }
 
 
 
