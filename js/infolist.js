@@ -661,7 +661,7 @@ function templateMe(template, obj) {
     return template.replace(regex, function(match, capture) {
       return obj[capture] || "";
     });
-  }
+}
 
 
 
