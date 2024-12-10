@@ -32,6 +32,8 @@
 /**
  * @typedef {object} InfoObject
  * @property {string} [name]
+ * @property {string|string[]} idField
+ * @property {number|number[]} [idIndex]
  * @property {string[]} fields
  * @property {InfoTypes[]} types
  * @property {InfoFormat[]} [formats]
@@ -78,6 +80,12 @@ export class InfoList {
     self = this;
     name = "";
 
+    /** @type {string|string[]} */
+    idField = "";
+
+    /** @type {number|number[]} */
+    idIndex = 0;
+
     /** @type {string[]} */
     fields = [];
 
@@ -95,16 +103,63 @@ export class InfoList {
 
 
     /**
+     * Setzt das ID-Feld und mekt sich den ID-Index.
+     * Felder müssen vorher in der Liste existieren.
+     * @param {string|string[]} idField - ID Feldname oder Liste mit Feldnamen die eine eindeutige ID ergeben
+     * @returns {void}
+     */
+    setIdField(idField) {
+        if (!idField) {return;}
+
+        this.idField = idField;
+
+        // idIndex
+        if (Array.isArray(this.idField)) {
+            // Liste von Feldern ergeben ID
+            this.idIndex = [];
+            for (let i = 0; i < this.idField.length; i++) {
+                this.idIndex.push(this.fields.indexOf(this.idField[i]));
+            }
+        } else {
+            // ID-Index setzen
+            this.idIndex = this.fields.indexOf(this.idField);
+        }
+    }
+
+
+    /**
+     * Holt aus einer Datenzeile die ID laut gespeicherten idIndex
+     * @param {any[]} dataRow - Datenzeile Array
+     * @returns {string|number} ID
+     */
+    getID(dataRow) {
+        if (!Array.isArray(dataRow)) {return null;}
+
+        if (Array.isArray(this.idIndex)) {
+            let id = "";
+            for (let i = 0; i < this.idIndex.length; i++) {
+                id += dataRow[this.idIndex[i]] + "_";
+            }
+            return id;
+        } else {
+            return dataRow[this.idIndex];
+        }
+    }
+
+
+
+    /**
      * Setzt die Feldnamen der InfoListe
      * Der Typ des neuen Feldes wird auf "string" gesetzt, außer es wird nach dem Feldnamen mit einem Leerzeichen getrennt, der Typ angegeben.
      * Der Typ darf nur einen der folgenden Texte enthalten:
      * "string" | "number" | "boolean" | "object" | "list"
      * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
      * @param {string|string[]} fieldList - Liste Mit Feldnamen, oder String mit Trennzeichen getrennt
+     * @param {string|string[]} idField - Feldname des ID Feldes, oder Liste von Feldnamen, die eine eindeutige Kennung ergeben.
      * @param {string} [seperator] - Trennzeichen muss angegeben werden wenn fieldList ein String mit Trennzeichen ist
      * @returns {void}
      */
-    setFields(fieldList, seperator) {
+    setFields(fieldList, idField, seperator) {
         if (!fieldList) {return;}
         let newFields = [];
 
@@ -143,6 +198,9 @@ export class InfoList {
             }
         }
 
+        // ID Feld setzen
+        this.setIdField(idField);
+
         // Daten passen dann nicht mehr zu Feldern und werden gelöscht
         this.data = new Map();
     } // setFields
@@ -164,11 +222,14 @@ export class InfoList {
             this.types = newData.types;
             this.formats = newData.formats || [];
 
+            // idIndex
+            this.setIdField(newData.idField)
+
             // Daten in Map
             this.data = new Map();
             const dataLength = newData.data.length;
             for (let i = 0; i < dataLength; i++) {
-                this.data.set(newData[i][0], newData[i][1]);
+                this.data.set(this.getID(newData.data[i]), newData.data[i]);
                 // todo: indexes ????
             }
 
@@ -179,7 +240,7 @@ export class InfoList {
                 const key = objKeys[i];
 
                 // Klassen Parameter ignorieren
-                if (" name fields types formats data ".indexOf(key) > -1) { continue; }
+                if (" name idField idIndex fields types formats data ".indexOf(key) > -1) { continue; }
 
                 this.prop.set(key, newData[key]);
             }
@@ -205,13 +266,15 @@ export class InfoList {
         newData.types = this.types;
         newData.formats = this.formats || [];
 
+        newData.idField = this.idField;
+
         // Daten aus Map
         const keyList = this.data.keys();
         const dataLength = this.data.size;
         newData.data = new Array(dataLength);
 
         for (let i = 0; i < dataLength; i++) {
-            newData.data[i] = [keyList[i], this.data.get(keyList[i])];
+            newData.data[i] = this.data.get(keyList[i]);
         }
 
         // alle anderen Eigensaften
@@ -238,12 +301,11 @@ export class InfoList {
     /**
      * Setzt einen Datensatz(any[]) mit der id in der Liste.
      * Wenn vorhanden wird der Datensatz komplett überschrieben.
-     * @param {string|number} key - ID des Datensatzes
      * @param {any[]} dataRow - Datenliste, die Feld Reihenfolge und type muss der von der InfoList entsprechen.
      */
-    setDataRow(key, dataRow) {
+    setDataRow(dataRow) {
         // todo: Prüfen auf Array und die richtigen Datentypen
-        this.data.set(key, dataRow);
+        this.data.set(this.getID(dataRow), dataRow);
     }
 
 
@@ -281,12 +343,10 @@ export class InfoList {
     /**
      * Schreibt die Daten des angegebenen Objektes in die Infoliste.
      * Ist bereits ein Eintrag mit der selben ID vorhanden, so wird diese überschrieben.
-     * @param {string|number} key - ID des Datensatzes
      * @param {object} obj - Daten Objekt
      * @returns {void}
      */
-    setObject(key, obj) {
-        if (!key) { return; }
+    setObject(obj) {
         if (!obj || typeof obj != "object") { return; }
 
         const dataRow = new Array(this.fields.length);
@@ -300,7 +360,7 @@ export class InfoList {
             }
         }
 
-        this.data.set(key, dataRow);
+        this.data.set(this.getID(dataRow), dataRow);
     }
 
 
