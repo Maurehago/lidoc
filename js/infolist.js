@@ -133,7 +133,7 @@ export class InfoList {
      * @returns {string|number} ID
      */
     getID(dataRow) {
-        if (!Array.isArray(dataRow)) {return null;}
+        if (!Array.isArray(dataRow)) {return -1;}
 
         if (Array.isArray(this.idIndex)) {
             let id = "";
