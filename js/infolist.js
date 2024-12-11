@@ -31,13 +31,14 @@
 
 /**
  * @typedef {object} InfoObject
- * @property {string} [name]
+ * @property {string} name
  * @property {string|string[]} idField
  * @property {number|number[]} [idIndex]
  * @property {string[]} fields
  * @property {InfoTypes[]} types
+ * @property {(string|undefined|null)[]} links
  * @property {InfoFormat[]} [formats]
- * @property {any[]} data
+ * @property {any[]} [data]
  */
 
 /**
@@ -71,6 +72,13 @@
 const regexTemplate = /{{(.*?)}}/g;
 const regexFor = /{{(for)}}/g;
 
+/** 
+ * Auflistung aller InfoListen
+ * @type {Map<string,InfoList>}
+ */
+export const lists = new Map();
+
+
 // ===============================
 //   Klasse
 // --------------
@@ -78,28 +86,45 @@ const regexFor = /{{(for)}}/g;
 export class InfoList {
     // Parameter
     self = this;
-    name = "";
+    _name = "";
 
     /** @type {string|string[]} */
-    idField = "";
+    _idField = "";
 
     /** @type {number|number[]} */
-    idIndex = 0;
+    _idIndex = 0;
 
     /** @type {string[]} */
-    fields = [];
+    _fields = [];
 
     /** @type {string[]} */
-    types = [];
+    _types = [];
+
+    /** @type {(string|undefined|null)[]} */
+    _links = [];
 
     /** @type {InfoFormat[]} */
-    formats = [];
+    _formats = [];
 
     /** @type {Map<string|number,any[]>} */
-    data = new Map();
+    _data = new Map();
 
     /** @type {Map<string,any>} */
     prop = new Map();
+
+
+    set name(newName) {
+        if (!newName) {
+            newName = GSID();
+        }
+        this._name = newName;
+
+        // name registrieren
+        lists.set(this._name, this);
+    }
+    get name() {
+        return this._name;
+    }
 
 
     /**
@@ -111,19 +136,36 @@ export class InfoList {
     setIdField(idField) {
         if (!idField) {return;}
 
-        this.idField = idField;
+        this._idField = idField;
 
         // idIndex
-        if (Array.isArray(this.idField)) {
+        if (Array.isArray(this._idField)) {
             // Liste von Feldern ergeben ID
-            this.idIndex = [];
-            for (let i = 0; i < this.idField.length; i++) {
-                this.idIndex.push(this.fields.indexOf(this.idField[i]));
+            this._idIndex = [];
+            for (let i = 0; i < this._idField.length; i++) {
+                this._idIndex.push(this._fields.indexOf(this._idField[i]));
             }
         } else {
             // ID-Index setzen
-            this.idIndex = this.fields.indexOf(this.idField);
+            this._idIndex = this._fields.indexOf(this._idField);
         }
+    }
+    /**
+     * @param {string | string[]} fieldName
+     */
+    set idField(fieldName) {
+        this.setIdField(fieldName);
+    }
+    get idField() {
+        return this._idField;
+    }
+
+
+    /**
+     * Index (Spalte) des ID Feldes
+     */
+    get idIndex() {
+        return this._idIndex;
     }
 
 
@@ -135,24 +177,73 @@ export class InfoList {
     getID(dataRow) {
         if (!Array.isArray(dataRow)) {return -1;}
 
-        if (Array.isArray(this.idIndex)) {
+        if (Array.isArray(this._idIndex)) {
             let id = "";
-            for (let i = 0; i < this.idIndex.length; i++) {
-                id += dataRow[this.idIndex[i]] + "_";
+            for (let i = 0; i < this._idIndex.length; i++) {
+                id += dataRow[this._idIndex[i]] + "_";
             }
             return id;
         } else {
-            return dataRow[this.idIndex];
+            return dataRow[this._idIndex];
         }
     }
 
 
+    /**
+     * Setzt oder löscht, für den angegebenen FeldIndex, den Link(Verknüpfung) zu einer anderen Liste
+     * @param {number} fieldIndex - Index vom Feld(Spalte)
+     * @param {string|undefined|null} [listName] - Name der InfoListe. Wenn nicht angegeben wird der Link(Verknüpfung) gelöscht.
+     * @returns {void}
+     */
+    setFieldIndexLink(fieldIndex, listName) {
+        if (!fieldIndex || typeof fieldIndex != "number") {return;}
+        if (fieldIndex > -1) {
+            this._links[fieldIndex] = listName;
+        }
+    }
+
 
     /**
-     * Setzt die Feldnamen der InfoListe
-     * Der Typ des neuen Feldes wird auf "string" gesetzt, außer es wird nach dem Feldnamen mit einem Leerzeichen getrennt, der Typ angegeben.
-     * Der Typ darf nur einen der folgenden Texte enthalten:
-     * "string" | "number" | "boolean" | "object" | "list"
+     * Setzt oder löscht, für den angegebenen Feldnamen, den Link(Verknüpfung) zu einer anderen Liste
+     * @param {string} fieldName - Index vom Feld(Spalte)
+     * @param {string|undefined|null} [listName] - Name der InfoListe. Wenn nicht angegeben wird der Link(Verknüpfung) gelöscht.
+     * @returns {void}
+     */
+    setFieldLink(fieldName, listName) {
+        if (!fieldName || typeof fieldName != "string") {return;}
+        this.setFieldIndexLink(this._fields.indexOf(fieldName), listName);
+    }
+
+
+    /**
+     * Liest den Listennamen der Verknüpften Liste vom angegebenen Feldindex aus
+     * @param {number} fieldIndex - Index des Feldes(Spalte)
+     * @returns {string|undefined|null} Name der Liste. Kann mit lists.get(name) gelesen werden.
+     */
+    getFieldIndexLink(fieldIndex) {
+        if (typeof fieldIndex == "number" && fieldIndex > -1) {
+            return this._links[fieldIndex];
+        }
+    }
+    
+
+    /**
+     * Liest den Listennamen der Verknüpften Liste vom angegebenen Feldname aus
+     * @param {string} fieldName - Index des Feldes(Spalte)
+     * @returns {string|undefined|null} Name der Liste. Kann mit lists.get(name) gelesen werden.
+     */
+    getFieldLink(fieldName) {
+        if (typeof fieldName == "string") {
+            return this.getFieldIndexLink(this._fields.indexOf(fieldName));
+        }
+    }
+
+
+    /**
+     * Setzt die Feldnamen der InfoListe  
+     * Der Typ des neuen Feldes wird auf "string" gesetzt, außer es wird nach dem Feldnamen mit einem Leerzeichen getrennt, der Typ angegeben.  
+     * Der Typ darf nur einen der folgenden Texte enthalten:  
+     * "string" | "number" | "boolean" | "object" | "list"  
      * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
      * @param {string|string[]} fieldList - Liste Mit Feldnamen, oder String mit Trennzeichen getrennt
      * @param {string|string[]} idField - Feldname des ID Feldes, oder Liste von Feldnamen, die eine eindeutige Kennung ergeben.
@@ -171,8 +262,9 @@ export class InfoList {
 
         // bestehende Felder löschen
         // todo: Eventuell mit bestehenden Feldern zusammenmergen ????
-        this.fields = [];
-        this.types = [];
+        this._fields = new Array(newFields.length);
+        this._links = new Array(newFields.length);
+        this._types = new Array(newFields.length);
 
         // alle neuen felder durchgehen
         for (let i = 0; i < newFields.length; i++) {
@@ -184,17 +276,30 @@ export class InfoList {
                 // Type steht nach namen
                 const nameType = name.split(" ");
 
-                this.fields.push(nameType[0]);
+                this._fields[i] = nameType[0];
+                
+                if (nameType[2]) {
+                    this._links[i] = nameType[2];
+                }
 
                 // auf richtige Typen prüfen
                 if ("|string|number|boolean|object|list|".indexOf(nameType[1]) > -1) {
-                    this.types.push(nameType[1]);
+                    this._types[i] = nameType[1];
+
+                    //  Wenn keine verknüpfte Liste
+                    if ((nameType[1] == "object" || nameType[1] == "list") && !nameType[2]) {
+                        // Liste Name wird vom FeldNamen(SpaltenNamen) angenommen
+                        this._links[i] = nameType[0];
+                    }
                 } else {
-                    this.types.push("string");
+                    // wenn kein Typ angegeben dann immer "string"
+                    this._types[i] = "string";
                 }
             } else {
-                this.fields.push(name);
-                this.types.push(type);
+                this._fields[i] = name;
+
+                // Standard Typ
+                this._types[i] = type;
             }
         }
 
@@ -202,8 +307,106 @@ export class InfoList {
         this.setIdField(idField);
 
         // Daten passen dann nicht mehr zu Feldern und werden gelöscht
-        this.data = new Map();
+        this._data = new Map();
     } // setFields
+
+
+    /**
+     * Setzt die Felder(Spalten) der Liste anhand eines Javascript Objektes.  
+     * Die Feldtypen werden von den Werten in den Eigenschaften bestimmt.  
+     * Ist der Wert nicht ermittelbar, wird "string" angenommen.  
+     * Ist der Wert ein "object" oder "array", so wird der ListenName(Verlinkung) gleich dem Eigenschaftsnamen angenommen.  
+     * @param {object} obj - Objekt dessen Eigenschaften als Feldnamen registriert werden
+     * @param {string} idField - Name der Eigenschaft die als Eindeutige ID genommen wird
+     * @returns {void}
+     */
+    setFieldsFromObject(obj, idField) {
+        if (typeof obj != "object") {return;}
+        if (Array.isArray(obj)) {return;}
+
+        // Eigenschaft Namen vom Objekt lesen
+        const keyList = Object.keys(obj);
+
+        // Typ Prüfung
+        for (let i = 0; i < keyList.length; i++) {
+            switch (typeof keyList[i]) {
+                case "bigint":
+                    keyList[i] = keyList[i] + " number";
+                    break;
+                case "boolean":
+                    keyList[i] = keyList[i] + " boolean";
+                    break;
+                case "number":
+                    keyList[i] = keyList[i] + " number";
+                    break;
+                case "object":
+                    if (Array.isArray(keyList[i])) {
+                        keyList[i] = keyList[i] + " list " + keyList[i];    
+                    } else {
+                        keyList[i] = keyList[i] + " object " + keyList[i];    
+                    }
+                    break;
+            
+                default:
+                    break;
+            }
+        }
+
+
+        // Felder setzen
+        this.setFields(keyList, idField);
+    }
+
+
+    /**
+     * Setzt für den Angegebenen Feldindex, die Format einstellungen
+     * @param {number} fieldIndex 
+     * @param {InfoFormat} formatObj 
+     */
+    setFieldIndexFormat(fieldIndex, formatObj) {
+        if (!fieldIndex || typeof fieldIndex != "number" || fieldIndex < 0) {return;}
+        if (!formatObj) {formatObj = {};}
+
+        // Format für Spalte ablegen
+        this._formats[fieldIndex] = formatObj;
+    }
+
+    /**
+     * Liefert vom angegebenen Feldindex das Format Objekt zurück
+     * @param {number} fieldIndex - Feld Index
+     * @returns {InfoFormat|undefined} Format Objekt wenn vorhanden
+     */
+    getFieldIndexFormat(fieldIndex) {
+        if (typeof fieldIndex == "number" && fieldIndex > -1) {
+            return this._formats[fieldIndex];
+        }
+    }
+
+
+    /**
+     * Setzt für den Angegebenen Feldnamen, die Format einstellungen
+     * @param {string} fieldName 
+     * @param {InfoFormat} formatObj 
+     */
+    setFieldFormat(fieldName, formatObj) {
+        if (!fieldName || typeof fieldName != "string") {return;}
+        if (!formatObj) {formatObj = {};}
+
+        // an der Richtigen Spalte das Format Objekt ablegen
+        this.setFieldIndexFormat(this._fields.indexOf(fieldName), formatObj);
+    }
+
+
+    /**
+     * 
+     * @param {string} fieldName - Feldname
+     * @returns {InfoFormat|undefined} Format Objekt wenn vorhanden
+     */
+    getFieldFormat(fieldName) {
+        if (typeof fieldName == "string") {
+            return this.getFieldIndexFormat(this._fields.indexOf(fieldName));
+        }
+    }
 
 
     /**
@@ -217,20 +420,23 @@ export class InfoList {
             if (!newData.fields || !newData.types) { return false; }
 
             // Standard Eigenschaften
-            this.name = newData.name || "";
-            this.fields = newData.fields;
-            this.types = newData.types;
-            this.formats = newData.formats || [];
+            this.name = newData.name;
+            this._fields = newData.fields;
+            this._types = newData.types;
+            this._links = newData.links;
+            this._formats = newData.formats || [];
 
             // idIndex
             this.setIdField(newData.idField)
 
             // Daten in Map
-            this.data = new Map();
-            const dataLength = newData.data.length;
-            for (let i = 0; i < dataLength; i++) {
-                this.data.set(this.getID(newData.data[i]), newData.data[i]);
-                // todo: indexes ????
+            this._data = new Map();
+            if (newData.data) {
+                const dataLength = newData.data.length;
+                for (let i = 0; i < dataLength; i++) {
+                    this._data.set(this.getID(newData.data[i]), newData.data[i]);
+                    // todo: indexes ????
+                }
             }
 
             // alle anderen Eigensaften
@@ -240,7 +446,7 @@ export class InfoList {
                 const key = objKeys[i];
 
                 // Klassen Parameter ignorieren
-                if (" name idField idIndex fields types formats data ".indexOf(key) > -1) { continue; }
+                if (" name idField idIndex fields types links formats data ".indexOf(key) > -1) { continue; }
 
                 this.prop.set(key, newData[key]);
             }
@@ -261,20 +467,21 @@ export class InfoList {
         const newData = {};
 
         // Standard Eigenschaften
-        newData.name = this.name || "";
-        newData.fields = this.fields;
-        newData.types = this.types;
-        newData.formats = this.formats || [];
+        newData.name = this.name;
+        newData.fields = this._fields;
+        newData.types = this._types;
+        newData.links = this._links;
+        newData.formats = this._formats || [];
 
         newData.idField = this.idField;
 
         // Daten aus Map
-        const keyList = this.data.keys();
-        const dataLength = this.data.size;
+        const keyList = this._data.keys();
+        const dataLength = this._data.size;
         newData.data = new Array(dataLength);
 
         for (let i = 0; i < dataLength; i++) {
-            newData.data[i] = this.data.get(keyList[i]);
+            newData.data[i] = this._data.get(keyList[i]);
         }
 
         // alle anderen Eigensaften
@@ -294,7 +501,7 @@ export class InfoList {
      * @returns {any[]|undefined}
      */
     getDataRow(key) {
-        return this.data.get(key);
+        return this._data.get(key);
     }
 
 
@@ -305,7 +512,7 @@ export class InfoList {
      */
     setDataRow(dataRow) {
         // todo: Prüfen auf Array und die richtigen Datentypen
-        this.data.set(this.getID(dataRow), dataRow);
+        this._data.set(this.getID(dataRow), dataRow);
     }
 
 
@@ -315,7 +522,7 @@ export class InfoList {
      * @returns {boolean} true wenn der Datensatz gelöst wurde
      */
     deleteDataRow(key) {
-        return this.data.delete(key);
+        return this._data.delete(key);
     }
 
 
@@ -327,12 +534,12 @@ export class InfoList {
      */
     getObject(key) {
         const obj = {};
-        const dataRow = this.data.get(key);
+        const dataRow = this._data.get(key);
         if (!dataRow) { return obj; }
 
         // Alle Felder durchgehen
-        for (let i = 0; i < this.fields.length; i++) {
-            obj[this.fields[i]] = dataRow[i];
+        for (let i = 0; i < this._fields.length; i++) {
+            obj[this._fields[i]] = dataRow[i];
         };
 
         // Objekt zurückgeben
@@ -344,23 +551,68 @@ export class InfoList {
      * Schreibt die Daten des angegebenen Objektes in die Infoliste.
      * Ist bereits ein Eintrag mit der selben ID vorhanden, so wird diese überschrieben.
      * @param {object} obj - Daten Objekt
-     * @returns {void}
+     * @returns {string|number|undefined} ID des eingefügten Objektes
      */
     setObject(obj) {
         if (!obj || typeof obj != "object") { return; }
 
-        const dataRow = new Array(this.fields.length);
+        const dataRow = new Array(this._fields.length);
 
         const objKeys = Object.keys(obj);
         for (let i = 0; i < objKeys.length; i++) {
             const objKey = objKeys[i];
-            const index = this.fields.indexOf(objKey);
+            const index = this._fields.indexOf(objKey);
             if (index > -1) {
-                dataRow[index] = obj[objKey];
+                let value = obj[objKey];
+                
+                // Bei Objekt oder Liste, in andere Liste Einfügen
+                if (typeof value == "object") {
+                    // Wenn Link
+                    if (typeof this._links[index] == "string") {
+                        // FremdListe lesen
+                        let foreignList = lists.get(this._links[index]);
+
+                        if (this._types[index] == "object") {
+                            // Wenn Liste noch nicht Existiert
+                            if (foreignList == undefined) {
+                                foreignList = new InfoList(this._links[index]);
+
+                                // ID ist id oder GSID 
+                                foreignList.setFieldsFromObject(value, value.id ? "id" : "GSID");
+                            }
+
+                            // Objekt in Subliste einfügen und Value neu setzen
+                            value = foreignList.setObject(value);
+                        } else if (this._types[index] == "list" && Array.isArray(value)) {
+                            // Wenn Liste noch nicht Existiert
+                            if (foreignList == undefined) {
+                                foreignList = new InfoList(this._links[index]);
+
+                                // ID ist id oder GSID 
+                                foreignList.setFieldsFromObject(value[0], value[0].id ? "id" : "GSID");
+                            }
+
+                            const newValue  = [];
+
+                            // Alle Objekte in der Liste durchgehen
+                            for (let j = 0; j < value.length; j++) {
+                                newValue.push(foreignList.setObject(value[j]));
+                            }
+
+                            // neuen Wert setzen
+                            value = newValue;
+                        }
+                    }
+                }
+
+                // Wert merken
+                dataRow[index] = value;
             }
         }
-
-        this.data.set(this.getID(dataRow), dataRow);
+        
+        const id = this.getID(dataRow);
+        this._data.set(id, dataRow);
+        return id;
     }
 
 
@@ -371,7 +623,7 @@ export class InfoList {
      * @returns {number} - Index Position des gesuchten Feldes. -1 wenn nicht gefunden.
      */
     getFieldIndex(field) {
-        return this.fields.indexOf(field);
+        return this._fields.indexOf(field);
     }
 
 
@@ -394,7 +646,7 @@ export class InfoList {
             if (field.indexOf(" ") >= 0) {
                 field = field.split(" ")[0];
             }
-            indexes[i] = this.fields.indexOf(field);
+            indexes[i] = this._fields.indexOf(field);
         };
 
         return indexes;
@@ -411,9 +663,9 @@ export class InfoList {
         if (!key) { return undefined; }
         if (!field) { return undefined; }
 
-        const index = this.fields.indexOf(field);
+        const index = this._fields.indexOf(field);
         if (index > -1) {
-            const dataRow = this.data.get(key);
+            const dataRow = this._data.get(key);
             if (dataRow) {
                 return dataRow[index];
             }
@@ -434,16 +686,16 @@ export class InfoList {
     setValue(key, field, value) {
         if (key == undefined || !field) { return; }
 
-        let dataRow = this.data.get(key);
+        let dataRow = this._data.get(key);
         if (!dataRow) {
-            dataRow = new Array(this.fields.length);
-            this.data.set(key, dataRow);
+            dataRow = new Array(this._fields.length);
+            this._data.set(key, dataRow);
         }
 
-        const index = this.fields.indexOf(field);
+        const index = this._fields.indexOf(field);
 
         if (index > -1) {
-            const fieldType = this.types[index];
+            const fieldType = this._types[index];
 
             // Wert setzen
             switch (fieldType) {
@@ -470,7 +722,7 @@ export class InfoList {
             return [];
         }
 
-        const dataRow = this.data.get(key);
+        const dataRow = this._data.get(key);
         if (!dataRow) { return []; }
 
         const fieldListLength = fieldList.length;
@@ -481,7 +733,7 @@ export class InfoList {
             if (field.indexOf(" ") >= 0) {
                 field = field.split(" ")[0];
             }
-            const index = this.fields.indexOf(field);
+            const index = this._fields.indexOf(field);
             valueList[i] = dataRow[index];
         };
 
@@ -501,7 +753,7 @@ export class InfoList {
             return [];
         }
 
-        const dataRow = this.data.get(key);
+        const dataRow = this._data.get(key);
         if (!dataRow) { return []; }
 
         const fieldIndexListLength = fieldIndexList.length;
@@ -522,8 +774,8 @@ export class InfoList {
      */
     getKeyList() {
         // Alle Keys von der map
-        const dataKeys = this.data.keys();
-        const keysLength = this.data.size;
+        const dataKeys = this._data.keys();
+        const keysLength = this._data.size;
 
         const indexList = new Array(keysLength);
         for (let i = 0; i < keysLength; i++) {
@@ -550,8 +802,8 @@ export class InfoList {
      */
     getSortKeyList(sortFields) {
         // Alle Keys von der map
-        const dataKeys = this.data.keys();
-        const keysLength = this.data.size;
+        const dataKeys = this._data.keys();
+        const keysLength = this._data.size;
 
         const keyList = new Array(keysLength);
         for (let i = 0; i < keysLength; i++) {
@@ -578,15 +830,15 @@ export class InfoList {
                     direction = -1;
                 }
             }
-            fieldIndex[i] = this.fields.indexOf(field);
+            fieldIndex[i] = this._fields.indexOf(field);
             orderIndex[i] = direction;
         }
 
 
         // Sortieren
         keyList.sort((a, b) => {
-            const dataA = this.data.get(a) || "";
-            const dataB = this.data.get(b) || "";
+            const dataA = this._data.get(a) || "";
+            const dataB = this._data.get(b) || "";
 
             // Prüfen
             for (let i = 0; i < fieldLength; i++) {
@@ -627,8 +879,8 @@ export class InfoList {
                 func(this.getObject(keyList[i]), keyList[i], this);
             }
         } else {
-            const dataKeys = this.data.keys();
-            let dataKesyLength = this.data.size;
+            const dataKeys = this._data.keys();
+            let dataKesyLength = this._data.size;
 
             for (let i = 0; i < dataKesyLength; i++) {
                 // Funktion ausführen
@@ -647,7 +899,7 @@ export class InfoList {
     forEachField(func, fieldList) {
         if (typeof func != "function") {return;}
         
-        let fields = this.fields;
+        let fields = this._fields;
         if (fieldList && Array.isArray(fieldList)) {fields = fieldList;}
         
         const fieldsLength = fields.length;
@@ -691,16 +943,14 @@ export class InfoList {
 
     /**
      * Konstruktor mit InfoList Objekt oder JSON-String
-     * @param {InfoObject & [any]|string} [newData] - Javascript Objekt oder JSON-String
+     * @param {string} name - Javascript Objekt oder JSON-String
+     * @param {string[]} [fieldList] - Optionale Liste mit Feldnamen
+     * @param {string} [idField] - Name des ID Feldes. Muss angegeben werden wenn fieldList angegeben.
      */
-    constructor(newData) {
-        // Wenn InizialisierungsDaten
-        if (newData) {
-            if (typeof newData == "string") {
-                this.parse(newData);
-            } else {
-                this.setData(newData);
-            }
+    constructor(name, fieldList, idField) {
+        this.name = name;
+        if (fieldList) {
+            this.setFields(fieldList, idField || fieldList[0]);
         }
     }
 } // Class InfoList
