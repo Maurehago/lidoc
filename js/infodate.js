@@ -54,11 +54,23 @@ function checkDate(date) {
 
 
 /**
+ * gibt den ersten Tag eines Monats als Datum-ISOString zurück
+ * @param {Date} date - Datum des Monats
+ * @returns {String} Datum ISOString
+ */
+export function getFirstOfMonth(date) {
+    let newDate = checkDate(date);
+    newDate = new Date(newDate.getUTCFullYear(), newDate.getMonth(), 1, 12);
+    return newDate.toISOString();
+}
+
+
+/**
  * gibt den letzten Tag eines Monats als Datum-ISOString zurück
  * @param {Date} date - Datum des Monats
  * @returns {String} Datum ISOString
  */
-export function getLastofMonth(date) {
+export function getLastOfMonth(date) {
     let newDate = checkDate(date);
     newDate = new Date(newDate.getUTCFullYear(), newDate.getMonth() + 1, 0, 12);
     return newDate.toISOString();
