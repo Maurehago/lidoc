@@ -76,6 +76,9 @@ export class GridList {
 
     /** @type {string[]} */
     #cols = [];
+    get cols() {
+        return this.#cols;
+    }
 
     /** @type {string[]} */
     #types = [];
@@ -598,7 +601,7 @@ export class GridList {
     /**
      * Liefert auf Grund des angegebenen Spaltennamen
      * die Position/Nummer der Spalte in der GridList zurück
-     * @param {any} col - Name des gesuchten Feldes
+     * @param {string|number} col - Name der gesuchten Splate
      * @returns {number} - Index Position des gesuchten Feldes. -1 wenn nicht gefunden.
      */
     getColNumber(col) {
@@ -617,7 +620,7 @@ export class GridList {
     /**
      * Liefert eine Liste an Positionen/Nummern der angegebenen Spaltennamen zurück.
      * Für Spaltennamen die nicht in der GridListe gefunden werden, wird -1 als Position zurück gegeben.
-     * @param {string[]} colNameList - Liste mit Feldnamen
+     * @param {(string|number)[]} colNameList - Liste mit Feldnamen
      * @returns {number[]} - Liste mit Spalten-Positionen der gesuchten Spalten. -1 wenn die Spalte nicht in der Gridliste gefunden wurde.
      */
     getColNumbers(colNameList) {
@@ -630,11 +633,15 @@ export class GridList {
 
         for (let i = 0; i < colNameList.length; i++) {
             let colName = colNameList[i];
-            if (colName.indexOf(" ") >= 0) {
-                colName = colName.split(" ")[0];
+            if (typeof colName == "string") {
+                if (colName.indexOf(" ") >= 0) {
+                    colName = colName.split(" ")[0];
+                }
+                indexes.push(this.#cols.indexOf(colName));
+            } else if (typeof colName == "number") {
+                indexes.push(colName);
             }
-            indexes.push(this.#cols.indexOf(colName));
-        };
+        }
 
         return indexes;
     }
@@ -773,6 +780,31 @@ export class GridList {
         }
     }
 
+    /**
+     * Liefert eine Liste von Datenzeilen, die dem angegeben Index entsprechen, zurück
+     * @param {string} index - Index Name
+     * @returns {Array[]} Liste mit indizierten Datenzeilen
+     */
+    getIndexRows(index) {
+        return this.#index.get(index || "") || [...this.#data.values()];
+    }
+
+
+    /**
+     * Merkt sich alle Datenzeilen, oder die Datenzeilen vom "oldIndex", unter angegebenen Index(newIndex)
+     * @param {string} newIndex - Index Name unter dem die Datenzeilen angelegt werden
+     * @param {string} [oldIndex] - optional Index Name von dem die Daten gelesen werden
+     * @returns {void}
+     */
+    setIndex(newIndex, oldIndex) {
+        if (typeof newIndex != "string") {return;}
+        if (typeof oldIndex == "string") {
+            this.#index.set(newIndex, this.#index.get(oldIndex) || []);
+        } else {
+            this.#index.set(newIndex, [...this.#data.values()]);
+        }
+    }
+
 
     /**
      * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.
@@ -887,6 +919,75 @@ export class GridList {
 
 
     /**
+     * Gibt eine gefilterte Liste mit Datensätzen zurück.  
+     * Die Filterfunktion wird mit einer Liste von Datensätzen aufgerufen, die in der angegebenen Spaltenliste(colList) den selben Wert haben.  
+     * Wenn index angegeben werden die Daten zum Filtern vom bestehenden Index genommen.
+     * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
+     * @param {(string|number)[]} colList - Spalten Namen oder Nummern nach dem Gruppiert wird. 
+     * @param {Function} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" werden alle Datensätze der Gruppe in die gefilterte Liste aufgenommen.
+     * @param {string} [index] - optionaler Index, wenn Daten von einem bestehenden Index genommen werden. 
+     * @param {string} [newIndex] - Index unter dem die gefilterte Liste abgelegt wird.
+     * @returns {Array[]} Gefilterte Liste
+     */
+    filterGroup(colList, fu, index, newIndex) {
+
+        // Daten zum Filtern
+        const rowList = this.#index.get(index || "") || [...this.#data.values()];
+        if (typeof fu != "function") {return rowList;}
+
+        const newList = [];
+        const groupCols = this.getColNumbers(colList);
+        const groupValues = new Array(groupCols.length);
+        let groupList = [];
+        
+        // alle durchgehen
+        for (let i = 0; i < rowList.length; i++) {
+            let istNewGroup = false;
+            
+            // auf neue Gruppe prüfen
+            for (let j = 0; j < groupCols.length; j++) {
+                const value = rowList[i][groupCols[j]];
+                if (value != groupValues[j] ) {
+                    istNewGroup = true;
+                    groupValues[j] = value;
+                }
+            }
+
+            // wenn neue gruppe
+            if (istNewGroup) {
+                // wenn FilterFunktion == true
+                if (i > 0 && fu(groupList)) {
+                    for (let k = 0; k < groupList.length; k++) {
+                        newList.push(groupList[k]);
+                    }
+                }
+
+                // Gruppe zurücksetzen
+                groupList = [];
+                istNewGroup = false;
+            }
+            
+            // Datensatz in Gruppe
+            groupList.push(rowList[i])
+        } // for jeder Datensatz
+        
+        // Letze Gruppe
+        if (fu(groupList)) {
+            for (let k = 0; k < groupList.length; k++) {
+                newList.push(groupList[k]);
+            }
+        }
+
+
+        if (newIndex) {
+            this.#index.set(newIndex, newList);
+        }
+        return newList;
+    } 
+
+
+
+    /**
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
      * Als Parameter wird die Datenzeile als Objekt übergeben. 
      * @param {Function} fu - Funktion die pro Datensatz ausgeführt wird
@@ -905,7 +1006,8 @@ export class GridList {
         // alle durchgehen
         for (let i = 0; i < rowList.length; i++) {
             const obj = this.getObjFromRow(rowList[i]);
-            fu(obj);
+            // Funktion ausführen
+            if (fu(obj)) {break;};
         }
     }
 
@@ -949,6 +1051,134 @@ export class GridList {
         }
     }
 } // Class GridList
+
+
+// List -> row -> col -> cell
+
+//  GridTable
+export class GridTable {
+    /** @type {HTMLTableElement} */
+    #elm
+    
+    /** @type {number[]} */
+    #colNumbers = [];
+    
+    /** @type {string[]} */
+    #cols = [];
+    /** @param {string[]} value */
+    set cols(value) {
+        this.#cols = value;
+        this.#colNumbers = this.#gridList.getColNumbers(value);
+    }
+    get cols() {
+        return this.#cols;
+    }
+
+    /** @type {GridList} */
+    #gridList
+    /** @param {GridList} value - GridListe */
+    set gridList(value) {
+        this.#gridList = value;
+        if (this.#cols.length > 0) {
+            this.cols = this.#cols;
+        } else {
+            this.cols = value.cols;
+        }
+    }
+    get gridList() {
+        return this.#gridList;
+    }
+
+    /** @type {Map<string|Function>} */
+    colFunc = new Map();
+
+    /** @type {Function} */
+    rowFunc;
+
+    /**
+     * Liefert den HTML-String eine Spalte zurück
+     * @param {any[]} row - Datenzeile
+     * @param {number} colNumber - Spaltennummer
+     * @returns {string} HTML-String der Spalte
+     */
+    getColHtml(row, colNumber) {
+        const colName = this.#cols[colNumber];
+        const colIndex = this.#colNumbers[colNumber];
+        let attr = "";
+
+        // Auf ZellenAnpassung prüfen
+        if (this.colFunc.has(colName)) {
+            attr = " " + this.colFunc.get(colName)(colName, row);
+        }
+
+        return `<td${attr}>${row[colName]}</td>`;
+    }
+
+
+    /**
+     * Liefert einen HTML-String der Datenzeile zurück
+     * @param {any[]} row - Datenzeile
+     * @returns {string} HTML String der Datenzeile
+     */
+    getRowHtml(row) {
+        const rowID = this.#gridList.getID(row);
+        const tableRowID = this.#gridList.name + '_' + rowID;
+        let attr = "";
+
+        // Auf Zeilenanpassung prüfen
+        if (this.rowFunc) {
+            attr = " " + this.rowFunc(row);
+        }
+        
+        let html = `<tr id="${tableRowID}${attr}">`;
+
+        // Alle Spalten durchgehen
+        for (let i = 0; i < this.#cols.length; i++) {
+            html += this.getColHtml(row, i);
+        }
+        return html + "</tr>";
+    }
+
+
+    /**
+     * Liefert den HTML-String als "tbody" von den Daten der GridList zurück
+     * @param {string} index - optionaler Index-Name
+     * @returns {string} HTML-String vom Table-Body
+     */
+    getTableBodyHtml(index) {
+        let html = "<tbody>";
+
+        // alle Zeilen durchgehen
+        this.#gridList.forEach((/** @type {any[]} */row) => {
+            html += this.getRowHtml(row);
+        }, index);
+
+        // html zurückgeben
+        return html + "</tbody>";
+    }
+
+    
+    /**
+     * GridTable
+     * @param {HTMLTableElement} tableElm - Tabelle Element
+     * @param {GridList} gridList - GridListe mit daten
+     */
+    constructor(tableElm, gridList) {
+        if (tableElm instanceof HTMLTableElement) {
+            this.#elm = tableElm;
+        }
+        if (gridList instanceof GridList) {
+            this.#gridList = gridList;
+            if (this.#cols.length > 0) {
+                this.cols = this.#cols;
+            } else {
+                this.cols = gridList.cols;
+            }
+        }
+    }
+} // class GridTable
+
+
 
 
 // ===============================
