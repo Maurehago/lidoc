@@ -71,9 +71,6 @@ export class GridList {
     /** @type {number[]} */
     #idColNumbers = [];
 
-    ///** @type {number|number[]} */
-    //_idColIndex = 0;
-
     /** @type {string[]} */
     #cols = [];
     get cols() {
@@ -1055,11 +1052,23 @@ export class GridList {
 
 // List -> row -> col -> cell
 
-//  GridTable
-export class GridTable {
-    /** @type {HTMLTableElement} */
-    #elm
-    
+//  GridTableRows
+export class GridTableRows {
+    /** @type {string[]} */
+    #colTags = [];
+    get colTags() {
+        return this.#colTags;
+    }
+
+    /** @type {string} */
+    #rowTag = "tr";
+    set rowTag(value) {
+        this.#rowTag = value;
+    }
+    get rowTag() {
+        return this.#rowTag;
+    }
+
     /** @type {number[]} */
     #colNumbers = [];
     
@@ -1067,23 +1076,20 @@ export class GridTable {
     #cols = [];
     /** @param {string[]} value */
     set cols(value) {
-        this.#cols = value;
-        this.#colNumbers = this.#gridList.getColNumbers(value);
+        this.setCols(value);
     }
     get cols() {
         return this.#cols;
     }
 
+    /** @type {string|string[]} */
+    #rowIDNames
+
     /** @type {GridList} */
     #gridList
     /** @param {GridList} value - GridListe */
     set gridList(value) {
-        this.#gridList = value;
-        if (this.#cols.length > 0) {
-            this.cols = this.#cols;
-        } else {
-            this.cols = value.cols;
-        }
+        this.setGridList(value);
     }
     get gridList() {
         return this.#gridList;
@@ -1096,13 +1102,57 @@ export class GridTable {
     rowFunc;
 
     /**
+     * Setzt die Spalten die im HTML erstellt werden
+     * @param {(string|number)[]} cols - Listen mit Spaltennamen. Optional mit Leerzeichen getrennt der TagName.
+     */
+    setCols(cols) {
+        this.#cols = [];
+        this.#colTags = [];
+        this.#colNumbers = [];
+
+        for (let i = 0; i < cols.length; i++) {
+            const col = cols[i];
+            if(typeof col == "string") {
+                const pos1 = col.indexOf(" ");
+                if (pos1 > -1) {
+                    const name = col.substring(0,pos1);
+                    const tag = col.substring(pos1 +1);
+                    this.#cols.push(name);
+                    this.#colTags.push(tag);
+                    this.#colNumbers.push(this.#gridList.getColNumber(name));
+                } else {
+                    this.#cols.push(col);
+                    this.#colTags.push("td");
+                    this.#colNumbers.push(this.#gridList.getColNumber(col));
+                }
+            } else if (typeof col == "number") {
+                this.#cols.push(this.#gridList.cols[col]);
+                this.#colTags.push("td");
+                this.#colNumbers.push(col);
+            }
+        }
+    }
+
+    /**
+     * Setzt die Gridliste(Daten) für das Generieren des HTML-Strings
+     * @param {GridList} gridList - Gridliste mit Daten
+     */
+    setGridList(gridList) {
+        this.#gridList = gridList;
+
+        // ID Namen Merken
+        this.#rowIDNames = gridList.idColName;
+    }
+
+    /**
      * Liefert den HTML-String eine Spalte zurück
-     * @param {any[]} row - Datenzeile
+     * @param {Object} row - Datenzeile
      * @param {number} colNumber - Spaltennummer
      * @returns {string} HTML-String der Spalte
      */
     getColHtml(row, colNumber) {
-        const colName = this.#cols[colNumber];
+        let colName = this.#cols[colNumber];
+        let tagName = this.#colTags[colNumber] || "td";
         const colIndex = this.#colNumbers[colNumber];
         let attr = "";
 
@@ -1111,18 +1161,38 @@ export class GridTable {
             attr = " " + this.colFunc.get(colName)(colName, row);
         }
 
-        return `<td${attr}>${row[colName]}</td>`;
+        return `<${tagName}${attr}>${row[colName]}</${tagName}>`;
+    }
+
+
+    /**
+     * Gibt die ID des Datensatzobjektes zurück
+     * @param {Object} row - Datensatz Objekt
+     * @returns {string|number} ID
+     */
+    getRowID(row) {
+        let id;
+        if (Array.isArray(this.#rowIDNames)) {
+            id = "";
+            for (let i = 0; i < this.#rowIDNames.length; i++) {
+                id += row[this.#rowIDNames[i]] + "_";
+            }
+        } else {
+            id = row[this.#rowIDNames];
+        }
+        return id;
     }
 
 
     /**
      * Liefert einen HTML-String der Datenzeile zurück
-     * @param {any[]} row - Datenzeile
+     * @param {Object} row - Datenzeile Objekt
      * @returns {string} HTML String der Datenzeile
      */
     getRowHtml(row) {
-        const rowID = this.#gridList.getID(row);
+        const rowID = this.getRowID(row);
         const tableRowID = this.#gridList.name + '_' + rowID;
+        const tagName = this.#rowTag || "tr";
         let attr = "";
 
         // Auf Zeilenanpassung prüfen
@@ -1130,13 +1200,13 @@ export class GridTable {
             attr = " " + this.rowFunc(row);
         }
         
-        let html = `<tr id="${tableRowID}${attr}">`;
+        let html = `<${tagName} id="${tableRowID}"${attr}>`;
 
         // Alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
             html += this.getColHtml(row, i);
         }
-        return html + "</tr>";
+        return html + `</${tagName}>`;
     }
 
 
@@ -1145,38 +1215,29 @@ export class GridTable {
      * @param {string} index - optionaler Index-Name
      * @returns {string} HTML-String vom Table-Body
      */
-    getTableBodyHtml(index) {
-        let html = "<tbody>";
+    getHtml(index) {
+        let html = "";
 
         // alle Zeilen durchgehen
-        this.#gridList.forEach((/** @type {any[]} */row) => {
+        this.#gridList.forEach((/** @type {Object} */row) => {
             html += this.getRowHtml(row);
         }, index);
 
         // html zurückgeben
-        return html + "</tbody>";
+        return html;
     }
 
     
     /**
-     * GridTable
-     * @param {HTMLTableElement} tableElm - Tabelle Element
+     * GridTableBody
      * @param {GridList} gridList - GridListe mit daten
      */
-    constructor(tableElm, gridList) {
-        if (tableElm instanceof HTMLTableElement) {
-            this.#elm = tableElm;
-        }
+    constructor(gridList) {
         if (gridList instanceof GridList) {
-            this.#gridList = gridList;
-            if (this.#cols.length > 0) {
-                this.cols = this.#cols;
-            } else {
-                this.cols = gridList.cols;
-            }
+            this.setGridList(gridList);
         }
     }
-} // class GridTable
+} // class GridTableRows
 
 
 

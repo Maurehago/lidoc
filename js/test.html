@@ -11,7 +11,7 @@
     <link rel="stylesheet" type="text/css" href="/css/flex-colors.css" />
 
     <link rel="stylesheet" type="text/css" href="/prism/prism.css" />
-    <script src="/prism/prism.js"></script>
+    <!-- <script src="/prism/prism.js"></script> -->
 </head>
 
 <body>
@@ -19,7 +19,7 @@
 
 <script type="module">
     // @ts-check
-    import {GridList, GridTable, GSID} from "./gridlist.js";
+    import {GridList, GridTableRows, GSID} from "./gridlist.js";
 
     // Anzahl der Zeilen
     const countRows = 10000;
@@ -39,13 +39,14 @@
     // Tabelle erstellen
     const newTableElm = document.createElement("table");
     document.body.appendChild(newTableElm);
+    // newTableElm.setAttribute("table-stripes", "");
 
     console.time("tabelle");
-    const newTable = new GridTable(newTableElm, list);
-    newTable.cols = ["id", "name", "info"];
+    const newTable = new GridTableRows(list);
+    newTable.setCols(["id th", "name", "info"]);
 
     console.timeLog("tabelle", "erstellen");
-    const html = newTable.getTableBodyHtml("name");
+    const html = newTable.getHtml("name");
     console.timeLog("tabelle", "HTML lesen");
     newTableElm.insertAdjacentHTML("afterbegin", html);
     console.timeLog("tabelle", "anzeigen");

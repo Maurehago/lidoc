@@ -304,15 +304,34 @@ table {
   display:table;
   padding-bottom: 8px;
 }
+
 th {
   text-align: inherit;
   text-align: -webkit-match-parent;
-  background-color: #ddd;
+  padding: 8px;
+  /* background-color: #ddd; */
 }
-thead,tbody,tfoot,tr,td,th {
+
+td {
+  padding: 8px;
+}
+
+table[table-border] thead
+,table[table-border] tbody
+,table[table-border] tfoot
+,table[table-border] tr
+,table[table-border] td
+,table[table-border] th
+,table.table-border thead
+,table.table-border tbody
+,table.table-border tfoot
+,table.table-border tr
+,table.table-border td
+,table.table-border th {
   border: 1px solid #ddd;
 }
-tr:nth-child(even){background-color: #f2f2f2;}
+table[table-stripes] tr:nth-child(even)
+, table.table-stripes tr:nth-child(even){background-color: #f2f2f2;}
 /*tr:hover {background-color: #ddd;}*/
 
 /*thead{border-bottom: 2px solid #c4c4c4;}
@@ -805,7 +824,6 @@ down-co,[down-co],.down-co {
 /* Modal */
 modal-back,[modal-back],.modal-back {
   z-index: 99;
-  display: none;
   padding-top: 100px;
   position: fixed;
   left: 0;
