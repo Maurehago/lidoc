@@ -256,7 +256,7 @@ export class GridList {
 
         // alle neuen Spalten durchgehen
         for (let i = 0; i < newFields.length; i++) {
-            let name = newFields[i];
+            let name = newFields[i].trim();
             let type = "string";
 
             // Wenn ein leerzeichen im Namen
@@ -854,7 +854,7 @@ export class GridList {
             for (let i = 0; i < colLength; i++) {
                 // absteigend
                 if (orderIndex[i] < 0) {
-                    if (typeof a[colIndex[i]] == "string") {
+                    if (typeof a[colIndex[i]] == "string" && typeof b[colIndex[i]] == "string") {
                         if (a[colIndex[i]].toLowerCase() > b[colIndex[i]].toLowerCase()) { return -1; }
                         if (a[colIndex[i]].toLowerCase() < b[colIndex[i]].toLowerCase()) { return 1; }
                     } else {
@@ -863,7 +863,7 @@ export class GridList {
                     }
                 } else {
                     // Aufsteigend
-                    if (typeof a[colIndex[i]] == "string") {
+                    if (typeof a[colIndex[i]] == "string" && typeof a[colIndex[i]] == "string") {
                         if (a[colIndex[i]].toLowerCase() > b[colIndex[i]].toLowerCase()) { return 1; }
                         if (a[colIndex[i]].toLowerCase() < b[colIndex[i]].toLowerCase()) { return -1; }
                     } else {

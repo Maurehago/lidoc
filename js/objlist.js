@@ -420,59 +420,59 @@ export class ObjList {
         let linkKeys = Object.keys(this.#links);
 
         // todo: Spalten prüfen auf Typ und vorhanden
-
-        for (let i = 0; i < linkKeys.length; i++) {
-            if (typeof linkKeys[i] != "string") { continue; }
-
-            const value = obj[linkKeys[i]];
-            let newId;
-
-            // FremdListe lesen
-            let foreignList = lists.get(linkKeys[i]);
-
-            if (this.#types[linkKeys[i]] == "object") {
-                // Wenn Liste noch nicht Existiert
-                if (foreignList == undefined) {
-                    foreignList = new ObjList(linkKeys[i]);
-
-                    // ID ist id oder GSID 
-                    foreignList.setColsFromObject(value, value.id ? "id" : "GSID");
-                }
-
-                // Objekt in Subliste einfügen und Value neu setzen
-                newId = foreignList.setObject(value);
-            } else if (this.#types[linkKeys[i]] == "list" && Array.isArray(value)) {
-                // Wenn Liste noch nicht Existiert
-                if (foreignList == undefined) {
-                    foreignList = new ObjList(linkKeys[i]);
-
-                    // ID ist id oder GSID 
-                    foreignList.setColsFromObject(value[0], value[0].id ? "id" : "GSID");
-                }
-
-                const newValue = [];
-
-                // Alle Objekte in der Liste durchgehen
-                for (let j = 0; j < value.length; j++) {
-                    newValue.push(foreignList.setObject(value[j]));
-                }
-
-                // neuen Wert setzen
-                newId = newValue;
+        for (let i = 0; i < this.#cols.length; i++) {
+            const colName = this.#cols[i];
+            if (obj[colName] == undefined) {
+                obj[colName] == null;
             }
+            const colValue = obj[colName];
 
-            // Wert merken
-            // dataRow[index] = value;
+            if (typeof linkKeys[colName] != "string") {
+                let newId;
 
-            // DatenSatz(Obj) in Liste eintragen
-            const id = this.getID(obj);
-            this.#data.set(id, obj);
+                // FremdListe lesen
+                let foreignList = lists.get(this.#links[colName]) || lists.get(colName);
 
-            return id;
-        }
-    }
+                if (this.#types[colName] == "object") {
+                    // Wenn Liste noch nicht Existiert
+                    if (foreignList == undefined) {
+                        foreignList = new ObjList(colName);
+                        this.#links[colName] = colName;
 
+                        // ID ist id oder GSID 
+                        foreignList.setColsFromObject(colValue, colValue.id ? "id" : "GSID");
+                    }
 
+                    // Objekt in Subliste einfügen und Value neu setzen
+                    newId = foreignList.setObject(colValue);
+                } else if (this.#types[colName] == "list" && Array.isArray(colValue)) {
+                    if (foreignList == undefined) {
+                        foreignList = new ObjList(colName);
+                        this.#links[colName] = colName;
+
+                        // ID ist id oder GSID 
+                        foreignList.setColsFromObject(colValue[0], colValue[0].id ? "id" : "GSID");
+                    }
+
+                    const newValue = [];
+
+                    // Alle Objekte in der Liste durchgehen
+                    for (let j = 0; j < colValue.length; j++) {
+                        newValue.push(foreignList.setObject(colValue[j]));
+                    }
+
+                    // neuen Wert setzen
+                    newId = newValue;
+                } // if Type Object or Array
+            } // if Link
+        } // for Cols
+
+        // DatenSatz(Obj) in Liste eintragen
+        const id = this.getID(obj);
+        this.#data.set(id, obj);
+
+        return id;
+    } // setObject
 
 
 
@@ -482,12 +482,12 @@ export class ObjList {
      * @param {object} dataRow - DatenZeile
      * @returns {string|number}
      */
-    setRow(dataRow) {
-        // todo: Prüfen auf Array und die richtigen Datentypen
-        const id = this.getID(dataRow);
-        this.#data.set(id, dataRow);
-        return id;
-    }
+    // setRow(dataRow) {
+    //     // todo: Prüfen auf Array und die richtigen Datentypen
+    //     const id = this.getID(dataRow);
+    //     this.#data.set(id, dataRow);
+    //     return id;
+    // }
 
 
     /**
@@ -733,7 +733,8 @@ export class ObjList {
                 colNumber = this.getColNumber(col);
             }
 
-            colIndex[i] = colNumber;
+            //colIndex[i] = colNumber;
+            colIndex[i] = col;
             orderIndex[i] = direction;
         }
 
@@ -1101,7 +1102,7 @@ export class ObjTableRows {
         // Alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
             if (rowObj[this.#cols[i]]) {
-                html += this.#cols[i];
+                html += rowObj[this.#cols[i]];
             } else {
                 html += this.getColHtml(row, i);
             }
