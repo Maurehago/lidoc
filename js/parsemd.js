@@ -62,6 +62,7 @@ export function parseMd(mdString, options) {
     let tagAttribute = "";
     let newAttribute = "";
     let newColAttribute = "";
+    let tableColAttributes = [];
     let isData = false;
     let isCode = false;
     let isRow = false;
@@ -112,7 +113,8 @@ export function parseMd(mdString, options) {
             isList = false;
         }
         if (isTable) {
-            htmlString += "</tr></thead><tbody></tbody></table>";
+            htmlString += "</table>";
+            tableColAttributes = [];
             isTable = false;
         }
         if (isRowCol) {
@@ -142,7 +144,8 @@ export function parseMd(mdString, options) {
             isList = false;
         }
         if (isTable) {
-            htmlString += "</tr></thead><tbody></tbody></table>";
+            htmlString += "</table>";
+            tableColAttributes = [];
             isTable = false;
         }
         if (isRowCol) {
@@ -215,7 +218,8 @@ export function parseMd(mdString, options) {
      * @returns {void}
      */
     let checkListe = function (isSorted) {
-        if (!trimLine || !trimLine.startsWith("- ")) return;
+        // Prüfung passiert vor Aufruf dieser Funktion
+        //if (!trimLine || !trimLine.startsWith("- ")) return;
 
         // ListTag
         listTag = "ul";
@@ -223,8 +227,8 @@ export function parseMd(mdString, options) {
             listTag = "ol";
         }
 
-        // Text
-        let text = trimLine.substring(2);
+        // Text  "- " oder "1. " entfernen
+        let text = trimLine.substring(trimLine.indexOf(" ") +1);
         text = checkText(text);
 
         // Wenn noch keine Liste oder Unterliste beginn
@@ -355,19 +359,54 @@ export function parseMd(mdString, options) {
         }
 
         // Tabelle
-        if (trimLine.startsWith("| ")) {
+        if (trimLine.startsWith("| ") || trimLine.startsWith("|* ")) {
             // Tabelle prüfen
             if (!isTable) {
-                htmlString += "<table" + newAttribute + "><thead><tr>";
+                htmlString += "<table" + newAttribute + ">";
                 isTable = true;
                 newAttribute = "";
             }
 
-            // Tabellen Spalte
-            let text = trimLine.substring(2);
-            htmlString += "<td" + tagAttribute + ">" + text + "</td>";
+            // in Spalten aufsplitten
+            // |* head |* zentriert [ text-c] |* rechts [ text-r] | [ format row]
+            const cols = trimLine.split("|");
+
+            // Zeile beginn
+            htmlString += "<tr" + tagAttribute + ">";
+            tagAttribute = "";
+
+            // Tabellen Spalten
+            for (let i = 1; i < cols.length -1; i++) {
+                let isHeader = false;
+                let text = cols[i].trim();
+                if (text.startsWith("*")) {
+                    isHeader = true;
+                    text = text.substring(1);
+                }
+                
+                let colAttribute = tableColAttributes[i] || "";
+                if (text.endsWith("]")) {
+                    let pos1 = text.lastIndexOf("[ ");
+                    colAttribute = text.substring(pos1 +1, text.length -1);
+                    text = text.substring(0, pos1);
+                    if (isHeader) {
+                        tableColAttributes[i] = colAttribute;
+                    }
+                }
+                
+                // Spalte
+                if (isHeader) {
+                    htmlString += "<th" + colAttribute + ">" + text + "</th>";
+                } else {
+                    htmlString += "<td" + colAttribute + ">" + text + "</td>";
+                }
+            } // for cols
+            
+            // Zeile Ende
+            htmlString + "</tr>";
             return;
-        }
+        } // tabelle "|"
+
 
         // Wenn Überschriften
         const pos1 = trimLine.indexOf("# ");
@@ -422,6 +461,7 @@ export function parseMd(mdString, options) {
 
         if (!isP) {
             htmlString += "<p" + tagAttribute + ">" + text;
+            tagAttribute = "";
             isP = true;
         } else {
             htmlString += "</br>" + text;

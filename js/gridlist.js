@@ -982,6 +982,28 @@ export class GridList {
         return newList;
     } 
 
+    /**
+     * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
+     * Als Parameter wird die Datenzeile als Array übergeben. 
+     * @param {Function} fu - Funktion die pro Datensatz ausgeführt wird
+     * @param {string} [index] - optionaler Index der als Datenquelle verwendet wird
+     * @returns {void}
+     * @example
+     * const namensListe = [];
+     * adresslistList.forEach((row, listIndex, rowList) => {namensListe.push(row[1] + " " + row[2]);});
+     * console.log(namensListe);
+     */
+    forEach(fu, index) {
+        // Daten zum Filtern
+        const rowList = this.#index.get(index || "") || [...this.#data.values()];
+        if (typeof fu != "function") {return;}
+
+        // alle durchgehen
+        for (let i = 0; i < rowList.length; i++) {
+            // Funktion ausführen
+            if (fu(rowList[i], i, rowList)) {break;};
+        }
+    }
 
 
     /**
@@ -992,10 +1014,10 @@ export class GridList {
      * @returns {void}
      * @example
      * const namensListe = [];
-     * adresslistList.forEach((objekt) => {namensListe.push(objekt.vorname + " " + objekt.nachname);});
+     * adresslistList.forEach((objekt, listIndex, rowList) => {namensListe.push(objekt.vorname + " " + objekt.nachname);});
      * console.log(namensListe);
      */
-    forEach(fu, index) {
+    forEachObj(fu, index) {
         // Daten zum Filtern
         const rowList = this.#index.get(index || "") || [...this.#data.values()];
         if (typeof fu != "function") {return;}
@@ -1004,7 +1026,7 @@ export class GridList {
         for (let i = 0; i < rowList.length; i++) {
             const obj = this.getObjFromRow(rowList[i]);
             // Funktion ausführen
-            if (fu(obj)) {break;};
+            if (fu(obj, i, rowList)) {break;};
         }
     }
 
@@ -1052,8 +1074,8 @@ export class GridList {
 
 // List -> row -> col -> cell
 
-//  GridTableRows
-export class GridTableRows {
+//  GridView
+export class GridView {
     /** @type {string[]} */
     #colTags = [];
     get colTags() {
@@ -1158,6 +1180,7 @@ export class GridTableRows {
 
         // Auf ZellenAnpassung prüfen
         if (this.colFunc.has(colName)) {
+            // Funktion mit (SpalteName, SpalteWert, Zeile, SpalteIndex)
             attr = " " + this.colFunc.get(colName)(colName, row);
         }
 
@@ -1186,11 +1209,13 @@ export class GridTableRows {
 
     /**
      * Liefert einen HTML-String der Datenzeile zurück
-     * @param {Object} row - Datenzeile Objekt
+     * @param {any[]} row - Datenzeile Objekt
+     * @param {string|number} listIndex - Index in der Liste
+     * @param {any[][]} list - Liste aus der die Datenzeile kommt
      * @returns {string} HTML String der Datenzeile
      */
-    getRowHtml(row) {
-        const rowID = this.getRowID(row);
+    getRowHtml(row, listIndex, list) {
+        const rowID = this.#gridList.getID(row);
         const tableRowID = this.#gridList.name + '_' + rowID;
         const tagName = this.#rowTag || "tr";
         let attr = "";
@@ -1219,8 +1244,8 @@ export class GridTableRows {
         let html = "";
 
         // alle Zeilen durchgehen
-        this.#gridList.forEach((/** @type {Object} */row) => {
-            html += this.getRowHtml(row);
+        this.#gridList.forEach((/** @type {any[]} */row, /** @type {string|number} */i, /** {any[][]} */ list) => {
+            html += this.getRowHtml(row, i, list);
         }, index);
 
         // html zurückgeben
