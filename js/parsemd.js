@@ -104,7 +104,7 @@ export function parseMd(mdString, options) {
                 htmlString += "</li></" + listTag + ">";
             }
             stepList.splice(0);
-            
+
             isLi = false;
             isList = false;
         }
@@ -161,7 +161,7 @@ export function parseMd(mdString, options) {
      * @returns {string}
      */
     let checkText = function (text) {
-        if (!text) {return "";}
+        if (!text) { return ""; }
         let newText = text;
 
         // Auf Link oder Bild prüfen
@@ -228,7 +228,7 @@ export function parseMd(mdString, options) {
         }
 
         // Text  "- " oder "1. " entfernen
-        let text = trimLine.substring(trimLine.indexOf(" ") +1);
+        let text = trimLine.substring(trimLine.indexOf(" ") + 1);
         text = checkText(text);
 
         // Wenn noch keine Liste oder Unterliste beginn
@@ -261,8 +261,8 @@ export function parseMd(mdString, options) {
             }
 
             // Elemente bis zur Stufe entfernen
-            stepList.splice(stepIndex +1);
-            
+            stepList.splice(stepIndex + 1);
+
         } else if (isLi && step == lastStep) {
             htmlString += "</li>";
             isLi = false;
@@ -295,14 +295,14 @@ export function parseMd(mdString, options) {
         }
 
         // Ab hier ist keine Leerzeile
-        
+
         // Wenn HTML Code
         if (isHTML || (trimLine.startsWith("<") && trimLine.endsWith(">"))) {
             isHTML = true;
             htmlString += trimLine + "\n";
             return;
         }
-        
+
         // Neue Attribute für folgende zeilen
         if (trimLine.startsWith("[") && trimLine.endsWith("]")) {
             newAttribute = " " + trimLine.substring(1, trimLine.length - 1);
@@ -369,6 +369,7 @@ export function parseMd(mdString, options) {
 
             // in Spalten aufsplitten
             // |* head |* zentriert [ text-c] |* rechts [ text-r] | [ format row]
+            let colString = trimLine.replace("\|", "&#124;");
             const cols = trimLine.split("|");
 
             // Zeile beginn
@@ -376,24 +377,26 @@ export function parseMd(mdString, options) {
             tagAttribute = "";
 
             // Tabellen Spalten
-            for (let i = 1; i < cols.length -1; i++) {
+            for (let i = 1; i < cols.length - 1; i++) {
                 let isHeader = false;
                 let text = cols[i].trim();
                 if (text.startsWith("*")) {
                     isHeader = true;
                     text = text.substring(1);
                 }
-                
+
                 let colAttribute = tableColAttributes[i] || "";
                 if (text.endsWith("]")) {
                     let pos1 = text.lastIndexOf("[ ");
-                    colAttribute = text.substring(pos1 +1, text.length -1);
-                    text = text.substring(0, pos1);
-                    if (isHeader) {
-                        tableColAttributes[i] = colAttribute;
+                    if (pos1 > -1) {
+                        colAttribute = text.substring(pos1 + 1, text.length - 1);
+                        text = text.substring(0, pos1);
+                        if (isHeader) {
+                            tableColAttributes[i] = colAttribute;
+                        }
                     }
                 }
-                
+
                 // Spalte
                 if (isHeader) {
                     htmlString += "<th" + colAttribute + ">" + text + "</th>";
@@ -401,7 +404,7 @@ export function parseMd(mdString, options) {
                     htmlString += "<td" + colAttribute + ">" + text + "</td>";
                 }
             } // for cols
-            
+
             // Zeile Ende
             htmlString + "</tr>";
             return;

@@ -60,6 +60,9 @@ export const lists = new Map();
 //   Klasse
 // --------------
 
+/**
+ * @class
+ */
 export class GridList {
     // Parameter
     // self = this;
@@ -479,10 +482,12 @@ export class GridList {
      * Setzt eine Datenzeile(any[]) in der Liste.  
      * Die Spalten müssen mit allen Spalten in der Liste übereinstimmen.  
      * Wenn vorhanden wird der Datensatz komplett überschrieben.  
+     * !!! WICHTIG !!! - Bereits vorhandenen sortierte oder gruppierte Indexes werden nicht angepasst.
      * @param {any[]} dataRow - DatenZeile, die Spalten Reihenfolge und type muss der von der GridList entsprechen.
      */
     setRow(dataRow) {
         // todo: Prüfen auf Array und die richtigen Datentypen
+        // todo: auf Indexes prüfen - verändert nicht indizierte Daten!!!
         this.#data.set(this.getID(dataRow), dataRow);
     }
 
@@ -528,7 +533,8 @@ export class GridList {
 
     /**
      * Schreibt die Daten des angegebenen Objektes in die Gridliste.
-     * Ist bereits ein Eintrag mit der selben ID vorhanden, so wird diese überschrieben.
+     * Ist bereits ein Eintrag mit der selben ID vorhanden, so wird dieser überschrieben.  
+     * !!! WICHTIG !!! - Bereits vorhandenen sortierte oder gruppierte Indexes werden nicht angepasst.
      * @param {object} obj - Daten Objekt
      * @returns {string|number|undefined} ID des eingefügten Objektes
      */
@@ -779,26 +785,26 @@ export class GridList {
 
     /**
      * Liefert eine Liste von Datenzeilen, die dem angegeben Index entsprechen, zurück
-     * @param {string} index - Index Name
+     * @param {string} indexName - Index Name
      * @returns {Array[]} Liste mit indizierten Datenzeilen
      */
-    getIndexRows(index) {
-        return this.#index.get(index || "") || [...this.#data.values()];
+    getIndexRows(indexName) {
+        return this.#index.get(indexName || "") || [...this.#data.values()];
     }
 
 
     /**
      * Merkt sich alle Datenzeilen, oder die Datenzeilen vom "oldIndex", unter angegebenen Index(newIndex)
-     * @param {string} newIndex - Index Name unter dem die Datenzeilen angelegt werden
-     * @param {string} [oldIndex] - optional Index Name von dem die Daten gelesen werden
+     * @param {string} newIndexName - Index Name unter dem die Datenzeilen angelegt werden
+     * @param {string} [oldIndexName] - optional Index Name von dem die Daten gelesen werden
      * @returns {void}
      */
-    setIndex(newIndex, oldIndex) {
-        if (typeof newIndex != "string") {return;}
-        if (typeof oldIndex == "string") {
-            this.#index.set(newIndex, this.#index.get(oldIndex) || []);
+    setIndex(newIndexName, oldIndexName) {
+        if (typeof newIndexName != "string") {return;}
+        if (typeof oldIndexName == "string") {
+            this.#index.set(newIndexName, this.#index.get(oldIndexName) || []);
         } else {
-            this.#index.set(newIndex, [...this.#data.values()]);
+            this.#index.set(newIndexName, [...this.#data.values()]);
         }
     }
 
@@ -808,18 +814,18 @@ export class GridList {
      * Wenn "index" angegeben, und der Index vorhanden ist, werden die Daten unter diesem Index sortiert, und unter dem selben Index abgelegt.
      * Wenn "index" angegeben, und noch nicht angelegt, werden alle Daten sortiert und unter dem Index abgelegt.
      * @param {(string|number)[]} sortCols - Liste mit Spalten nach denen Sortiert wird
-     * @param {string} [index] - Index der zum sortieren verwendet wird, oder wenn nicht vorhanden, gesetzt wird.
+     * @param {string} [indexName] - Index Name der zum sortieren verwendet wird, oder wenn nicht vorhanden, gesetzt wird.
      * @returns {Array[]} sortierte Zeilen
      * @example
      * const sortList = dataList.sortRows(["name", "hausnummer DESC"], "sortListe");
      */
-    sortRows(sortCols, index) {
+    sortRows(sortCols, indexName) {
         // Alle Datenzeile in einer liste
-        const rowList = this.#index.get(index || "") || [...this.#data.values()];
+        const rowList = this.#index.get(indexName || "") || [...this.#data.values()];
   
         // wenn keine SortierungsSpalten angegeben
         if (!Array.isArray(sortCols)) {
-            if (index) { this.#index.set(index, rowList);}
+            if (indexName) { this.#index.set(indexName, rowList);}
             return rowList;
         }
 
@@ -877,24 +883,24 @@ export class GridList {
             return 0;
         });
 
-        if (index) { this.#index.set(index, rowList);}
+        if (indexName) { this.#index.set(indexName, rowList);}
         return rowList;
     } // getSortRows
 
 
     /**
      * Gibt eine gefilterte Liste mit Datensätzen zurück.  
-     * Wenn index Angegeben werden die Daten zum Filtern vom bestehenden Index genommen.
+     * Wenn index Angegeben werden die Daten zum Filtern vom bestehenden Index genommen.  
      * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
      * @param {Function} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" wird der Datensatz in die gefilterte Liste aufgenommen. 
-     * @param {string} [index] - optionaler Index, wenn Daten von einem bestehenden Index genommen werden. 
-     * @param {string} [newIndex] - Index unter dem die gefilterte Liste abgelegt wird.
+     * @param {string} [indexName] - optionaler Index, wenn Daten von einem bestehenden Index genommen werden. 
+     * @param {string} [newIndexName] - Index unter dem die gefilterte Liste abgelegt wird.
      * @returns {Array[]} Gefilterte Liste
      */
-    filter(fu, index, newIndex) {
+    filter(fu, indexName, newIndexName) {
 
         // Daten zum Filtern
-        const rowList = this.#index.get(index || "") || [...this.#data.values()];
+        const rowList = this.#index.get(indexName || "") || [...this.#data.values()];
         if (typeof fu != "function") {return rowList;}
 
         const newList = [];
@@ -903,13 +909,13 @@ export class GridList {
         for (let i = 0; i < rowList.length; i++) {
             const obj = this.getObjFromRow(rowList[i]);
             
-            if (fu(obj)) {
+            if (fu(obj, i, rowList)) {
                 newList.push(rowList[i]);
             }
         }
 
-        if (newIndex) {
-            this.#index.set(newIndex, newList);
+        if (newIndexName) {
+            this.#index.set(newIndexName, newList);
         }
         return newList;
     } 
@@ -922,14 +928,14 @@ export class GridList {
      * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
      * @param {(string|number)[]} colList - Spalten Namen oder Nummern nach dem Gruppiert wird. 
      * @param {Function} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" werden alle Datensätze der Gruppe in die gefilterte Liste aufgenommen.
-     * @param {string} [index] - optionaler Index, wenn Daten von einem bestehenden Index genommen werden. 
-     * @param {string} [newIndex] - Index unter dem die gefilterte Liste abgelegt wird.
+     * @param {string} [indexName] - optionaler Index, wenn Daten von einem bestehenden Index genommen werden. 
+     * @param {string} [newIndexName] - Index unter dem die gefilterte Liste abgelegt wird.
      * @returns {Array[]} Gefilterte Liste
      */
-    filterGroup(colList, fu, index, newIndex) {
+    filterGroup(colList, fu, indexName, newIndexName) {
 
         // Daten zum Filtern
-        const rowList = this.#index.get(index || "") || [...this.#data.values()];
+        const rowList = this.#index.get(indexName || "") || [...this.#data.values()];
         if (typeof fu != "function") {return rowList;}
 
         const newList = [];
@@ -976,8 +982,8 @@ export class GridList {
         }
 
 
-        if (newIndex) {
-            this.#index.set(newIndex, newList);
+        if (newIndexName) {
+            this.#index.set(newIndexName, newList);
         }
         return newList;
     } 
@@ -986,16 +992,16 @@ export class GridList {
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
      * Als Parameter wird die Datenzeile als Array übergeben. 
      * @param {Function} fu - Funktion die pro Datensatz ausgeführt wird
-     * @param {string} [index] - optionaler Index der als Datenquelle verwendet wird
+     * @param {string} [indexName] - optionaler Index Name der als Datenquelle verwendet wird
      * @returns {void}
      * @example
      * const namensListe = [];
      * adresslistList.forEach((row, listIndex, rowList) => {namensListe.push(row[1] + " " + row[2]);});
      * console.log(namensListe);
      */
-    forEach(fu, index) {
+    forEach(fu, indexName) {
         // Daten zum Filtern
-        const rowList = this.#index.get(index || "") || [...this.#data.values()];
+        const rowList = this.#index.get(indexName || "") || [...this.#data.values()];
         if (typeof fu != "function") {return;}
 
         // alle durchgehen
@@ -1010,16 +1016,16 @@ export class GridList {
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
      * Als Parameter wird die Datenzeile als Objekt übergeben. 
      * @param {Function} fu - Funktion die pro Datensatz ausgeführt wird
-     * @param {string} [index] - optionaler Index der als Datenquelle verwendet wird
+     * @param {string} [indexName] - optionaler Index Name der als Datenquelle verwendet wird
      * @returns {void}
      * @example
      * const namensListe = [];
      * adresslistList.forEach((objekt, listIndex, rowList) => {namensListe.push(objekt.vorname + " " + objekt.nachname);});
      * console.log(namensListe);
      */
-    forEachObj(fu, index) {
+    forEachObj(fu, indexName) {
         // Daten zum Filtern
-        const rowList = this.#index.get(index || "") || [...this.#data.values()];
+        const rowList = this.#index.get(indexName || "") || [...this.#data.values()];
         if (typeof fu != "function") {return;}
 
         // alle durchgehen
@@ -1075,6 +1081,9 @@ export class GridList {
 // List -> row -> col -> cell
 
 //  GridView
+/**
+ * @class
+ */
 export class GridView {
     /** @type {string[]} */
     #colTags = [];
@@ -1166,6 +1175,9 @@ export class GridView {
         this.#rowIDNames = gridList.idColName;
     }
 
+
+
+
     /**
      * Liefert den HTML-String eine Spalte zurück
      * @param {Object} row - Datenzeile
@@ -1244,7 +1256,8 @@ export class GridView {
         let html = "";
 
         // alle Zeilen durchgehen
-        this.#gridList.forEach((/** @type {any[]} */row, /** @type {string|number} */i, /** {any[][]} */ list) => {
+        // todo: ForEach und ForEachObj macht keinen grossen Unterschied
+        this.#gridList.forEachObj((/** @type {any[]} */row, /** @type {string|number} */i, /** {any[][]} */ list) => {
             html += this.getRowHtml(row, i, list);
         }, index);
 
@@ -1255,6 +1268,7 @@ export class GridView {
     
     /**
      * GridTableBody
+     * @constructor
      * @param {GridList} gridList - GridListe mit daten
      */
     constructor(gridList) {

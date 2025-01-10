@@ -19,7 +19,7 @@
 
 <script type="module">
     // @ts-check
-    import {GridList, GridTableRows, GSID} from "./gridlist.js";
+    import {GridList, GridView, GSID} from "./gridlist.js";
 
     // Anzahl der Zeilen
     const countRows = 10000;
@@ -42,7 +42,7 @@
     // newTableElm.setAttribute("table-stripes", "");
 
     console.time("tabelle");
-    const newTable = new GridTableRows(list);
+    const newTable = new GridView(list);
     newTable.setCols(["id th", "name", "info"]);
 
     console.timeLog("tabelle", "erstellen");
