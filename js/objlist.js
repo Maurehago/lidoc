@@ -894,8 +894,8 @@ export class ObjList {
 
         // alle durchgehen
         for (let i = 0; i < rowList.length; i++) {
-            //const obj = this.getObjFromRow(rowList[i]);
-            const obj = rowList[i];
+            const obj = this.getRow(rowList[i]);
+            //const obj = rowList[i];
             // Funktion ausführen
             if (fu(obj)) { break; };
         }

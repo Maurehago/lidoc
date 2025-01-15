@@ -14,44 +14,58 @@
     <!-- <script src="/prism/prism.js"></script> -->
 </head>
 
-<body>
 </body>
 
-<script type="module">
-    // @ts-check
-    import {GridList, GridView, GSID} from "./gridlist.js";
+<body>
 
-    // Anzahl der Zeilen
-    const countRows = 10000;
+    <script type="module">
+        //@ts-check
+        import { GridList, GridView, GSID } from "./gridlist.js";
 
-    console.time("erstellen");
-    const list = new GridList("test", ["id number", "name", "info"], "id");
-    for (let i = 0; i < countRows; i++) {
-        list.setRow([i, "Name " + i, "Info " + i]);
-    }
-    console.timeLog("erstellen", countRows + " Zeilen einfügen");
-    
-    // sortieren
-    list.sortRows(["name DESC"], "name");
-    console.timeLog("erstellen", countRows + " sortieren");
+        // Anzahl der Zeilen
+        const countRows = 10000;
+
+        console.time("erstellen");
+        const list = new GridList("test", ["id number", "name", "info"], "id");
+        for (let i = 0; i < countRows; i++) {
+            list.setObject({ id: i, name: "Name " + i, info: "Info " + i });
+        }
+        console.timeLog("erstellen", countRows + " Zeilen einfügen");
+
+        // filtern
+        list.filter((obj) => {
+            if (obj.name.indexOf("8") > -1) {
+                return false;
+            }
+            return true;
+        }, null, "name"); 
+
+        // sortieren
+        list.sortRows(["id"], "name");
+        console.timeLog("erstellen", countRows + " sortieren");
 
 
-    // Tabelle erstellen
-    const newTableElm = document.createElement("table");
-    document.body.appendChild(newTableElm);
-    // newTableElm.setAttribute("table-stripes", "");
+        // Tabelle erstellen
+        const newTableElm = document.createElement("table");
+        document.body.appendChild(newTableElm);
+        newTableElm.setAttribute("table-stripes", "");
 
-    console.time("tabelle");
-    const newTable = new GridView(list);
-    newTable.setCols(["id th", "name", "info"]);
+        console.time("tabelle");
+        const newTable = new GridView(list);
+        newTable.rowFunc = (row, colAttr) => {
+            if ((row.id + "").endsWith("0")) {
+                colAttr.name = "color-green";
+                return "border-t";
+            }
+        }
+        newTable.setCols(["id", "name", "info"]);
 
-    console.timeLog("tabelle", "erstellen");
-    const html = newTable.getHtml("name");
-    console.timeLog("tabelle", "HTML lesen");
-    newTableElm.insertAdjacentHTML("afterbegin", html);
-    console.timeLog("tabelle", "anzeigen");
+        console.timeLog("tabelle", "erstellen");
+        const html = newTable.getHtml("name");
+        console.timeLog("tabelle", "HTML lesen");
+        newTableElm.insertAdjacentHTML("afterbegin", html);
+        console.timeLog("tabelle", "anzeigen");
 
-    // console.timeEnd("tabelle erstellen");
-</script>
-
+        // console.timeEnd("tabelle erstellen");
+    </script>
 </html>
