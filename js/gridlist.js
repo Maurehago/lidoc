@@ -81,10 +81,10 @@ export class GridList {
         return this.#cols;
     }
 
-    /** @type {object} */
+    /** @type {Object<string,any>} */
     #findex = {};
 
-    /** @type {string[]} */
+    /** @type {InfoTypes[]} */
     #types = [];
 
     /** @type {(string|undefined|null)[]} */
@@ -97,7 +97,7 @@ export class GridList {
     #data = new Map();
 
     /** @type {Map<string,any>} */
-    prop = new Map();
+    //prop = new Map();
 
     /** @type {Map<string,(string|number)[]>} */
     #index = new Map();
@@ -179,7 +179,7 @@ export class GridList {
 
     /**
      * Holt aus einer Datenzeile die ID laut gespeicherten idIndex
-     * @param {any[]|object} dataRow - Datenzeile Array
+     * @param {any[]|Object<string,any>} dataRow - Datenzeile Array
      * @returns {string|number} ID
      */
     getID(dataRow) {
@@ -245,6 +245,9 @@ export class GridList {
      */
     setCols(cols, idCol, seperator) {
         if (!cols) { return; }
+        /**
+         * @type {string | any[]}
+         */
         let newFields = [];
 
         if (Array.isArray(cols)) {
@@ -263,7 +266,6 @@ export class GridList {
         // alle neuen Spalten durchgehen
         for (let i = 0; i < newFields.length; i++) {
             let name = newFields[i].trim();
-            let type = "string";
 
             // Wenn ein leerzeichen im Namen
             if (name.indexOf(" ") > -1) {
@@ -299,7 +301,7 @@ export class GridList {
                 this.#findex[name] = i;
 
                 // Standard Typ
-                this.#types[i] = type;
+                this.#types[i] = "string";
             } // if else indexof(" ")
         } // for newFields
 
@@ -316,7 +318,7 @@ export class GridList {
      * Die Feldtypen werden von den Werten in den Eigenschaften bestimmt.  
      * Ist der Wert nicht ermittelbar, wird "string" angenommen.  
      * Ist der Wert ein "object" oder "array", so wird der ListenName(Verlinkung) gleich dem Eigenschaftsnamen angenommen.  
-     * @param {object} obj - Objekt dessen Eigenschaften als Spaltennamen registriert werden
+     * @param {Object<string,any>} obj - Objekt dessen Eigenschaften als Spaltennamen registriert werden
      * @param {string} idCol - Name der Eigenschaft die als Eindeutige ID genommen wird
      * @returns {void}
      */
@@ -379,7 +381,7 @@ export class GridList {
 
     /**
      * Ersetzt alle Daten mit einem neuen GridObject
-     * @param {GridObject & [any]} obj 
+     * @param {GridObject} obj 
      * @returns {boolean} true wenn die daten übernommen wurden
      */
     createFromGridObject(obj) {
@@ -405,20 +407,7 @@ export class GridList {
                 const dataLength = obj.data.length;
                 for (let i = 0; i < dataLength; i++) {
                     this.#data.set(this.getID(obj.data[i]), obj.data[i]);
-                    // todo: indexes ????
                 }
-            }
-
-            // alle anderen Eigensaften
-            this.prop = new Map();
-            const objKeys = [...Object.keys(obj)];
-            for (let i = 0; i < objKeys.length; i++) {
-                const key = objKeys[i];
-
-                // Klassen Parameter ignorieren
-                if (" name idColNumber idColNumbers cols findex types links formats data ".indexOf(key) > -1) { continue; }
-
-                this.prop.set(key, obj[key]);
             }
         } catch (err) {
             console.error(err);
@@ -431,9 +420,10 @@ export class GridList {
 
     /**
      * Liefert die Gridliste als Javascript Objekt zurück
-     * @returns {GridObject & any} Gridliste als Javascript Objekt
+     * @returns {GridObject} Gridliste als Javascript Objekt
      */
     getAsGridObject() {
+        /** @type {GridObject} */
         const newObj = {};
 
         // Standard Eigenschaften
@@ -448,22 +438,15 @@ export class GridList {
         newObj.idColNumbers = this.#idColNumbers;
 
         // Daten aus Map
-        const keyList = [...this.#data.keys()];
         const valueList = [...this.#data.values()];
-        const dataLength = keyList.length;
 
         /** @type {any[]} */
-        newObj.data = [];
+        const data = [];
+        newObj.data = data;
 
         valueList.forEach(value => {
-            newObj.data.push(value);
+            data.push(value);
         })
-
-        // alle anderen Eigensaften
-        const propKeys = [...this.prop.keys()];
-        for (let i = 0; i < propKeys.length; i++) {
-            newObj[propKeys[i]] = this.prop.get(propKeys[i]);
-        }
 
         return newObj;
     } // getAsInfoObj()
@@ -480,45 +463,6 @@ export class GridList {
     }
 
 
-    // /**
-    //  * Setzt eine Datenzeile(any[]) in der Liste.  
-    //  * Die Spalten müssen mit allen Spalten in der Liste übereinstimmen.  
-    //  * Wenn vorhanden wird der Datensatz komplett überschrieben.  
-    //  * !!! WICHTIG !!! - Bereits vorhandenen sortierte oder gruppierte Indexes werden nicht angepasst.
-    //  * @param {any[]} dataRow - DatenZeile, die Spalten Reihenfolge und type muss der von der GridList entsprechen.
-    //  * @returns {string|number} ID das Datensatzes.
-    //  */
-    // setRow(dataRow) {
-    //     if (!Array.isArray(dataRow)) { return -1; }
-
-    //     // neue Datenzeilen
-    //     // Prüfen / lesen von bestehender Datenzeile
-    //     let isNewRow = false;
-    //     const id = this.getID(dataRow);
-    //     let newRow = this.getRow(id)
-    //     if (newRow == undefined) {
-    //         newRow = new Array(this.#cols.length);
-    //         isNewRow = true;
-    //     }
-
-    //     // alle registrierten Spalten durchgehen        
-    //     for (let i = 0; i < this.#cols.length; i++) {
-    //         // nur wenn Objekt den Key hat
-    //         if (dataRow[i] == undefined) { continue; }
-
-    //         // Wert setzen
-    //         this.#setCellValue(newRow, i, dataRow[i]);
-    //     } // for this#cols
-
-    //     // wenn neue Datenzeile
-    //     if (isNewRow) {
-    //         this.#data.set(id, dataRow);
-    //     }
-
-    //     return id;
-    // }
-
-
     /**
      * Löscht eine Datenzeile aus der Liste
      * @param {string|number} key - ID des Datenzeile
@@ -531,10 +475,11 @@ export class GridList {
 
     /**
      * Gibt einen Datensatz als Objekt zurück
-     * @param {Array[]} dataRow - Datensatz Zeile 
+     * @param {any[]} dataRow - Datensatz Zeile 
      * @returns {object} Datensatz als Objekt
      */
     #getObjFromRow(dataRow) {
+        /** @type {Object<string,any>} */
         const obj = {};
         if (!dataRow) { return obj; }
 
@@ -673,7 +618,7 @@ export class GridList {
      * Schreibt die Daten des angegebenen Objektes in die Gridliste.
      * Ist bereits ein Eintrag mit der selben ID vorhanden, so wird vorhandene Eigenschaften überschrieben.  
      * !!! WICHTIG !!! - Bereits vorhandenen sortierte oder gruppierte Indexes werden nicht angepasst.
-     * @param {object} obj - Daten Objekt
+     * @param {Object<string,any>} obj - Daten Objekt
      * @returns {string|number|undefined|any[]} ID des eingefügten Objektes
      */
     setObject(obj) {
@@ -1045,7 +990,7 @@ export class GridList {
 
 
     /**
-     * Gibt eine gefilterte Liste mit Datensätzen zurück.  
+     * Gibt eine gefilterte Liste mit Datensatz ID's zurück.  
      * Die Filterfunktion wird mit einer Liste von Datensätzen aufgerufen, die in der angegebenen Spaltenliste(colList) den selben Wert haben.  
      * Wenn index angegeben werden die Daten zum Filtern vom bestehenden Index genommen.
      * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
@@ -1127,7 +1072,7 @@ export class GridList {
         } else if (typeof index == "string") {
             this.#index.set(index, newList);
         }
-        return newObjList;
+        return newList;
     }
 
 
@@ -1224,6 +1169,9 @@ export class GridView {
         return this.#colTags;
     }
 
+    /** @type {string[]} */
+    #endColTags = [];
+
     /** @type {string} */
     #rowTag = "tr";
     set rowTag(value) {
@@ -1246,10 +1194,9 @@ export class GridView {
         return this.#cols;
     }
 
-    /** @type {string|string[]} */
-    #rowIDNames
 
     /** @type {GridList} */
+    // @ts-ignore
     #gridList
     /** @param {GridList} value - GridListe */
     set gridList(value) {
@@ -1259,8 +1206,8 @@ export class GridView {
         return this.#gridList;
     }
 
-    /** @type {Function} */
-    rowFunc;
+    /** @type {Function|null} */
+    rowFunc = null;
 
     /**
      * Setzt die Spalten die im HTML erstellt werden
@@ -1269,6 +1216,7 @@ export class GridView {
     setCols(cols) {
         this.#cols = [];
         this.#colTags = [];
+        this.#endColTags = [];
         this.#colNumbers = [];
 
         for (let i = 0; i < cols.length; i++) {
@@ -1280,15 +1228,18 @@ export class GridView {
                     const tag = col.substring(pos1 + 1);
                     this.#cols.push(name);
                     this.#colTags.push(tag);
+                    this.#endColTags.push(tag.split(" ")[0]);
                     this.#colNumbers.push(this.#gridList.getColNumber(name));
                 } else {
                     this.#cols.push(col);
                     this.#colTags.push("td");
+                    this.#endColTags.push("td");
                     this.#colNumbers.push(this.#gridList.getColNumber(col));
                 }
             } else if (typeof col == "number") {
                 this.#cols.push(this.#gridList.cols[col]);
                 this.#colTags.push("td");
+                this.#endColTags.push("td");
                 this.#colNumbers.push(col);
             }
         }
@@ -1301,9 +1252,6 @@ export class GridView {
      */
     setGridList(gridList) {
         this.#gridList = gridList;
-
-        // ID Namen Merken
-        this.#rowIDNames = gridList.idCol;
     }
 
 
@@ -1319,16 +1267,18 @@ export class GridView {
 
     /**
      * Liefert einen HTML-String der Datenzeile zurück
-     * @param {object} row - Datenzeile Objekt
+     * @param {Object<string,any>} row - Datenzeile Objekt
      * @param {number} [listIndex] - Index in der Liste
      * @param {(string|number)[]} [list] - ID - Liste aus der die Datenzeile kommt
      * @returns {string} HTML String der Datenzeile
      */
     getRowHtml(row, listIndex, list) {
+        if (!row) {return "";}
         const rowID = this.#gridList.getID(row);
         const tableRowID = this.#gridList.name + '_' + rowID;
         const tagName = this.#rowTag || "tr";
         let rowAttr = "";
+        /** @type {Object<string,any>} */
         const colAttr = {};
 
         // Auf Zeilenanpassung prüfen
@@ -1342,11 +1292,7 @@ export class GridView {
 
         // Alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
-            const colName = this.#cols[i];
-            const tagName = this.#colTags[i] || "td";
-            const attr = colAttr[colName] || "";
-
-            html += `<${tagName} ${attr}>${row[colName]}</${tagName}>`;
+            html += `<${this.#colTags[i]} ${colAttr[this.#cols[i]]}>${row[this.#cols[i]]}</${this.#endColTags[i]}>`;
         }
 
         // Zeile Ende
@@ -1357,6 +1303,8 @@ export class GridView {
     /**
      * Liefert den HTML-String von den Daten der GridList zurück.
      * @param {string} index - optionaler Index-Name wenn die Daten von einem Index verwendet werden.
+     * @param {number} [rowNumbers] - Optionale Anzahl der gezeigten Datenzeilen.
+     * @param {number} [startRow] - Ab welcher Datenzeile die Anzahl der Zeilen angezeigt werden.
      * @returns {string} HTML-String vom Table-Body
      */
     getHtml(index, rowNumbers, startRow) {
@@ -1368,16 +1316,8 @@ export class GridView {
         // alle Zeilen durchgehen
         // ForEach und ForEachObj macht keinen grossen Unterschied
         for (let i = start; i <= end; i++) {
-            const obj = this.#gridList.get(idList[i]);
-            html += this.getRowHtml(obj, i, idList);
+            html += this.getRowHtml(this.#gridList.get(idList[i]), i, idList);
         }
-
-        // let zaehler = 0;
-        // this.#gridList.forEach((/** @type {object} */row, /** @type {number} */i, /** {any[][]} */ list) => {
-        //     html += this.getRowHtml(row, i, list);
-        //     zaehler += 1;
-        //     if (zaehler > count) {return true;}
-        // }, index);
 
         // html zurückgeben
         return html;
@@ -1409,9 +1349,13 @@ export function GSID() {
         crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
 }
 
+/**
+ * @param {string} template
+ * @param {Object<string,any>} obj
+ */
 function templateMe(template, obj) {
     var regex = /{{(.*?)}}/g;
-    return template.replace(regex, function (match, capture) {
+    return template.replace(regex, function (/** @type {any} */ match, /** @type {string | number} */ capture) {
         return obj[capture] || "";
     });
 }
