@@ -78,7 +78,7 @@ export function getLastOfMonth(date) {
 
 
 /**
- * gibt die Anzahl der Tage vom angegebenen Datum zurück
+ * gibt die Anzahl der Tage vom Monat angegebenen Datum zurück
  * @param {Date|string} date - Datum des Monats
  * @returns {number} - Anzahl der Tage im Monat
  */

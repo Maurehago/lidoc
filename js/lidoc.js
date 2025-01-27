@@ -80,7 +80,7 @@ export function setConfig(obj) {
 /**
  * Prüft die URL auf einen Markdown Datei Namen
  * @param {string} siteUrl - relatife URL zu der Markdown Seite
- * @returns string
+ * @returns {string}
  */
 function checkSiteUrl(siteUrl) {
     if (!siteUrl) {
@@ -135,7 +135,6 @@ async function fetchText(url) {
 /**
  * Alle [sub-list] Elemente laden
  * //@param {any[]} linkList Liste mit Links, denen [sub-list] Elemente folgen
- * @returns 
  */
 export function setSublist() {
     const linkList = document.querySelectorAll("nav a");

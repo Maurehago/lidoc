@@ -37,7 +37,7 @@
  * @property {string[]} cols
  * @property {object} findex
  * @property {InfoTypes[]} types
- * @property {(string|undefined|null)[]} links
+ * @property {Array<string|undefined|null>} links
  * @property {ColFormat[]} [formats]
  * @property {any[]} [data]
  */
@@ -62,44 +62,44 @@ export const lists = new Map();
 // --------------
 
 /**
- * @class
+ * @class GridList
  */
 export class GridList {
-    // Parameter
-    // self = this;
+    /** Name der Liste @type {string} */
     #name = "";
 
-    /** @type {number} */
+    /** Nummer der ID-Spalte @type {number} */
     #idColNumber = -1;
 
-    /** @type {number[]} */
+    /** Nummern der ID-Spalte wenn mehrere Spalten eine eindeutige ID ergeben @type {number[]} */
     #idColNumbers = [];
 
-    /** @type {string[]} */
+    /** Liste Mit SpaltenNamen @type {string[]} */
     #cols = [];
     get cols() {
         return this.#cols;
     }
 
-    /** @type {Object<string,any>} */
+    /** Objekt wo Key = Spaltenname und Value = Index der Spalte @type {Object<string,number>} */
     #findex = {};
 
-    /** @type {InfoTypes[]} */
+    /** Liste mit Typbezeichnung für jede Spalte @type {InfoTypes[]} */
     #types = [];
 
-    /** @type {(string|undefined|null)[]} */
+    /** Liste mit Namen zu verlinkten Liste für die jeweilige Spalte @type {Array<string|undefined|null>} */
     #links = [];
 
-    /** @type {ColFormat[]} */
+    /** Liste mit Format Objekten für die einzelnen Spalten @type {ColFormat[]} */
     #formats = [];
 
-    /** @type {Map<string|number,any[]>} */
+    /** Interner Datenspeicher @type {Map<string|number,any[]>} */
     #data = new Map();
 
-    /** @type {Map<string,any>} */
-    //prop = new Map();
-
-    /** @type {Map<string,(string|number)[]>} */
+    /** 
+     * MAP mit Index für Sortierung und Filter der Daten.  
+     * Key ist der IndexName und Value ist eine Liste mit Datensatz ID's der sortierten/gefilterten Datenzeilen
+     *  @type {Map<string,Array<string|number>>} 
+     */
     #index = new Map();
 
     set name(newName) {
@@ -115,16 +115,17 @@ export class GridList {
         return this.#name;
     }
 
-    /** @type {number} */
+    /** Anzahl der Datenzeile in der Liste @type {number} */
     get length() {
         return this.#data.size;
     }
 
+
     /**
      * Setzt das ID-Feld und mekt sich den ID-Index.
      * Felder müssen vorher in der Liste existieren.
-     * @param {string|number|(string|number)[]} colName - ID Spaltenname oder Spaltennummer oder Liste davon, die eine eindeutige ID ergeben
-     * @returns {void}
+     * @function setIdCol
+     * @param {string|number|Array<string|number>} colName - ID Spaltenname oder Spaltennummer oder Liste davon, die eine eindeutige ID ergeben
      */
     setIdCol(colName) {
         if (typeof colName == "string") {
@@ -156,7 +157,7 @@ export class GridList {
         }
     }
     /**
-     * @param {string|number|(string|number)[]} colName - Name der Spalte
+     * @param {string|number|Array<string|number>} colName - Name der Spalte
      */
     set idCol(colName) {
         this.setIdCol(colName);
@@ -179,6 +180,7 @@ export class GridList {
 
     /**
      * Holt aus einer Datenzeile die ID laut gespeicherten idIndex
+     * @function getID
      * @param {any[]|Object<string,any>} dataRow - Datenzeile Array
      * @returns {string|number} ID
      */
@@ -213,6 +215,7 @@ export class GridList {
 
     /**
      * Setzt oder löscht, für die Angegebene Spalte, den Link(Verknüpfung) zu einer anderen Liste
+     * @function setColLink
      * @param {string|number} col - Spaltenname oder Splaltennummer
      * @param {string|undefined|null} [listName] - Name der GridListe. Wenn nicht angegeben wird der Link(Verknüpfung) gelöscht.
      * @returns {void}
@@ -224,6 +227,7 @@ export class GridList {
 
     /**
      * Liest den Listennamen der Verknüpften Liste vom angegebenen Feldindex aus
+     * @function getColLink
      * @param {string|number} col - Spaltennummer oder Spaltenname
      * @returns {string|undefined|null} Name der Liste. Kann mit lists.get(name) gelesen werden.
      */
@@ -238,10 +242,10 @@ export class GridList {
      * Der Typ darf nur einen der folgenden Texte enthalten:  
      * "string" | "number" | "boolean" | "object" | "list"  
      * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
+     * @function setCols
      * @param {string|string[]} cols - Liste Mit Spaltennamen, oder String mit Trennzeichen getrennt
      * @param {string|string[]} idCol - Spaltenname des ID Feldes, oder Liste von Spaltennamen, die eine eindeutige Kennung ergeben.
      * @param {string} [seperator] - Trennzeichen muss angegeben werden wenn fieldList ein String mit Trennzeichen ist
-     * @returns {void}
      */
     setCols(cols, idCol, seperator) {
         if (!cols) { return; }
@@ -318,9 +322,9 @@ export class GridList {
      * Die Feldtypen werden von den Werten in den Eigenschaften bestimmt.  
      * Ist der Wert nicht ermittelbar, wird "string" angenommen.  
      * Ist der Wert ein "object" oder "array", so wird der ListenName(Verlinkung) gleich dem Eigenschaftsnamen angenommen.  
+     * @function setColsFromObject
      * @param {Object<string,any>} obj - Objekt dessen Eigenschaften als Spaltennamen registriert werden
      * @param {string} idCol - Name der Eigenschaft die als Eindeutige ID genommen wird
-     * @returns {void}
      */
     setColsFromObject(obj, idCol) {
         if (typeof obj != "object") { return; }
@@ -361,8 +365,9 @@ export class GridList {
 
     /**
      * Setzt für die angegebene Spalte die Format einstellungen
-     * @param {string|number} col 
-     * @param {ColFormat} formatObj 
+     * @function setColFormat
+     * @param {string|number} col - Spaltenname oder Nummer
+     * @param {ColFormat} formatObj - FormatObjekt für die Spalte
      */
     setColFormat(col, formatObj) {
         if (!formatObj) { formatObj = {}; }
@@ -381,7 +386,7 @@ export class GridList {
 
     /**
      * Ersetzt alle Daten mit einem neuen GridObject
-     * @param {GridObject} obj 
+     * @param {GridObject} obj - Grid Objekt
      * @returns {boolean} true wenn die daten übernommen wurden
      */
     createFromGridObject(obj) {
@@ -686,7 +691,7 @@ export class GridList {
     /**
      * Liefert eine Liste an Positionen/Nummern der angegebenen Spaltennamen zurück.
      * Für Spaltennamen die nicht in der GridListe gefunden werden, wird -1 als Position zurück gegeben.
-     * @param {(string|number)[]} colNameList - Liste mit Feldnamen
+     * @param {Array<string|number>} colNameList - Liste mit Feldnamen
      * @returns {number[]} - Liste mit Spalten-Positionen der gesuchten Spalten. -1 wenn die Spalte nicht in der Gridliste gefunden wurde.
      */
     getColNumbers(colNameList) {
@@ -752,7 +757,7 @@ export class GridList {
     /**
      * Gibt ein Array an Werten für die Spalten(fieldList) eines Datensatzes(id) zurück.
      * @param {string|number} rowID - ID des Datensatzes
-     * @param {(string|number)[]} colList - Liste mit Spaltennamen oder Spaltennummern
+     * @param {Array<string|number>} colList - Liste mit Spaltennamen oder Spaltennummern
      * @returns {any[]} Liste mit Werten der angegebenen Spalten
      */
     getColValues(rowID, colList) {
@@ -777,7 +782,7 @@ export class GridList {
 
     /**
      * Gibt eine Liste aller Id's zurück
-     * @returns {(string|number)[]} Liste aller ID's
+     * @returns {Array<string|number>} Liste aller ID's
      */
     getIdList() {
         // Alle Keys von der map
@@ -786,7 +791,7 @@ export class GridList {
     /**
      * gibt eine Liste aller Id's zurück
      * @alias getIdList
-     * @returns {(string|number)[]} Liste aller ID's
+     * @returns {Array<string|number>} Liste aller ID's
      */
     keys() {
         return [...this.#data.keys()];
@@ -795,12 +800,12 @@ export class GridList {
 
     /**
      * Liefert alle Datenzeilen als Objekte, oder nur die Datenzeilen mit angegebenen Index oder Liste von IDs, in einer Liste zurück.
-     * @param {string|(string|number)[]} [index] - Optional Index oder Liste mit Datensatz ID's
+     * @param {string|Array<string|number>} [index] - Optional Index oder Liste mit Datensatz ID's
      * @returns {object[]} Liste mit Datenobjekten
      */
     getRows(index) {
         const newList = [];
-        /** @type {(string|number)[]} */
+        /** @type {Array<string|number>} */
         let indexList = [];
 
         if (Array.isArray(index)) {
@@ -822,7 +827,7 @@ export class GridList {
     /**
      * Merkt sich alle Datenzeilen, oder die Datenzeilen vom "oldIndex", unter angegebenen Index(newIndex)
      * @param {string} newIndexName - Index Name unter dem die Datenzeilen angelegt werden
-     * @param {string|(string|number)[]} [oldIndex] - optional bestehender Index(Name oder ID-Liste) von dem die Daten gelesen werden
+     * @param {string|Array<string|number>} [oldIndex] - optional bestehender Index(Name oder ID-Liste) von dem die Daten gelesen werden
      * @returns {void}
      */
     setIndex(newIndexName, oldIndex) {
@@ -841,7 +846,7 @@ export class GridList {
      * Liefert eine Liste aller Datensatz(Zeilen) ID's zurück wenn kein "indexName" angegeben.  
      * Bei "indexName" wird die ID-Liste vom bestehenden Index zurückgegeben.
      * @param {string} [indexName] - Optionaler Name des Index
-     * @returns {(string|number)[]} Liste mit ID's vom Index
+     * @returns {Array<string|number>} Liste mit ID's vom Index
      */
     getIndex(indexName) {
         return this.#index.get(indexName || "") || [...this.#data.keys()];
@@ -849,13 +854,23 @@ export class GridList {
 
 
     /**
+     * Prüft ob der Index bereits in der Liste existiert
+     * @param {string} indexName - Name des gesuchten Index
+     * @returns {boolean} true wenn Index vorhanden
+     */
+    hasIndex(indexName) {
+        return this.#index.has(indexName);
+    }
+    
+
+    /**
      * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.
      * Wenn "index" angegeben, und der Index vorhanden ist, werden die Daten unter diesem Index sortiert, und unter dem selben Index abgelegt.
      * Wenn "index" angegeben, und noch nicht angelegt, werden alle Daten sortiert und unter dem Index abgelegt.
-     * @param {(string|number)[]} sortCols - Liste mit Spalten nach denen Sortiert wird
-     * @param {string|(string|number)[]} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird, oder wenn nicht vorhanden, nach dem Sortieren gesetzt wird.
+     * @param {Array<string|number>} sortCols - Liste mit Spalten nach denen Sortiert wird
+     * @param {string|Array<string|number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird, oder wenn nicht vorhanden, nach dem Sortieren gesetzt wird.
      * @param {string} [newIndexName] - Index Name der nach dem Sortieren gesetzt wird.
-     * @returns {(string|number)[]} sortierte Liste mit ID's
+     * @returns {Array<string|number>} sortierte Liste mit ID's
      * @example
      * const sortList = dataList.sortRows(["name", "hausnummer DESC"], "sortListe");
      */
@@ -882,6 +897,7 @@ export class GridList {
         const colLength = sortCols.length;
         const colIndex = new Array(colLength);
         const orderIndex = new Array(colLength);
+        const isString = new Array(colLength);
 
         for (let i = 0; i < colLength; i++) {
             let col = sortCols[i];
@@ -900,6 +916,7 @@ export class GridList {
 
             colIndex[i] = index;
             orderIndex[i] = direction;
+            isString[i] = this.#types[index] == "string" ? true : false;
         }
 
 
@@ -910,9 +927,30 @@ export class GridList {
 
             // Prüfen
             for (let i = 0; i < colLength; i++) {
+                if (!aRow[colIndex[i]] && !bRow[colIndex[i]]){
+                    continue;
+                } else if (aRow[colIndex[i]] && !bRow[colIndex[i]]){
+                    if (orderIndex[i] < 0) {
+                        // Absteigend
+                        return -1;
+                    } else {
+                        // Aufsteigend
+                        return 1;
+                    }
+                } else if (!aRow[colIndex[i]] && bRow[colIndex[i]]){
+                    if (orderIndex[i] < 0) {
+                        // Absteigend
+                        return 1;
+                    } else {
+                        // Aufsteigend
+                        return -1;
+                    }
+                }
+                
                 // absteigend
                 if (orderIndex[i] < 0) {
-                    if (typeof aRow[colIndex[i]] == "string" && typeof bRow[colIndex[i]] == "string") {
+                    //if (typeof aRow[colIndex[i]] == "string" && typeof bRow[colIndex[i]] == "string") {
+                    if (isString[i]) {
                         if (aRow[colIndex[i]].toLowerCase() > bRow[colIndex[i]].toLowerCase()) { return -1; }
                         if (aRow[colIndex[i]].toLowerCase() < bRow[colIndex[i]].toLowerCase()) { return 1; }
                     } else {
@@ -921,7 +959,7 @@ export class GridList {
                     }
                 } else {
                     // Aufsteigend
-                    if (typeof aRow[colIndex[i]] == "string" && typeof aRow[colIndex[i]] == "string") {
+                    if (isString[i]) {
                         if (aRow[colIndex[i]].toLowerCase() > bRow[colIndex[i]].toLowerCase()) { return 1; }
                         if (aRow[colIndex[i]].toLowerCase() < bRow[colIndex[i]].toLowerCase()) { return -1; }
                     } else {
@@ -950,9 +988,9 @@ export class GridList {
      * Wenn index Angegeben werden die Daten zum Filtern vom bestehenden Index genommen.  
      * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
      * @param {Function} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" wird der Datensatz in die gefilterte Liste aufgenommen. 
-     * @param {string|(string|number)[]} [index] - optionaler Index Name oder Liste von ID's, wenn Daten von einem bestehenden Index genommen werden. 
+     * @param {string|Array<string|number>} [index] - optionaler Index Name oder Liste von ID's, wenn Daten von einem bestehenden Index genommen werden. 
      * @param {string} [newIndexName] - Index unter dem die gefilterte Liste abgelegt wird.
-     * @returns {(string|number)[]} Gefilterte Liste mit ID's 
+     * @returns {Array<string|number>} Gefilterte Liste mit ID's 
      */
     filter(fu, index, newIndexName) {
 
@@ -994,11 +1032,11 @@ export class GridList {
      * Die Filterfunktion wird mit einer Liste von Datensätzen aufgerufen, die in der angegebenen Spaltenliste(colList) den selben Wert haben.  
      * Wenn index angegeben werden die Daten zum Filtern vom bestehenden Index genommen.
      * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
-     * @param {(string|number)[]} colList - Spalten Namen oder Nummern nach dem Gruppiert wird. 
+     * @param {Array<string|number>} colList - Spalten Namen oder Nummern nach dem Gruppiert wird. 
      * @param {Function} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" werden alle Datensätze der Gruppe in die gefilterte Liste aufgenommen.
-     * @param {string|(string|number)[]} [index] - optionaler Index oder Liste von ID's, wenn Daten von einem bestehenden Index genommen werden. 
+     * @param {string|Array<string|number>} [index] - optionaler Index oder Liste von ID's, wenn Daten von einem bestehenden Index genommen werden. 
      * @param {string} [newIndexName] - Index unter dem die gefilterte Liste abgelegt wird.
-     * @returns {(string|number)[]} Gefilterte Liste mit ID's
+     * @returns {Array<string|number>} Gefilterte Liste mit ID's
      */
     filterGroup(colList, fu, index, newIndexName) {
         // Aggregatfunktionen
@@ -1211,7 +1249,7 @@ export class GridView {
 
     /**
      * Setzt die Spalten die im HTML erstellt werden
-     * @param {(string|number)[]} cols - Listen mit Spaltennamen. Optional mit Leerzeichen getrennt der TagName.
+     * @param {Array<string|number>} cols - Listen mit Spaltennamen. Optional mit Leerzeichen getrennt der TagName.
      */
     setCols(cols) {
         this.#cols = [];
@@ -1269,7 +1307,7 @@ export class GridView {
      * Liefert einen HTML-String der Datenzeile zurück
      * @param {Object<string,any>} row - Datenzeile Objekt
      * @param {number} [listIndex] - Index in der Liste
-     * @param {(string|number)[]} [list] - ID - Liste aus der die Datenzeile kommt
+     * @param {Array<string|number>} [list] - ID - Liste aus der die Datenzeile kommt
      * @returns {string} HTML String der Datenzeile
      */
     getRowHtml(row, listIndex, list) {
@@ -1302,7 +1340,7 @@ export class GridView {
 
     /**
      * Liefert den HTML-String von den Daten der GridList zurück.
-     * @param {string} index - optionaler Index-Name wenn die Daten von einem Index verwendet werden.
+     * @param {string} [index] - optionaler Index-Name wenn die Daten von einem Index verwendet werden.
      * @param {number} [rowNumbers] - Optionale Anzahl der gezeigten Datenzeilen.
      * @param {number} [startRow] - Ab welcher Datenzeile die Anzahl der Zeilen angezeigt werden.
      * @returns {string} HTML-String vom Table-Body

@@ -17,7 +17,7 @@
 /**
  * @typedef {object} SiteInfo
  * @property {Map<string,string>} html - Map mit HTML-String's nach dem Parsen. Der Standard Key ist "content"
- * @property {object} data - Objekt Mit Header Daten der Seite
+ * @property {Object<string,any>} data - Objekt Mit Header Daten der Seite
  * @property {string[]} imageList - Liste mit allen Bild-URL's der Seite
  * @property {string[]} linkList - Liste mit allen Links der Seite
  */
@@ -62,6 +62,7 @@ export function parseMd(mdString, options) {
     let tagAttribute = "";
     let newAttribute = "";
     let newColAttribute = "";
+    /** @type {string[]} */
     let tableColAttributes = [];
     let isData = false;
     let isCode = false;
@@ -79,6 +80,7 @@ export function parseMd(mdString, options) {
     let lastLine = "";
     let step = 0;
     let lastStep = 0;
+    /** @type {number[]} */
     let stepList = [];
     let listTag = "ul";
     let lastKey = "";
