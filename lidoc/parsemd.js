@@ -420,36 +420,42 @@ export function parseMd(mdString, options) {
             const text = trimLine.substring(pos1 + 2);
             if (praefix == "#") {
                 // H1
+                if (isP) {htmlString += "</p>"; isP = false;}
                 htmlString += "<h1" + tagAttribute + ">" + text + "</h1>";
                 tagAttribute = "";
                 return;
             }
             if (praefix == "##") {
-                // H6
+                // H2
+                if (isP) {htmlString += "</p>"; isP = false;}
                 htmlString += "<h2" + tagAttribute + ">" + text + "</h2>";
                 tagAttribute = "";
                 return;
             }
             if (praefix == "###") {
-                // H6
+                // H3
+                if (isP) {htmlString += "</p>"; isP = false;}
                 htmlString += "<h3" + tagAttribute + ">" + text + "</h3>";
                 tagAttribute = "";
                 return;
             }
             if (praefix == "####") {
                 // H4
+                if (isP) {htmlString += "</p>"; isP = false;}
                 htmlString += "<h4" + tagAttribute + ">" + text + "</h4>";
                 tagAttribute = "";
                 return;
             }
             if (praefix == "#####") {
                 // H5
+                if (isP) {htmlString += "</p>"; isP = false;}
                 htmlString += "<h5" + tagAttribute + ">" + text + "</h5>";
                 tagAttribute = "";
                 return;
             }
             if (praefix == "######") {
                 // H6
+                if (isP) {htmlString += "</p>"; isP = false;}
                 htmlString += "<h6" + tagAttribute + ">" + text + "</h6>";
                 tagAttribute = "";
                 return;
