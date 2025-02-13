@@ -7,36 +7,21 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="" />
     <link rel="icon" href="/img/icon.png">
-    <link rel="stylesheet" type="text/css" href="/css/flex.css" />
-    <link rel="stylesheet" type="text/css" href="/css/flex-colors.css" />
+    <link rel="stylesheet" type="text/css" href="/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/flex/flex-colors.css" />
     <link rel="stylesheet" type="text/css" href="/prism/prism.css" />
 
     <style>
-        f-grid {
-            display: grid;
-            grid-template-rows: 50px auto;
-            grid-template-columns: auto;
-            height: 100vh;
-        }
-
         #header {
-            position: fixed;
             top: 0px;
-            z-index: 1;
-            width: 100%;
+            left: 0px;
             height: 50px;
         }
-
         #content {
-            margin-top: 50px;
+            min-height: 85vh;
         }
-
         #footer {
             height: 60px;
-        }
-
-        [i-news] {
-            height: 40vh;
         }
     </style>
 
@@ -44,12 +29,12 @@
 </head>
 
 <body>
-    <div id="header" color-p border-b no-print data-lidoc="/_header.md"></div>
-    <div id="content" data-lidoc="/index.md"></div>
+    <div id="header" color-p pos-sticky border-b no-print data-lidoc="/_header.md"></div>
+    <div id="content" data-lidoc="./index.md"></div>
     <div id="footer" color-darkgrey no-print data-lidoc="/_footer.md"></div>
     <!-- <div id="toggle_menue" color-p2 no-print hide-m hide-l hide-xl hide-xxl>+</div> -->
 </body>
 
-<script type="module" src="/js/lidoc.js"></script>
+<script type="module" src="/lidoc/lidoc.js"></script>
 
 </html>

@@ -136,7 +136,11 @@ body {
     color: #000 !important;background-color: #E9767C !important
   }
   
-  
+  /** Aktive elemente **/
+  .active {
+    color: #000000 !important;background-color: #D8EBB5 !important
+  }
+
   /* Dark Schema */
   @media (prefers-color-scheme: dark) {
     /*

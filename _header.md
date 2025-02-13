@@ -3,7 +3,5 @@
 ---
 [Home](/)
 ---
-[Blog](/blog/)
----
-[Info](/info/)
+[LiDoc](/doc/lidoc/)
 ---
