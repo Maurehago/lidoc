@@ -192,9 +192,10 @@ export function parseMd(mdString, options) {
                 const part4 = newText.substring(endPos + 1);
 
                 // Link
-                newText = part1 + "<a href='" + part3 + "'>" + part2 + "</a>" +
+                newText = part1 + "<a" + tagAttribute + " href='" + part3 + "'>" + part2 + "</a>" +
                     part4;
                 site.linkList.push(part3);
+                tagAttribute = "";
             } else {
                 // Abbrechen bei keinem Gültigen Link oder Bild
                 break;
@@ -305,12 +306,6 @@ export function parseMd(mdString, options) {
             return;
         }
 
-        // Neue Attribute für folgende zeilen
-        if (trimLine.startsWith("[") && trimLine.endsWith("]")) {
-            newAttribute = " " + trimLine.substring(1, trimLine.length - 1);
-            return;
-        }
-
         // Wenn Tag Attribute
         if (trimLine.endsWith("]")) {
             // Tag Attribute
@@ -320,6 +315,12 @@ export function parseMd(mdString, options) {
                     trimLine.substring(pos1 + 2, trimLine.length - 1);
                 trimLine = trimLine.substring(0, pos1);
             }
+        }
+
+        // Neue Attribute für folgende zeilen
+        if (trimLine.startsWith("[") && trimLine.endsWith("]")) {
+            newAttribute = " " + trimLine.substring(1, trimLine.length - 1);
+            return;
         }
 
         if (trimLine == "---") {
