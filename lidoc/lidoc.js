@@ -188,6 +188,25 @@ function checkNav() {
 
 
 /**
+ * Läd erforderliche Javascript Module für die Seite.  
+ * Es können nur Module mit absoluten Pfad (beginnend mit "/") geladen werden.
+ * @param {Array<string>} module - Liste mit Modul Namen
+ * @returns {Promise<void>}
+ */
+async function loadModule(module) {
+    if (!module || !Array.isArray(module)) {return;}
+    
+    // alle module durchgehen
+    for (let i = 0;i < module.length; i++) {
+        const modulName = module[i];
+        if (!modulName.startsWith("/")) {continue;}
+        let m = await import(modulName);
+    }
+}
+
+
+
+/**
  * Läd und Parsed Content aus einer Markdown Datei
  * Und Zeigt den Inhalt im Element an.
  * @param {any} elm - HTMLElement
@@ -216,6 +235,8 @@ export async function showContent(elm, url) {
     // HTML im Body anzeigen
     elm.innerHTML = "";
     elm.insertAdjacentHTML("afterbegin", siteData.html.get("content"));
+
+    await loadModule(siteData.data.module);
 } // showSite
 
 
