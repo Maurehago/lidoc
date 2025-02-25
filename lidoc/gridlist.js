@@ -128,6 +128,10 @@ export class GridList {
      * @param {string|number|Array<string|number>} colName - ID Spaltenname oder Spaltennummer oder Liste davon, die eine eindeutige ID ergeben
      */
     setIdCol(colName) {
+        if (typeof colName == "string" && colName.indexOf(",") > 0) {
+            colName = colName.split(",").map(name => {return name.trim();});
+        }
+
         if (typeof colName == "string") {
             //this.#idColNumber = this.#cols.indexOf(col);
             this.#idColNumber = this.#findex[colName];
@@ -324,7 +328,7 @@ export class GridList {
      * Ist der Wert ein "object" oder "array", so wird der ListenName(Verlinkung) gleich dem Eigenschaftsnamen angenommen.  
      * @function setColsFromObject
      * @param {Object<string,any>} obj - Objekt dessen Eigenschaften als Spaltennamen registriert werden
-     * @param {string} idCol - Name der Eigenschaft die als Eindeutige ID genommen wird
+     * @param {string|Array<string>} idCol - Name der Eigenschaft die als Eindeutige ID genommen wird
      */
     setColsFromObject(obj, idCol) {
         if (typeof obj != "object") { return; }
