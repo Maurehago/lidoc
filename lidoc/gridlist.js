@@ -135,6 +135,15 @@ export class GridList {
         if (typeof colName == "string") {
             //this.#idColNumber = this.#cols.indexOf(col);
             this.#idColNumber = this.#findex[colName];
+            if (this.#idColNumber == undefined && colName == "GSID") {
+                let cIndex = this.#cols.indexOf("GSID");
+                if (cIndex < 0) {
+                    cIndex = this.#cols.push("GSID") -1;
+                    this.#types[cIndex] = "string";
+                }
+                this.#findex.GSID = cIndex;
+                this.#idColNumber = cIndex;
+            }
             this.#idColNumbers = [];
         } else if (typeof colName == "number") {
             this.#idColNumber = colName;
@@ -186,32 +195,64 @@ export class GridList {
      * Holt aus einer Datenzeile die ID laut gespeicherten idIndex
      * @function getID
      * @param {any[]|Object<string,any>} dataRow - Datenzeile Array
-     * @returns {string|number} ID
+     * @returns {string|number|undefined} ID
      */
     getID(dataRow) {
         if (typeof dataRow != "object") { return -1; }
+        
+        // auf GSID prüfen
+        let isGSID = false;
+        if (this.#cols[this.#idColNumber] == "GSID") {
+            isGSID = true;
+        }
 
         // wenn Array
         if (Array.isArray(dataRow)) {
             if (this.#idColNumber < 0) {
                 let id = "";
                 for (let i = 0; i < this.#idColNumbers.length; i++) {
-                    id += dataRow[this.#idColNumbers[i]] + "_";
+                    let id2 = dataRow[this.#idColNumbers[i]];
+                    if (id2 == undefined || id2 == null || id2 === "") {
+                        return undefined;
+                    }                    
+                    id += id2 + "_";
                 }
                 return id;
             } else {
-                return dataRow[this.#idColNumber] || -1;
+                let id = dataRow[this.#idColNumber];
+                if (id == undefined || id == null || id === "") {
+                    if (isGSID) {
+                        id = GSID();
+                        dataRow[this.#idColNumber] = id;
+                    } else {
+                        return undefined;
+                    }
+                }
+                return id;
             }
         } else {
             // Wenn Objekt
             if (this.#idColNumber < 0) {
                 let id = "";
                 for (let i = 0; i < this.#idColNumbers.length; i++) {
-                    id += dataRow[this.#cols[this.#idColNumbers[i]]] + "_";
+                    let id2 = dataRow[this.#cols[this.#idColNumbers[i]]];
+                    if (id2 == undefined || id2 == null || id2 === "") {
+                        return undefined;
+                    }                    
+                    id += id2 + "_";
                 }
                 return id;
             } else {
-                return dataRow[this.#cols[this.#idColNumber]] || -1;
+                let id = dataRow[this.#cols[this.#idColNumber]];
+                if (id == undefined || id == null || id === "") {
+                    if (isGSID) {
+                        id = GSID();
+                        dataRow.GSID = id;
+                    } else {
+                        return undefined;
+                    }
+                }
+                return id;
             }
         }
     } // getID
@@ -248,7 +289,7 @@ export class GridList {
      * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
      * @function setCols
      * @param {string|string[]} cols - Liste Mit Spaltennamen, oder String mit Trennzeichen getrennt
-     * @param {string|string[]} idCol - Spaltenname des ID Feldes, oder Liste von Spaltennamen, die eine eindeutige Kennung ergeben.
+     * @param {string|string[]} idCol - Spaltenname des ID Feldes, oder Liste von Spaltennamen, die eine eindeutige Kennung ergeben. Zum generieren einer eindeutigen ID kann auch "GSID" angegeben werden.
      * @param {string} [seperator] - Trennzeichen muss angegeben werden wenn fieldList ein String mit Trennzeichen ist
      */
     setCols(cols, idCol, seperator) {
@@ -328,7 +369,7 @@ export class GridList {
      * Ist der Wert ein "object" oder "array", so wird der ListenName(Verlinkung) gleich dem Eigenschaftsnamen angenommen.  
      * @function setColsFromObject
      * @param {Object<string,any>} obj - Objekt dessen Eigenschaften als Spaltennamen registriert werden
-     * @param {string|Array<string>} idCol - Name der Eigenschaft die als Eindeutige ID genommen wird
+     * @param {string|Array<string>} idCol - Name der Eigenschaft die als Eindeutige ID genommen wird. Für eine ID Generierung kann auch "GSID" angegeben werden.
      */
     setColsFromObject(obj, idCol) {
         if (typeof obj != "object") { return; }
@@ -415,7 +456,11 @@ export class GridList {
             if (obj.data) {
                 const dataLength = obj.data.length;
                 for (let i = 0; i < dataLength; i++) {
-                    this.#data.set(this.getID(obj.data[i]), obj.data[i]);
+                    let id = this.getID(obj.data[i]);
+                    if (id != undefined) {
+                        // nur Datensätze mit ID kommen in die Liste!!!
+                        this.#data.set(id, obj.data[i]);
+                    }
                 }
             }
         } catch (err) {
@@ -590,7 +635,14 @@ export class GridList {
                     if (foreignList == undefined) {
                         // neue Liste
                         foreignList = new GridList(link);
-                        foreignList.setColsFromObject(value, value.id ? "id" : "GSID");
+                        let id = "id"
+                        if (value.id == undefined) {
+                            // erzeuge eine GSID
+                            value.GSID = GSID();
+                            id = "GSID";
+                        }
+
+                        foreignList.setColsFromObject(value, id);
                     }
                     // Objekt in Subliste einfügen und ID als Wert
                     dataRow[i] = foreignList.setObject(value);
@@ -606,7 +658,13 @@ export class GridList {
                         if (foreignList == undefined) {
                             // neue Liste
                             foreignList = new GridList(link);
-                            foreignList.setColsFromObject(value[0], value[0].id ? "id" : "GSID");
+                            let id = "id"
+                            if (value[0].id == undefined) {
+                                // erzeuge eine GSID
+                                value[0].GSID = GSID();
+                                id = "GSID";
+                            }
+                            foreignList.setColsFromObject(value[0], id);
                         }
                         // Objekt in Subliste einfügen und ID als Wert
                         dataRow[i] = foreignList.setObject(value);
@@ -644,6 +702,10 @@ export class GridList {
         // Prüfen / lesen von bestehender Datenzeile
         let isNewRow = false;
         const id = this.getID(obj);
+        
+        // nur Datensätze mit ID kommen in die Liste
+        if (id == undefined) {return id;}
+
         let dataRow = this.#getRow(id)
         if (dataRow == undefined) {
             dataRow = this.#newRow(id);
@@ -1300,7 +1362,7 @@ export class GridView {
     /**
      * Gibt die ID des Datensatzobjektes zurück
      * @param {object} row - Datensatz Objekt
-     * @returns {string|number} ID
+     * @returns {string|number|undefined} ID
      */
     getRowID(row) {
         return this.#gridList.getID(row);
@@ -1386,6 +1448,10 @@ export class GridView {
 // --------------
 
 // Global Short Identifier
+/**
+ * Gibt eine neue GlobalShortId zurück
+ * @returns {string}
+ */
 export function GSID() {
     return new Date().getTime().toString(36) +
         crypto.getRandomValues(new Uint32Array(1))[0].toString(36);

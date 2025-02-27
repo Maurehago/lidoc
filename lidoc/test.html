@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="" />
     <link rel="icon" href="/img/icon.png">
-    <link rel="stylesheet" type="text/css" href="/css/flex.css" />
-    <link rel="stylesheet" type="text/css" href="/css/flex-colors.css" />
+    <link rel="stylesheet" type="text/css" href="/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/flex/flex-colors.css" />
 
     <link rel="stylesheet" type="text/css" href="/prism/prism.css" />
     <!-- <script src="/prism/prism.js"></script> -->
@@ -28,7 +28,7 @@
     const countRows = 10000;
 
     console.time("erstellen");
-    const list = new GridList("test", ["id number", "name", "info"], "id");
+    const list = new GridList("test", ["id number", "name", "info"], "GSID");
     for (let i = 0; i < countRows; i++) {
         list.setObject({ id: i, name: "Name " + i, info: "Info " + i });
     }
