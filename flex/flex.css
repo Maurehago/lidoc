@@ -1991,7 +1991,7 @@ der Inhalt größer ist als angegebende breite*/
 /* Breiten fix */
 [w-fit],
 .w-fit {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 5%;
 }
 
