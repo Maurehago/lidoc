@@ -322,24 +322,34 @@ function diffMilli(date1, date2) {
  */
 export function getDateDiff(date1, date2, unit) {
     if (!isDate(date1) || !isDate(date2)) { return -1; }
-    const diffInMilli = diffMilli(checkDate(date1), checkDate(date2));
+    let d1 = checkDate(date1);
+    let d2 = checkDate(date2);
+
+    // um ganze Tage zu bekommen
+    if (unit == "week" || unit == "day") {
+        d1.setHours(12, 0, 0, 0);
+        d2.setHours(12, 0, 0, 0);
+    }
+    console.log("d1,d2", d1, d2);
+
+    const diffInMilli = diffMilli(d1, d2);
 
     // Je nach Einheit
     switch (unit) {
         case "week":
-            return Math.ceil(diffInMilli / weekMillisec) - 1;
+            return Math.trunc(diffInMilli / weekMillisec);
             break;
         case "day":
-            return Math.ceil(diffInMilli / dayMillisec) - 1;
+            return Math.trunc(diffInMilli / dayMillisec);
             break;
         case "hour":
-            return Math.ceil(diffInMilli / hourMillisec) - 1;
+            return Math.trunc(diffInMilli / hourMillisec);
             break;
         case "minute":
-            return Math.ceil(diffInMilli / minuteMillisec) - 1;
+            return Math.trunc(diffInMilli / minuteMillisec);
             break;
         case "second":
-            return Math.ceil(diffInMilli / secondMillisec) - 1;
+            return Math.trunc(diffInMilli / secondMillisec);
             break;
 
         default:
@@ -360,6 +370,7 @@ export function getWeek(date) {
 
     // Donnerstag der Woche lesen
     const currentThursday = checkDate(getThursday(newDate));
+    console.log("currentThursday",currentThursday);
 
     // Jahr, Monat, Tag, Wochentag lesen
     const year = currentThursday.getFullYear();
@@ -380,10 +391,15 @@ export function getWeek(date) {
     }
 
     // 1. Jänner prüfen
-    const firstThursday = checkDate(getThursday(new Date(year, 0, 4, 12)));
+    //const firstThursday = checkDate(getThursday(new Date(year, 0, 4, 12)));
+    const firstThursday = checkDate(getThursday(new Date(year, 0, 4)));
+    console.log("firstThursday", firstThursday);
 
     // Differenz in Wochen
     const diffWeek = getDateDiff(firstThursday, currentThursday, "week");
+    console.log("diffWeek", diffWeek);
+    console.log("diffDays", getDateDiff(firstThursday, currentThursday, "day"));
+
     const diffString = "0" + (diffWeek + 1);
     return year + "-W" + diffString.substring(diffString.length - 2);
 }

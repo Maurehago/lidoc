@@ -21,8 +21,10 @@
 <script type="module">
     //@ts-check
     import { GridList, GridView, GSID, lists } from "./gridlist.js";
-    import { isDate } from "./infodate.js";
+    import { isDate, getWeek, getDateDiff } from "./infodate.js";
     globalThis.isDate = isDate;
+    globalThis.getWeek = getWeek;
+    globalThis.getDateDiff = getDateDiff;
 
     // Anzahl der Zeilen
     const countRows = 10000;
