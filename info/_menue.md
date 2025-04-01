@@ -1,3 +1,0 @@
-- [**Info**](#/info/)
-    - [Lidoc](#lidoc)
-    - [FlexCSS](#flexcss)
