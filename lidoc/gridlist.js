@@ -10,12 +10,15 @@
 
 // [date|special(30){>0;10}/regex/=default]
 
+// colname = ColFormatID - es kann das selbe Format bei mehreren Spalten angewendet werden - Listen Übergreifend
+// colName = Caption/Label - Anzeige Überschrift/Titel für die Spalte
+// colname = ArributeID - es kann das Selbe Attribute bei mehreren Spalten angewendet werden - Listen Übergreifend
+
 /**
- * @typedef {object} ColFormat
+ * @typedef {object} DataFormat
  * @property {boolean} [optional] - Wenn der Wert NULL sein Kann oder nicht angegeben
  * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
  * @property {string} [subtype] - Name eines Speziellen Types 
- * @property {string|number|boolean} [default] - Defaultwert, der beim Anlegen gesetzt wird
  * @property {number} [size] - Größe (gesamt)
  * @property {number} [decimals] - Anzahl der Dezimalstellen 
  * @property {number} [min] - Minimalwert
@@ -25,6 +28,8 @@
  * @property {string} [regex] - Regular Expression zum Testen eines Wertes
  * @property {any} [defaultValue] - Standard-Wert der Eigenschafft
  * @property {boolean} [charToBool] - true wenn der Charakter "J" in "true" umgewandelt werden soll.
+ * @property {boolean} [readonly] - true wenn wert nicht bearbeitet werden darf.
+ * @property {boolean} [password] - true wenn es ein Passwort Feld ist.
  */
 
 /** @typedef {"string"|"number"|"boolean"|"object"|"list"} InfoTypes */
@@ -38,7 +43,7 @@
  * @property {object} findex
  * @property {InfoTypes[]} types
  * @property {Array<string|undefined|null>} links
- * @property {ColFormat[]} [formats]
+ * @property {DataFormat[]} [formats]
  * @property {any[]} [data]
  */
 
@@ -89,7 +94,7 @@ export class GridList {
     /** Liste mit Namen zu verlinkten Liste für die jeweilige Spalte @type {Array<string|undefined|null>} */
     #links = [];
 
-    /** Liste mit Format Objekten für die einzelnen Spalten @type {ColFormat[]} */
+    /** Liste mit Format Objekten für die einzelnen Spalten @type {DataFormat[]} */
     #formats = [];
 
     /** Interner Datenspeicher @type {Map<string|number,any[]>} */
@@ -407,14 +412,24 @@ export class GridList {
         this.setCols(keyList, idCol);
     }
 
+    
+    /**
+     * Git den Typ der Spalte als String zurück
+     * @param {string|number} col - Spaltenname oder Nummer
+     * @returns {InfoTypes} Typ als string
+     */
+    getColType(col) {
+        return this.#types[this.getColNumber(col)];
+    }
+
 
     /**
      * Setzt für die angegebene Spalte die Format einstellungen
-     * @function setColFormat
+     * @function setColDataFormat
      * @param {string|number} col - Spaltenname oder Nummer
-     * @param {ColFormat} formatObj - FormatObjekt für die Spalte
+     * @param {DataFormat} formatObj - FormatObjekt für die Spalte
      */
-    setColFormat(col, formatObj) {
+    setColDataFormat(col, formatObj) {
         if (!formatObj) { formatObj = {}; }
         this.#formats[this.getColNumber(col)] = formatObj;
     }
@@ -422,9 +437,9 @@ export class GridList {
     /**
      * Liefert vom der angegebenen Spalte das Format Objekt zurück
      * @param {string|number} col - Splatenname oder SplantenNummer 
-     * @returns {ColFormat|undefined} Format Objekt wenn vorhanden
+     * @returns {DataFormat|undefined} Format Objekt wenn vorhanden
      */
-    getColFormat(col) {
+    getColDataFormat(col) {
         return this.#formats[this.getColNumber(col)];
     }
 
@@ -1440,6 +1455,151 @@ export class GridView {
     }
 } // class GridView
 
+
+// ===============================
+//   Formular
+// --------------
+
+
+export class FormView {
+    /** @type {GridList} */
+    #gridlist;
+
+    /** @type {Array<string>} */
+    #cols = [];
+    
+    /** @type {Array<string>} */
+    #labels = [];
+
+    formTag = "form";
+    formAttribute = "";
+
+    /**
+     * Mekrkt sich die Datenliste
+     * @param {GridList} gridList - Liste mit Daten
+     */
+    setGridList(gridList) {
+        this.#gridlist = gridList;
+    }
+
+
+    setCols(cols) {
+        if (!Array.isArray(cols)) {return;}
+
+        // zurücksetzen
+        this.#cols = [];
+        this.#labels = [];
+
+        // Alle Spalten durchgehen
+        for (let i = 0; i < cols.length; i++) {
+            if (typeof cols[i] == "string") {
+                const pos1 = cols[i].indexOf(" ");
+                if (pos1 > 0) {
+                    // Spaltenname und Label
+                    this.#cols[i] = cols[i].substring(0, pos1);
+                    this.#labels[i] = cols[i].substring(pos1 +1);
+                } else {
+                    // nur Spaltenname
+                    this.#cols[i] = cols[i];
+                    this.#labels[i] = cols[i];
+                }
+            }
+        }
+    }
+
+    /**
+     * Liefert den Inner-Htmlstring für das Formular zurück.
+     * @param {object|string|number} obj - Datensatz Objekt oder ID
+     * @returns {string} HTML String
+     */
+    getHTML(obj) {
+        // wenn kein Objekt
+        if (typeof obj != "object") {
+            // dann ist es eine ID - Holen aus den Daten
+            obj = this.#gridlist.get(obj);
+        }
+        if (!obj) {return ""};
+        console.log("obj", obj);
+
+        // Name der Liste
+        const listName = this.#gridlist.name;
+
+        //let htmlString = `<${this.formTag} id="form_${listName}" ${this.formAttribute}>`;
+        let htmlString = "";
+
+        // alle Anzeigespalten durchgehen
+        for (let i = 0; i < this.#cols.length; i++) {
+            // Namen
+            const colName = this.#cols[i];
+            let colType = this.#gridlist.getColType(colName);
+            
+            /** @type {DataFormat} */
+            let colFormat = {};
+            if (colType) {
+                colFormat = this.#gridlist.getColDataFormat(colName) || {};
+            } else {
+                colType = "string";
+                colFormat = {};
+            }
+            const inputName = "i_" + listName + "_" + colName;
+            const labelText = this.#labels[i];
+            
+            let inputType = "text";
+            let readonly = "";
+
+            if (colType == "number") {
+                inputType = "number";
+            } else if (colType == "boolean") {
+                inputType = "checkbox";
+            }
+
+            // Wenn Spalten Daten Formatierung
+            if (colFormat) {
+                if (colFormat.date) {
+                    inputType = "date";
+                }
+                if (colFormat.password) {
+                    inputType = "password";
+                }
+                if (colFormat.readonly) {
+                    readonly = " readonly";
+                }
+            }
+
+        
+            if (inputType == "checkbox") {
+                let checked = "";
+                if (obj[colName]) {
+                    checked = " checked";
+                }
+                // input
+                htmlString += `<p><input type="checkbox" id="${inputName}" data-list="${listName}" data-col="${colName}" value="${obj[colName]}"${checked}${readonly}>`;
+                
+                // label
+                htmlString += `<label for="${inputName}">${labelText}</label></p>`;
+            } else {
+                // label
+                htmlString += `<p><label for="${inputName}">${labelText}</label>`;
+
+                // input
+                htmlString += `<input type="${inputType}" id="${inputName}" data-list="${listName}" data-col="${colName}" value="${obj[colName]}"${readonly}></p>`;
+            }
+        }
+
+        // todo: Events ("change")
+        // todo: Button "speichern" / "abbrechen" / "zurücksetzen"
+
+        // HTML String zurück geben
+        //return htmlString + `</${this.formTag}>`;
+        return htmlString;
+    }
+
+    constructor(gridList) {
+        if (gridList instanceof GridList) {
+            this.setGridList(gridList);
+        }
+    }    
+}
 
 
 

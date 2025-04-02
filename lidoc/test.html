@@ -7,20 +7,25 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="" />
     <link rel="icon" href="/img/icon.png">
-    <link rel="stylesheet" type="text/css" href="/flex/flex.css" />
-    <link rel="stylesheet" type="text/css" href="/flex/flex-colors.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex-colors.css" />
 
-    <link rel="stylesheet" type="text/css" href="/prism/prism.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
     <!-- <script src="/prism/prism.js"></script> -->
 </head>
 
 <body>
- 
+    <f-row>
+        <f-item w-fit id="table">
+        </f-item>
+        <f-item w-fit color-s id="form">
+        </f-item>
+    </f-row>
 </body>
 
 <script type="module">
     //@ts-check
-    import { GridList, GridView, GSID, lists } from "./gridlist.js";
+    import { GridList, GridView, GSID, lists, FormView } from "./gridlist.js";
     import { isDate, getWeek, getDateDiff } from "./infodate.js";
     globalThis.isDate = isDate;
     globalThis.getWeek = getWeek;
@@ -30,7 +35,9 @@
     const countRows = 10000;
 
     console.time("erstellen");
-    const list = new GridList("test", ["id number", "name", "info"], "GSID");
+    /** @type {GridList} */
+    //const list = new GridList("test", ["id number", "name", "info"], "GSID");
+    const list = new GridList("test", ["id number", "name", "info", "test boolean"], "id");
     for (let i = 0; i < countRows; i++) {
         list.setObject({ id: i, name: "Name " + i, info: "Info " + i });
     }
@@ -51,7 +58,7 @@
 
     // Tabelle erstellen
     const newTableElm = document.createElement("table");
-    document.body.appendChild(newTableElm);
+    document.getElementById("table")?.appendChild(newTableElm);
     newTableElm.setAttribute("table-stripes", "");
     newTableElm.setAttribute("w-50", "");
 
@@ -81,6 +88,19 @@
 
     // console.timeEnd("tabelle erstellen");
     console.log("Lists:", lists);
+
+
+    // Formular
+    // Format ID Readonly
+    //list.setColDataFormat("id", {password: true});
+
+    const form = new FormView(list);
+    form.setCols(["id ID", "name Name", "info Info", "test"]);
+    let formHTML = form.getHTML(9990);
+    let formColumn = document.getElementById("form");
+    if (formColumn instanceof HTMLElement) {
+        formColumn.innerHTML = formHTML;
+    }
 </script>
 
 </html>
