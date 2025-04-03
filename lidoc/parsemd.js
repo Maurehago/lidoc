@@ -82,6 +82,7 @@ export function parseMd(mdString, options) {
     let lastStep = 0;
     /** @type {number[]} */
     let stepList = [];
+    let stepTagList = [];
     let listTag = "ul";
     let lastKey = "";
     /** @type {string[]} */
@@ -102,10 +103,9 @@ export function parseMd(mdString, options) {
             const stepListLength = stepList.length;
 
             // Wenn bereits ein List-Item
-            for (let i = 0; i < stepListLength; i++) {
-                htmlString += "</li></" + listTag + ">";
+            for (let i = stepListLength -1; i > -1; i--) {
+                htmlString += "</li></" + stepTagList[i] + ">";
             }
-            stepList.splice(0);
 
             isLi = false;
             isList = false;
@@ -114,6 +114,8 @@ export function parseMd(mdString, options) {
             htmlString += "</" + listTag + ">";
             isList = false;
         }
+        stepList = [];
+        stepTagList = [];
         if (isTable) {
             htmlString += "</table>";
             tableColAttributes = [];
@@ -233,14 +235,16 @@ export function parseMd(mdString, options) {
         // Text  "- " oder "1. " entfernen
         let text = trimLine.substring(trimLine.indexOf(" ") + 1);
         text = checkText(text);
-
+        const stepIndex = stepList.indexOf(step);
+        
         // Wenn noch keine Liste oder Unterliste beginn
         if (!isList || step > lastStep) {
-            // Letzte Stufe in die Liste wenn noch nicht vorhanden
-            if (stepList.indexOf(lastStep) < 0) {
-                stepList.push(lastStep);
+            // Stufe in die Liste wenn noch nicht vorhanden
+            if (stepIndex < 0) {
+                stepList.push(step);
+                stepTagList.push(listTag);
             }
-
+            
             if (step > 2 && step > lastStep) {
                 htmlString += "<" + listTag + " sub-list" + newAttribute + ">";
             } else {
@@ -249,32 +253,34 @@ export function parseMd(mdString, options) {
             isList = true;
             newAttribute = "";
         }
-
+        
         // wenn Einrückung kleiner voriger Einrückung
         if (step < lastStep) {
             // prüfen auf die Position in der Liste
-            const stepIndex = stepList.indexOf(step);
             const stepListLength = stepList.length;
-
+            
             // Wenn bereits ein List-Item
             if (isLi) {
-                for (let i = stepIndex; i < stepListLength; i++) {
-                    htmlString += "</li></" + listTag + ">";
+                for (let i = stepListLength -1; i > stepIndex; i--) {
+                    htmlString += "</li></" + stepTagList[i] + ">";
                 }
+            } else {
+                htmlString += "</" + stepTagList[stepIndex] + ">";
             }
-
+            
             // Elemente bis zur Stufe entfernen
             stepList.splice(stepIndex + 1);
-
+            stepTagList.splice(stepIndex +1);
+            
         } else if (isLi && step == lastStep) {
             htmlString += "</li>";
             isLi = false;
         }
-
+        
         // neues ListenElement
         htmlString += "<li>" + text;
         isLi = true;
-
+        
         // Stufe merken
         lastStep = step;
     }; // checkListe

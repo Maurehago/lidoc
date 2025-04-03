@@ -1407,11 +1407,11 @@ export class GridView {
         }
 
         // Zeile Beginn
-        let html = `<${tagName} id="${tableRowID}"${rowAttr}>`;
+        let html = `<${tagName} data-id="${rowID}"${rowAttr}>`;
 
         // Alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
-            html += `<${this.#colTags[i]} ${colAttr[this.#cols[i]]}>${row[this.#cols[i]]}</${this.#endColTags[i]}>`;
+            html += `<${this.#colTags[i]} ${colAttr[this.#cols[i]] || ""}>${row[this.#cols[i]]}</${this.#endColTags[i]}>`;
         }
 
         // Zeile Ende
