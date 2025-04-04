@@ -143,5 +143,24 @@ console.log(x);
 &#96;&#96;&#96;
 ```
 
+### Abschnitt
+Es können Inhalte auch in verschiedenen HTML-Elementen angezeigt werden.
+Das erfolgt durch auftrennen in verschiedene Abschnitte.
+Ein Abschnitt wechselt mit einer Zeile mit mindestesten drei Istgleich-Zeichen "===".
+Wird hinter den Zeichen ein Name angegeben, so entspricht es der ID des HTML-Elements. Wenn kein Name wird immer "content" als ID angenommen.
+
+Beispiel:
+```txt
+=== info
+# Info
+Das steht im HTML-Element mit der ID "info"
+
+========
+
+# Content
+Das steht im HTML-Element mit der ID "content"
+
+```
+
 [ ma-b-l]
 %

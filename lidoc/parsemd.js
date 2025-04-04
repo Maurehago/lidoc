@@ -87,6 +87,7 @@ export function parseMd(mdString, options) {
     let lastKey = "";
     /** @type {string[]} */
     let dataList = [];
+    let contentID = "content";
 
     // Text aufsplitten
     /** @type {string[]} */
@@ -553,7 +554,10 @@ export function parseMd(mdString, options) {
     }; // checkData
 
     // Alle Zeilen durchgehen
-    lines.forEach((line, index) => {
+    //lines.forEach((line, index) => {
+    for (let index = 0; index < lines.length; index ++) {
+        const line = lines[index];
+
         trimLine = line.trim();
         step = line.length - trimLine.length;
 
@@ -561,11 +565,11 @@ export function parseMd(mdString, options) {
         if (index == 0 && trimLine == "---") {
             // Daten prüfen
             isData = true;
-            return;
+            continue;
         } else if (isData) {
             if (trimLine == "---") {
                 isData = false;
-                return;
+                continue;
             }
 
             checkData();
@@ -573,16 +577,31 @@ export function parseMd(mdString, options) {
             // Code prüfen
             checkCode(line);
         } else {
+            // Content Bereich prüfen
+            if (trimLine.startsWith("===")) {
+                closeAllTags();
+                site.html.set(contentID, htmlString);
+                htmlString = "";
+                contentID = "content";
+
+                const pos1 = trimLine.indexOf(" ");
+                if (pos1 > 0) {
+                    contentID = trimLine.substring(pos1 +1);
+                }
+                continue;
+            }
+
             // Zeilen prüfen
             checkLine();
             lastLine = trimLine;
         }
-    });
+    };
 
     // Alles schiessen
     closeAllTags();
 
     // geparsten HTML String zurückgeben
-    site.html.set("content", htmlString);
+    // site.html.set("content", htmlString);
+    site.html.set(contentID, htmlString);
     return site;
 } // parseMd

@@ -233,6 +233,16 @@ export async function showContent(elm, url) {
     // todo: Template mit Inhalt zusammenführen
 
     // HTML im Body anzeigen
+    siteData.html.forEach((value, key) => {
+        if (key == "content") {return;}
+        const cElm = document.getElementById(key);
+        if (cElm instanceof HTMLElement) {
+            cElm.innerHTML = "";
+            cElm.insertAdjacentHTML("afterbegin", value);
+        }
+    });
+    
+
     elm.innerHTML = "";
     elm.insertAdjacentHTML("afterbegin", siteData.html.get("content"));
 
