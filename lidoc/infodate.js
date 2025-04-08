@@ -83,6 +83,58 @@ function checkDate(date) {
 }
 
 
+
+/**
+ * gibt Das Datum laut Format-String zurück
+ * @param {Date} date - Datum des Monats
+ * @param {string} formatString - Formatierung für Datum. z.B.: "yyyy-mm-dd HH:MM:SS.sss"
+ * @returns {string} Datum im Formatstring
+ */
+export function formatDate(date, formatString) {
+    if (!isDate(date)) { return ""; }
+    let newDate = checkDate(date);
+    
+    if (typeof formatString != "string" ) {
+        return newDate.toISOString();
+    }
+
+    let newString = formatString;
+    // 2025-04-08T13:05:23.094Z
+    // 0123456789 123456789 123
+    const dateString = date.toISOString(); 
+
+    // Jahr ersetzen
+    newString = newString.replaceAll("yyyy", dateString.substring(0,4));
+    newString = newString.replaceAll("yy", dateString.substring(2,4));
+    newString = newString.replaceAll("y", dateString.substring(2,4));
+
+    // Monat ersetzen
+    newString = newString.replaceAll("mm", dateString.substring(5, 7));
+    newString = newString.replaceAll("m", dateString.substring(5, 7));
+
+    // Tag ersetzen
+    newString = newString.replaceAll("dd", dateString.substring(8, 10));
+    newString = newString.replaceAll("d", dateString.substring(8, 10));
+
+    // Stunden ersetzen
+    newString = newString.replaceAll("HH", dateString.substring(11, 13));
+    newString = newString.replaceAll("H", dateString.substring(11, 13));
+
+    // Minuten ersetzen
+    newString = newString.replaceAll("MM", dateString.substring(14, 16));
+    newString = newString.replaceAll("M", dateString.substring(14, 16));
+    
+    // Sekunden ersetzen
+    newString = newString.replaceAll("MM", dateString.substring(17, 19));
+    newString = newString.replaceAll("M", dateString.substring(17, 19));
+   
+    // Milli-Sekunden ersetzen
+    newString = newString.replaceAll("sss", "" + date.getMilliseconds());
+
+    return newString;
+}
+
+
 /**
  * gibt den ersten Tag eines Monats als Datum-ISOString zurück
  * @param {Date} date - Datum des Monats

@@ -1197,13 +1197,13 @@ export class GridList {
 
     /**
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
-     * Als Parameter wird die Datenzeile als Array übergeben. 
+     * Als Parameter wird die Datenzeile als Objekt übergeben. 
      * @param {Function} fu - Funktion die pro Datensatz ausgeführt wird
      * @param {string} [index] - optionaler Index Name oder Liste von ID's der als Datenquelle verwendet wird
      * @returns {void}
      * @example
      * const namensListe = [];
-     * adresslistList.forEach((row, listIndex, rowList) => {namensListe.push(row[1] + " " + row[2]);});
+     * adresslistList.forEach((row, listIndex, rowList) => {namensListe.push(row.vorname + " " + row.nachname);});
      * console.log(namensListe);
      */
     forEach(fu, index) {
@@ -1225,6 +1225,73 @@ export class GridList {
             // Funktion ausführen
             if (fu(obj, i, rowList)) { break; };
         }
+    }
+
+
+    /**
+     * Führt die Angegebene Funktion, pro Gruppierung nach den Angegebenen Spalten, aus.
+     * @param {function} fu - Funktion die für jede Gruppierung aufgerufen wird.
+     * @param {Array<string|number>} colList - Liste der Spalten nach denen Gruppiert wird.
+     * @param {string|Array<string|number>} index - Optionaler Index der für die Gruppierung verwendet wird.
+     * @returns {void}
+     */
+    forGroup(fu, colList, index) {
+        // Aggregatfunktionen
+        // count()
+        // sum()
+        // avg()
+        // min()
+        // max()
+
+
+        // Daten zum Filtern
+        let rowList = [];
+        if (Array.isArray(index)) {
+            rowList = index;
+        } else if (typeof index == "string") {
+            rowList = this.#index.get(index) || [...this.#data.keys()];
+        } else {
+            rowList = [...this.#data.keys()];
+        }
+
+        if (typeof fu != "function") { return; }
+
+        const groupCols = this.getColNumbers(colList);
+        const groupValues = new Array(groupCols.length);
+        let groupList = [];
+        let groupObjList = [];
+
+        // alle durchgehen
+        for (let i = 0; i < rowList.length; i++) {
+            let istNewGroup = false;
+
+            // auf neue Gruppe prüfen
+            for (let j = 0; j < groupCols.length; j++) {
+                const value = this.getCellValue(rowList[i], groupCols[j]);
+                if (value != groupValues[j]) {
+                    istNewGroup = true;
+                    groupValues[j] = value;
+                }
+            }
+
+            // wenn neue gruppe
+            if (istNewGroup) {
+                // Funktion ausführen
+                if (fu(groupObjList, i, rowList)) { break; };
+
+                // Gruppe zurücksetzen
+                groupList = [];
+                groupObjList = [];
+                istNewGroup = false;
+            }
+
+            // Datensatz in Gruppe
+            groupList.push(rowList[i])
+            groupObjList.push(this.get(rowList[i]));
+        } // for jeder Datensatz
+
+        // Letze Gruppe Funktion ausführen
+        fu(groupObjList, rowList.length -1, rowList);
     }
 
 

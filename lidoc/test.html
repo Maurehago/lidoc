@@ -37,7 +37,9 @@
     console.time("erstellen");
     /** @type {GridList} */
     //const list = new GridList("test", ["id number", "name", "info"], "GSID");
-    const list = new GridList("test", ["id number", "name", "info", "test boolean"], "id");
+    const list = new GridList("test", ["id number", "name", "info", "test"], "id");
+    list.setColDataFormat("test", {date: "date"});
+
     for (let i = 0; i < countRows; i++) {
         list.setObject({ id: i, name: "Name " + i, info: "Info " + i });
     }
@@ -67,22 +69,52 @@
     //document.body.appendChild(newTableElm);
 
     console.time("tabelle");
-    const newTable = new GridView(list);
-    //newTable.rowTag = "f-row";
-    newTable.rowFunc = (row, colAttr) => {
-        if ((row.id + "").endsWith("0")) {
-            colAttr.name = "color-green";
-            return "border-t";
-        }
-        return "";
-    }
-    newTable.setCols(["id th text-c", "name", "info"]);
 
-    console.timeLog("tabelle", "erstellen");
-    const html = newTable.getHtml("name");
-    console.timeLog("tabelle", "HTML lesen");
-    newTableElm.insertAdjacentHTML("afterbegin", html);
-    console.timeLog("tabelle", "anzeigen");
+    let withTableObj = false;
+    if (withTableObj) {
+        const newTable = new GridView(list);
+        //newTable.rowTag = "f-row";
+        newTable.rowFunc = (row, colAttr) => {
+            if ((row.id + "").endsWith("0")) {
+                colAttr.name = "color-green";
+                return "border-t";
+            }
+            return "";
+        }
+        newTable.setCols(["id th text-c", "name", "info"]);
+
+        console.timeLog("tabelle", "erstellen");
+        const html = newTable.getHtml("name");
+        console.timeLog("tabelle", "HTML lesen");
+        newTableElm.insertAdjacentHTML("afterbegin", html);
+        console.timeLog("tabelle", "anzeigen");
+    } else {
+        // Template funktion
+        const rowTemplate = function(obj) {
+            let attr = "";
+            let nameAttr = "";
+            if ((obj.id + "").endsWith("0")) {
+                attr = " border-t";
+                nameAttr = " color-green";
+            }
+            return `<tr data-id="${obj.id}"${attr}>
+                <th>${obj.id}</th>
+                <td${nameAttr}>${obj.name}</td>
+                <td>${obj.info}</td>
+                <td>${obj.test}</td>
+            </tr>`;
+        }
+        console.timeLog("tabelle", "erstellen");
+
+        let htmlString = "<tr pos-sticky pos-t-l color-p><th>ID</th><th>Name</th><th>Info</th><th>Test</th></tr>";
+        // Alle in der Liste durchgehen
+        list.forEach((obj) => {
+            htmlString += rowTemplate(obj);
+        }, "name");
+        console.timeLog("tabelle", "HTML lesen");
+        newTableElm.insertAdjacentHTML("afterbegin", htmlString);
+        console.timeLog("tabelle", "anzeigen");
+    }
 
     const testList = new GridList("test2");
     testList.parse(list.stringify());

@@ -152,12 +152,12 @@ Wird hinter den Zeichen ein Name angegeben, so entspricht es der ID des HTML-Ele
 Beispiel:
 ```txt
 === info
-# Info
+# Titel Info
 Das steht im HTML-Element mit der ID "info"
 
 ========
 
-# Content
+# Titel Content
 Das steht im HTML-Element mit der ID "content"
 
 ```
