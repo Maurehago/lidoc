@@ -87,7 +87,7 @@ function checkDate(date) {
 /**
  * gibt Das Datum laut Format-String zurück
  * @param {Date} date - Datum des Monats
- * @param {string} formatString - Formatierung für Datum. z.B.: "yyyy-mm-dd HH:MM:SS.sss"
+ * @param {string} formatString - Formatierung für Datum. z.B.: "yyyy-mm-dd HH:MM:SS.sss" "d.m.y" todo: Woche formatWeek()
  * @returns {string} Datum im Formatstring
  */
 export function formatDate(date, formatString) {
@@ -106,7 +106,7 @@ export function formatDate(date, formatString) {
     // Jahr ersetzen
     newString = newString.replaceAll("yyyy", dateString.substring(0,4));
     newString = newString.replaceAll("yy", dateString.substring(2,4));
-    newString = newString.replaceAll("y", dateString.substring(2,4));
+    newString = newString.replaceAll("y", dateString.substring(0,4));
 
     // Monat ersetzen
     newString = newString.replaceAll("mm", dateString.substring(5, 7));
@@ -125,11 +125,37 @@ export function formatDate(date, formatString) {
     newString = newString.replaceAll("M", dateString.substring(14, 16));
     
     // Sekunden ersetzen
-    newString = newString.replaceAll("MM", dateString.substring(17, 19));
-    newString = newString.replaceAll("M", dateString.substring(17, 19));
+    newString = newString.replaceAll("SS", dateString.substring(17, 19));
+    newString = newString.replaceAll("S", dateString.substring(17, 19));
    
     // Milli-Sekunden ersetzen
     newString = newString.replaceAll("sss", "" + date.getMilliseconds());
+
+    return newString;
+}
+
+
+/**
+ * Gibt die Woche laut formatString zurück.
+ * @param {Date|string|number} week - Woche als Datum, String oder Zahl
+ * @param {string} formatString - Template String für die Darstellung der Woche. z.B.: "Woche ww" ("ww" wird ersetzt) 
+ * @returns {string} Formatierter String
+ */
+export function formatWeek(week, formatString) {
+    let weekString = "";
+    if (week instanceof Date) {
+        weekString = getWeek(week);
+        weekString = weekString.substring(weekString.length -2);
+    } else if (typeof week == "string") {
+        weekString = week.substring(week.length -2);
+    } else if (typeof week == "number") {
+        weekString = "0" + week;
+        weekString = weekString.substring(weekString.length -2);
+    }
+
+    // Woche ersetzen
+    let newString = formatString.replaceAll("ww", weekString);
+    //newString = newString.replaceAll("w", "" + parseInt(weekString));
 
     return newString;
 }
