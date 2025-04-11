@@ -16,6 +16,8 @@
 
 /**
  * @typedef {object} DataFormat
+ * @property {string} [name] - Name der Spalte
+ * @property {string} [type] - Typ der Spalte
  * @property {boolean} [optional] - Wenn der Wert NULL sein Kann oder nicht angegeben
  * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
  * @property {string} [subtype] - Name eines Speziellen Types 
@@ -1229,6 +1231,31 @@ export class GridList {
 
 
     /**
+     * Führt für jese Spalte die angegebene Funktion aus.
+     * @param {function} fu - Funktion die für jede Spalte ausgeführt wird
+     * @param {Array<string>} [cols] - Optional Namen der Spalten 
+     * @returns {void}
+     */
+    forCols(fu, cols) {
+        if (typeof fu != "function") {return;}
+        if (!Array.isArray(cols)) {
+            cols = this.#cols;
+        }
+
+        // alle Spalten durchgehen
+        for (let i = 0; i < cols.length; i++) {
+            // Format lesen
+            const colFormat = this.getColDataFormat(cols[i]) || {};
+            colFormat.name = cols[i];
+            colFormat.type = this.getColType(cols[i]);
+
+            // Funktion ausführen
+            if (fu(colFormat, i, cols)) {break;};
+        }
+    }
+
+
+    /**
      * Führt die Angegebene Funktion, pro Gruppierung nach den Angegebenen Spalten, aus.
      * @param {function} fu - Funktion die für jede Gruppierung aufgerufen wird.
      * @param {Array<string|number>} colList - Liste der Spalten nach denen Gruppiert wird.
@@ -1786,11 +1813,13 @@ export function formatNumber(num, decimals, base, seperate) {
         // * schmales Leerzeichen 	U+2009 	8201 	THIN SPACE 	&#8201; 	&#x2009; 	&thinsp;
         // * schmales nicht umbrechendes Leerzeichen 	U+202F 	8239 	NARROW NO-BREAK SPACE 	&#8239; 	&#x202f; 	n. z.    // Dezimalstellen
         // 123 456 789.123 456 789
+        const smalSpace = String.fromCharCode(8239);
+
         let pos1 = numString.indexOf(".");
         let pos2 = pos1 > -1 ? pos1 -3 : numString.length -3;
         while (pos2 > 0) {
             //if (pos2 < numString.length && pos2 != pos1) {
-                numString = numString.substring(0, pos2) + "&#8239;" + numString.substring(pos2);
+                numString = numString.substring(0, pos2) + smalSpace + numString.substring(pos2);
             //}
             pos2 -= 3;
         }
@@ -1804,7 +1833,6 @@ export function formatNumber(num, decimals, base, seperate) {
 
     return numString;
 }
-
 
 
 /**

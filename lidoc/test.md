@@ -37,3 +37,10 @@
     - E
 
 Hallo
+
+## Form
+
+[ color-s ma-all w-50]
+| ID | <input type="number" data-col="id"> |
+| Name | <input type="text" data-col="name"> |
+| Info | <input type="text" data-col="info"> |

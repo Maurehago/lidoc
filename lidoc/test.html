@@ -27,6 +27,7 @@
     //@ts-check
     import { GridList, GridView, GSID, lists, FormView, formatNumber, maskString } from "./gridlist.js";
     import { isDate, getWeek, getDateDiff, formatDate, formatWeek } from "./infodate.js";
+    import { onInputNumber } from "./infoform.js";
     globalThis.isDate = isDate;
     globalThis.getWeek = getWeek;
     globalThis.getDateDiff = getDateDiff;
@@ -138,6 +139,10 @@
     if (formColumn instanceof HTMLElement) {
         formColumn.innerHTML = formHTML;
     }
+
+    // EreignissHandler
+    const idElm = document.getElementById("i_test_id");
+    //idElm?.addEventListener("input", onInputNumber);
 </script>
 
 </html>
