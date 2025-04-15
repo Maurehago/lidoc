@@ -18,9 +18,9 @@
  * @typedef {object} DataFormat
  * @property {string} [name] - Name der Spalte
  * @property {string} [type] - Typ der Spalte
+ * @property {string} [domain] - Name eines Speziellen abgeleiteten Types 
  * @property {boolean} [optional] - Wenn der Wert NULL sein Kann oder nicht angegeben
  * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
- * @property {string} [subtype] - Name eines Speziellen Types 
  * @property {number} [size] - Größe (gesamt)
  * @property {number} [decimals] - Anzahl der Dezimalstellen 
  * @property {number} [min] - Minimalwert
@@ -62,6 +62,157 @@ const regexFor = /{{(for)}}/g;
  * @type {Map<string,GridList>}
  */
 export const lists = new Map();
+
+
+
+// ===============================
+//   Funktionen
+// --------------
+
+// Global Short Identifier
+/**
+ * Gibt eine neue GlobalShortId zurück
+ * @returns {string}
+ */
+export function GSID() {
+    return new Date().getTime().toString(36) +
+        crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+}
+
+
+/**
+ * Liefert einen Formartierten String mit angegebener Maske zurück. 
+ * @param {string} text - Text der in das Format geschrieben wird
+ * @param {string} mask - Formatstring mit Pattern als Ersetzungszeichen
+ * @param {string} [pattern] - Optional Ersetzungszeichen. Default "_"
+ * @param {string} [base] - Optional Kommazeichen. Default "."
+ * @returns {string} Format-String mit ersetzten Zeichen
+ */
+export function maskString(text, mask, pattern, base) {
+    if (typeof text != "string") {
+        text = "" + text;
+    }
+    
+    if (!pattern) {pattern = "_";}
+
+    // Ausgangspunkt ermitteln
+    let posText = text.lastIndexOf(".");
+    let posMask = mask.lastIndexOf(".");
+    if (typeof base == "string") {
+        posText = text.lastIndexOf(base);
+        posMask = mask.lastIndexOf(base);
+    } else {
+        base = ".";
+    }
+
+    let firstText = "";
+    let lastText = text;
+    let firstMask = "";
+    let lastMask = mask;
+
+    // Wenn Kommastelle
+    if (posMask > -1) {
+        firstText = text.substring(0, posText);
+        lastText = text.substring(posText +1);
+        firstMask = mask.substring(0, posMask);
+        lastMask = mask.substring(posMask +1);
+    }
+
+    // in linke Richtung suchen
+    let pos1 = -1;
+    for (let i = 0; i < lastText.length; i++) {
+        pos1 = lastMask.indexOf(pattern, pos1 +1);
+        if (pos1 > -1) {
+            lastMask = lastMask.replace(pattern, lastText[i]);
+        }
+    }
+
+    if (!firstMask) {
+        return lastMask.replaceAll(pattern, "");
+    }
+
+    // in rechte Richtung suchen
+    pos1 = firstMask.length;
+    for (let i = firstText.length -1; i >= 0; i-- ) {
+        pos1 = firstMask.lastIndexOf(pattern, pos1 -1);
+        if (pos1 > -1) {
+            firstMask = firstMask.substring(0, pos1) + firstText[i] + firstMask.substring(pos1 +1);
+        }
+    }
+
+    return (firstMask + base + lastMask).replaceAll(pattern, "");
+}
+
+
+/**
+ * Gibt einen String mit formartierter Zahl zurück.  
+ * z.B.: formatNumber(1234.5, 2, ",") => "1234,50"  
+ * z.B.: formatNumber(-1234.5678, 2, ",", "___ ___,___") => "-1 234,57_"  
+ * @param {string|number} num - Zahl die formatiert wird
+ * @param {number} decimals - Anzahl der Dezimalstellen
+ * @param {string} [base] - Optional Kommerzeichen. Default = "." 
+ * @param {boolean} [seperate] - Optional Tausender Trennzeichen (thin space)
+ * @returns {string} Formatierte Zahl
+ */
+export function formatNumber(num, decimals, base, seperate) {
+    if (!decimals) {decimals = 0;}
+    if (typeof decimals == "string") {
+        decimals = parseInt(decimals);
+    }
+    
+    let numString = "";
+    if (typeof num == "string") {
+        // Falsche Komma(",") ersetzen 
+        let posPoint = num.lastIndexOf(".");
+        let posKomma = num.lastIndexOf(",");
+        if (posKomma > posPoint) {
+            num = num.substring(0, posKomma) + "." + num.substring(posKomma +1);
+        } else {
+            num = num.replaceAll(",", "");
+        }
+        numString = parseFloat(num).toFixed(decimals);
+    } else if (typeof num == "number") {
+        numString = "" + num.toFixed(decimals);
+    } else {
+        numString = "" + parseFloat("0").toFixed(decimals);
+    }
+    
+    if (seperate) {
+        // * schmales Leerzeichen 	U+2009 	8201 	THIN SPACE 	&#8201; 	&#x2009; 	&thinsp;
+        // * schmales nicht umbrechendes Leerzeichen 	U+202F 	8239 	NARROW NO-BREAK SPACE 	&#8239; 	&#x202f; 	n. z.    // Dezimalstellen
+        // 123 456 789.123 456 789
+        const smalSpace = String.fromCharCode(8239);
+
+        let pos1 = numString.indexOf(".");
+        let pos2 = pos1 > -1 ? pos1 -3 : numString.length -3;
+        while (pos2 > 0) {
+            //if (pos2 < numString.length && pos2 != pos1) {
+                numString = numString.substring(0, pos2) + smalSpace + numString.substring(pos2);
+            //}
+            pos2 -= 3;
+        }
+    }
+
+    // Kommazeichen setzen
+    if (typeof base == "string" && base != ".") {
+        numString = numString.replace(".", base);
+    }
+    
+
+    return numString;
+}
+
+
+/**
+ * @param {string} template
+ * @param {Object<string,any>} obj
+ */
+function templateMe(template, obj) {
+    var regex = /{{(.*?)}}/g;
+    return template.replace(regex, function (/** @type {any} */ match, /** @type {string | number} */ capture) {
+        return obj[capture] || "";
+    });
+}
 
 
 // ===============================
@@ -205,7 +356,7 @@ export class GridList {
      * @returns {string|number|undefined} ID
      */
     getID(dataRow) {
-        if (typeof dataRow != "object") { return -1; }
+        if (typeof dataRow != "object") { return undefined; }
         
         // auf GSID prüfen
         let isGSID = false;
@@ -639,8 +790,10 @@ export class GridList {
                     } else {
                         dataRow[i] = true;
                     }
-                } else {
+                } else if (typeof value == "number" && value != 0) {
                     dataRow[i] = true;
+                } else {
+                    dataRow[i] = false;
                 }
                 break;
             case "object":
@@ -755,7 +908,7 @@ export class GridList {
      * Liefert auf Grund des angegebenen Spaltennamen
      * die Position/Nummer der Spalte in der GridList zurück
      * @param {string|number} col - Name der gesuchten Splate
-     * @returns {number} - Index Position des gesuchten Feldes. -1 wenn nicht gefunden.
+     * @returns {number} - Index Position der gesuchten Spalte. -1 wenn nicht gefunden.
      */
     getColNumber(col) {
         if (typeof col == "string") {
@@ -960,7 +1113,6 @@ export class GridList {
     sortRows(sortCols, index, newIndexName) {
         // Alle Datenzeile in einer liste
         let rowList = [];
-        let newIndex = false;
 
         if (Array.isArray(index)) {
             rowList = index;
@@ -1369,6 +1521,11 @@ export class GridList {
 // -------------
 
 
+
+
+
+
+
 // List -> row -> col -> cell
 
 //  GridView
@@ -1696,152 +1853,3 @@ export class FormView {
 }
 
 
-
-// ===============================
-//   Funktionen
-// --------------
-
-// Global Short Identifier
-/**
- * Gibt eine neue GlobalShortId zurück
- * @returns {string}
- */
-export function GSID() {
-    return new Date().getTime().toString(36) +
-        crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-}
-
-
-/**
- * Liefert einen Formartierten String mit angegebener Maske zurück. 
- * @param {string} text - Text der in das Format geschrieben wird
- * @param {string} mask - Formatstring mit Pattern als Ersetzungszeichen
- * @param {string} [pattern] - Optional Ersetzungszeichen. Default "_"
- * @param {string} [base] - Optional Kommazeichen. Default "."
- * @returns {string} Format-String mit ersetzten Zeichen
- */
-export function maskString(text, mask, pattern, base) {
-    if (typeof text != "string") {
-        text = "" + text;
-    }
-    
-    if (!pattern) {pattern = "_";}
-
-    // Ausgangspunkt ermitteln
-    let posText = text.lastIndexOf(".");
-    let posMask = mask.lastIndexOf(".");
-    if (typeof base == "string") {
-        posText = text.lastIndexOf(base);
-        posMask = mask.lastIndexOf(base);
-    } else {
-        base = ".";
-    }
-
-    let firstText = "";
-    let lastText = text;
-    let firstMask = "";
-    let lastMask = mask;
-
-    // Wenn Kommastelle
-    if (posMask > -1) {
-        firstText = text.substring(0, posText);
-        lastText = text.substring(posText +1);
-        firstMask = mask.substring(0, posMask);
-        lastMask = mask.substring(posMask +1);
-    }
-
-    // in linke Richtung suchen
-    let pos1 = -1;
-    for (let i = 0; i < lastText.length; i++) {
-        pos1 = lastMask.indexOf(pattern, pos1 +1);
-        if (pos1 > -1) {
-            lastMask = lastMask.replace(pattern, lastText[i]);
-        }
-    }
-
-    if (!firstMask) {
-        return lastMask;
-    }
-
-    // in rechte Richtung suchen
-    pos1 = firstMask.length;
-    for (let i = firstText.length -1; i >= 0; i-- ) {
-        pos1 = firstMask.lastIndexOf(pattern, pos1 -1);
-        if (pos1 > -1) {
-            firstMask = firstMask.substring(0, pos1) + firstText[i] + firstMask.substring(pos1 +1);
-        }
-    }
-
-    return firstMask + base + lastMask;
-}
-
-
-/**
- * Gibt einen String mit formartierter Zahl zurück.  
- * z.B.: formatNumber(1234.5, 2, ",") => "1234,50"  
- * z.B.: formatNumber(-1234.5678, 2, ",", "___ ___,___") => "-1 234,57_"  
- * @param {string|number} num - Zahl die formatiert wird
- * @param {number} decimals - Anzahl der Dezimalstellen
- * @param {string} [base] - Optional Kommerzeichen. Default = "." 
- * @param {boolean} [seperate] - Optional Tausender Trennzeichen (thin space)
- * @returns {string} Formatierte Zahl
- */
-export function formatNumber(num, decimals, base, seperate) {
-    if (!decimals) {decimals = 0;}
-    if (typeof decimals == "string") {
-        decimals = parseInt(decimals);
-    }
-    
-    let numString = "";
-    if (typeof num == "string") {
-        // Falsche Komma(",") ersetzen 
-        let posPoint = num.lastIndexOf(".");
-        let posKomma = num.lastIndexOf(",");
-        if (posKomma > posPoint) {
-            num = num.substring(0, posKomma) + "." + num.substring(posKomma +1);
-        } else {
-            num = num.replaceAll(",", "");
-        }
-        numString = parseFloat(num).toFixed(decimals);
-    } else if (typeof num == "number") {
-        numString = "" + num.toFixed(decimals);
-    } else {
-        numString = "" + parseFloat("0").toFixed(decimals);
-    }
-    
-    if (seperate) {
-        // * schmales Leerzeichen 	U+2009 	8201 	THIN SPACE 	&#8201; 	&#x2009; 	&thinsp;
-        // * schmales nicht umbrechendes Leerzeichen 	U+202F 	8239 	NARROW NO-BREAK SPACE 	&#8239; 	&#x202f; 	n. z.    // Dezimalstellen
-        // 123 456 789.123 456 789
-        const smalSpace = String.fromCharCode(8239);
-
-        let pos1 = numString.indexOf(".");
-        let pos2 = pos1 > -1 ? pos1 -3 : numString.length -3;
-        while (pos2 > 0) {
-            //if (pos2 < numString.length && pos2 != pos1) {
-                numString = numString.substring(0, pos2) + smalSpace + numString.substring(pos2);
-            //}
-            pos2 -= 3;
-        }
-    }
-
-    // Kommazeichen setzen
-    if (typeof base == "string" && base != ".") {
-        numString = numString.replace(".", base);
-    }
-    
-
-    return numString;
-}
-
-
-/**
- * @param {string} template
- * @param {Object<string,any>} obj
- */
-function templateMe(template, obj) {
-    var regex = /{{(.*?)}}/g;
-    return template.replace(regex, function (/** @type {any} */ match, /** @type {string | number} */ capture) {
-        return obj[capture] || "";
-    });
-}
