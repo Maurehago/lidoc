@@ -260,6 +260,18 @@ export class GridList {
      */
     #index = new Map();
 
+    /**
+     * Map mit SortIndex als Key und Array mit Spalten nach denen sortiert wurde
+     * @type {Map<string,Array<string>>}
+     */
+    #sortCols = new Map();
+
+    /**
+     * Map mit SortIndex als Key und Array mit Spalten für Sortierrichtung
+     * @type {Map<string,Array<string>>}
+     */
+    #sortColsDirection = new Map();
+
     set name(newName) {
         if (!newName) {
             newName = GSID();
@@ -1124,7 +1136,9 @@ export class GridList {
 
         // wenn keine SortierungsSpalten angegeben
         if (!Array.isArray(sortCols)) {
+            // nur Index merken
             if (typeof index == "string") { this.#index.set(index, rowList); }
+            // unsortierte Liste mit ID's
             return rowList;
         }
 
@@ -1133,19 +1147,31 @@ export class GridList {
         const colIndex = new Array(colLength);
         const orderIndex = new Array(colLength);
         const isString = new Array(colLength);
+        const sCols = new Array(colLength);
+        const sDirection = new Array(colLength);
 
+        // Alle sortierspalten durchgehen
         for (let i = 0; i < colLength; i++) {
             let col = sortCols[i];
             let direction = 1; // 1 = Aufsteigend sortieren / -1 = Absteigend sortieren
             let index = -1;
 
+            // wenn Spaltenname eine String
             if (typeof col == "string" && col.indexOf(" ") >= 0) {
+                // prüfen auf Sortier Richtung
                 const fieldData = col.split(" ");
                 index = this.getColNumber(fieldData[0]);
+                sCols[i] = fieldData[0]; // Spaltennamen für spätere Verwendung merken
+                sDirection[i] = "ASC";
                 if (fieldData[1].trim().toUpperCase() == "DESC") {
                     direction = -1;
+                    sDirection[i] = "DESC"; // Sortierrichtung für spätere Verwendung merken
                 }
             } else {
+                // Wenn Spalte eine Nummer
+                // Name der Spalte setzen
+                sCols[i] = this.#cols[col];
+                sDirection[i] = "ASC";
                 index = this.getColNumber(col);
             }
 
@@ -1211,8 +1237,12 @@ export class GridList {
         // neuen Index speichern
         if (typeof newIndexName == "string") {
             this.#index.set(newIndexName, rowList);
+            this.#sortCols.set(newIndexName, sCols);
+            this.#sortColsDirection.set(newIndexName, sDirection);
         } else if (typeof index == "string") {
             this.#index.set(index, rowList);
+            this.#sortCols.set(index, sCols);
+            this.#sortColsDirection.set(index, sDirection);
         }
         return rowList;
     } // getSortRows
@@ -1520,8 +1550,14 @@ export class GridList {
 //   Anzeige UI
 // -------------
 
+export class TableView {
+    /** @type {Array<string>} */
+    #cols = [];
+    /** @type {Array<string>} */
+    #labels = [];
 
-
+    
+}
 
 
 

@@ -278,7 +278,6 @@ mark,.mark {
 a {
   color: inherit;
   text-decoration: none;
-  padding: 4px;
 }
 
 a:hover {
@@ -650,6 +649,11 @@ progress {
 [ma-h],.ma-h,[ma-h-s],.ma-h-s {margin-right: 8px;margin-left: 8px;}
 [ma-v],.ma-v,[ma-v-s],.ma-v-s {margin-top: 8px;margin-bottom: 8px;}
 [ma-all],.ma-all,[ma-all-s],.ma-all-s {margin: 8px}
+[ma-all-xs],.ma-all-xs {margin: 4px}
+[ma-all-m],.ma-all-m {margin: 16px}
+[ma-all-l],.ma-all-l {margin: 32px}
+[ma-all-xl],.ma-all-xl {margin: 64px}
+[ma-all-xxl],.ma-all-xxl {margin: 128px}
 [ma-t-xs],.ma-t-xs {margin-top: 4px;}
 [ma-t-m],.ma-t-m {margin-top: 16px;}
 [ma-t-l],.ma-t-l {margin-top: 32px;}
@@ -691,6 +695,11 @@ progress {
 [pa-h],.pa-h,[pa-h-s],.pa-h-s {padding-right: 8px;padding-left: 8px;}
 [pa-v],.pa-v,[pa-v-s],.pa-v-s {padding-top: 8px;padding-bottom: 8px;}
 [pa-all],.pa-all,[pa-all-s],.pa-all-s {padding: 8px}
+[pa-all-xs],.pa-all-xs {padding: 4px}
+[pa-all-m],.pa-all-m {padding: 16px}
+[pa-all-l],.pa-all-l {padding: 32px}
+[pa-all-xl],.pa-all-xl {padding: 64px}
+[pa-all-xxl],.pa-all-xxl {padding: 128px}
 [pa-t-s],.pa-t-s {padding-top: 8px;}
 [pa-t-m],.pa-t-m {padding-top: 16px;}
 [pa-t-l],.pa-t-l {padding-top: 32px;}
@@ -711,11 +720,13 @@ progress {
 [pa-b-l],.pa-b-l {padding-bottom: 32px;}
 [pa-b-xl],.pa-b-xl {padding-bottom: 64px;}
 [pa-b-xxl],.pa-b-xxl {padding-bottom: 128px;}
+[pa-h-xs],.pa-h-xs {padding-left: 4px;padding-right: 4px;}
 [pa-h-s],.pa-h-s {padding-left: 8px;padding-right: 8px;}
 [pa-h-m],.pa-h-m {padding-left: 16px;padding-right: 16px;}
 [pa-h-l],.pa-h-l {padding-left: 32px;padding-right: 32px;}
 [pa-h-xl],.pa-h-xl {padding-left: 64px;padding-right: 64px;}
 [pa-h-xxl],.pa-h-xxl {padding-left: 128px;padding-right: 128px;}
+[pa-v-xs],.pa-v-xs {padding-top: 4px;padding-bottom: 4px;}
 [pa-v-m],.pa-v-m {padding-top: 16px;padding-bottom: 16px;}
 [pa-v-l],.pa-v-l {padding-top: 32px;padding-bottom: 32px;}
 [pa-v-xl],.pa-v-xl {padding-top: 64px;padding-bottom: 64px;}
@@ -1160,17 +1171,13 @@ modal-co,[modal-co],.modal-co {
 
   h1,[break-before],.break-before {
     break-before: page;
-    margin-top: 0px;
-    padding-top: 0px;
   }
 
   h1,  h2,  h3,  h4,  h5,  h6 {
-    page-break-after: avoid;
     break-after: avoid;
   }
 
   p,  code {
-    page-break-inside: avoid;
     break-inside: avoid;
   }
 }
