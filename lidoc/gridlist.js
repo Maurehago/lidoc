@@ -92,8 +92,8 @@ export function maskString(text, mask, pattern, base) {
     if (typeof text != "string") {
         text = "" + text;
     }
-    
-    if (!pattern) {pattern = "_";}
+
+    if (!pattern) { pattern = "_"; }
 
     // Ausgangspunkt ermitteln
     let posText = text.lastIndexOf(".");
@@ -113,15 +113,15 @@ export function maskString(text, mask, pattern, base) {
     // Wenn Kommastelle
     if (posMask > -1) {
         firstText = text.substring(0, posText);
-        lastText = text.substring(posText +1);
+        lastText = text.substring(posText + 1);
         firstMask = mask.substring(0, posMask);
-        lastMask = mask.substring(posMask +1);
+        lastMask = mask.substring(posMask + 1);
     }
 
     // in linke Richtung suchen
     let pos1 = -1;
     for (let i = 0; i < lastText.length; i++) {
-        pos1 = lastMask.indexOf(pattern, pos1 +1);
+        pos1 = lastMask.indexOf(pattern, pos1 + 1);
         if (pos1 > -1) {
             lastMask = lastMask.replace(pattern, lastText[i]);
         }
@@ -133,10 +133,10 @@ export function maskString(text, mask, pattern, base) {
 
     // in rechte Richtung suchen
     pos1 = firstMask.length;
-    for (let i = firstText.length -1; i >= 0; i-- ) {
-        pos1 = firstMask.lastIndexOf(pattern, pos1 -1);
+    for (let i = firstText.length - 1; i >= 0; i--) {
+        pos1 = firstMask.lastIndexOf(pattern, pos1 - 1);
         if (pos1 > -1) {
-            firstMask = firstMask.substring(0, pos1) + firstText[i] + firstMask.substring(pos1 +1);
+            firstMask = firstMask.substring(0, pos1) + firstText[i] + firstMask.substring(pos1 + 1);
         }
     }
 
@@ -155,18 +155,18 @@ export function maskString(text, mask, pattern, base) {
  * @returns {string} Formatierte Zahl
  */
 export function formatNumber(num, decimals, base, seperate) {
-    if (!decimals) {decimals = 0;}
+    if (!decimals) { decimals = 0; }
     if (typeof decimals == "string") {
         decimals = parseInt(decimals);
     }
-    
+
     let numString = "";
     if (typeof num == "string") {
         // Falsche Komma(",") ersetzen 
         let posPoint = num.lastIndexOf(".");
         let posKomma = num.lastIndexOf(",");
         if (posKomma > posPoint) {
-            num = num.substring(0, posKomma) + "." + num.substring(posKomma +1);
+            num = num.substring(0, posKomma) + "." + num.substring(posKomma + 1);
         } else {
             num = num.replaceAll(",", "");
         }
@@ -176,7 +176,7 @@ export function formatNumber(num, decimals, base, seperate) {
     } else {
         numString = "" + parseFloat("0").toFixed(decimals);
     }
-    
+
     if (seperate) {
         // * schmales Leerzeichen 	U+2009 	8201 	THIN SPACE 	&#8201; 	&#x2009; 	&thinsp;
         // * schmales nicht umbrechendes Leerzeichen 	U+202F 	8239 	NARROW NO-BREAK SPACE 	&#8239; 	&#x202f; 	n. z.    // Dezimalstellen
@@ -184,10 +184,10 @@ export function formatNumber(num, decimals, base, seperate) {
         const smalSpace = String.fromCharCode(8239);
 
         let pos1 = numString.indexOf(".");
-        let pos2 = pos1 > -1 ? pos1 -3 : numString.length -3;
+        let pos2 = pos1 > -1 ? pos1 - 3 : numString.length - 3;
         while (pos2 > 0) {
             //if (pos2 < numString.length && pos2 != pos1) {
-                numString = numString.substring(0, pos2) + smalSpace + numString.substring(pos2);
+            numString = numString.substring(0, pos2) + smalSpace + numString.substring(pos2);
             //}
             pos2 -= 3;
         }
@@ -197,7 +197,7 @@ export function formatNumber(num, decimals, base, seperate) {
     if (typeof base == "string" && base != ".") {
         numString = numString.replace(".", base);
     }
-    
+
 
     return numString;
 }
@@ -225,6 +225,18 @@ function templateMe(template, obj) {
 export class GridList {
     /** Name der Liste @type {string} */
     #name = "";
+    set name(newName) {
+        if (!newName) {
+            newName = GSID();
+        }
+        this.#name = newName;
+
+        // name registrieren
+        lists.set(this.name, this);
+    }
+    get name() {
+        return this.#name;
+    }
 
     /** Nummer der ID-Spalte @type {number} */
     #idColNumber = -1;
@@ -272,18 +284,6 @@ export class GridList {
      */
     #sortColsDirection = new Map();
 
-    set name(newName) {
-        if (!newName) {
-            newName = GSID();
-        }
-        this.#name = newName;
-
-        // name registrieren
-        lists.set(this.name, this);
-    }
-    get name() {
-        return this.#name;
-    }
 
     /** Anzahl der Datenzeile in der Liste @type {number} */
     get length() {
@@ -299,7 +299,7 @@ export class GridList {
      */
     setIdCol(colName) {
         if (typeof colName == "string" && colName.indexOf(",") > 0) {
-            colName = colName.split(",").map(name => {return name.trim();});
+            colName = colName.split(",").map(name => { return name.trim(); });
         }
 
         if (typeof colName == "string") {
@@ -308,7 +308,7 @@ export class GridList {
             if (this.#idColNumber == undefined && colName == "GSID") {
                 let cIndex = this.#cols.indexOf("GSID");
                 if (cIndex < 0) {
-                    cIndex = this.#cols.push("GSID") -1;
+                    cIndex = this.#cols.push("GSID") - 1;
                     this.#types[cIndex] = "string";
                 }
                 this.#findex.GSID = cIndex;
@@ -369,7 +369,7 @@ export class GridList {
      */
     getID(dataRow) {
         if (typeof dataRow != "object") { return undefined; }
-        
+
         // auf GSID prüfen
         let isGSID = false;
         if (this.#cols[this.#idColNumber] == "GSID") {
@@ -384,7 +384,7 @@ export class GridList {
                     let id2 = dataRow[this.#idColNumbers[i]];
                     if (id2 == undefined || id2 == null || id2 === "") {
                         return undefined;
-                    }                    
+                    }
                     id += id2 + "_";
                 }
                 return id;
@@ -408,7 +408,7 @@ export class GridList {
                     let id2 = dataRow[this.#cols[this.#idColNumbers[i]]];
                     if (id2 == undefined || id2 == null || id2 === "") {
                         return undefined;
-                    }                    
+                    }
                     id += id2 + "_";
                 }
                 return id;
@@ -577,7 +577,7 @@ export class GridList {
         this.setCols(keyList, idCol);
     }
 
-    
+
     /**
      * Git den Typ der Spalte als String zurück
      * @param {string|number} col - Spaltenname oder Nummer
@@ -884,9 +884,9 @@ export class GridList {
         // Prüfen / lesen von bestehender Datenzeile
         let isNewRow = false;
         const id = this.getID(obj);
-        
+
         // nur Datensätze mit ID kommen in die Liste
-        if (id == undefined) {return id;}
+        if (id == undefined) { return id; }
 
         let dataRow = this.#getRow(id)
         if (dataRow == undefined) {
@@ -1053,16 +1053,7 @@ export class GridList {
      */
     getRows(index) {
         const newList = [];
-        /** @type {Array<string|number>} */
-        let indexList = [];
-
-        if (Array.isArray(index)) {
-            indexList = index;
-        } else if (typeof index == "string") {
-            indexList = this.#index.get(index || "") || [...this.#data.keys()];
-        } else {
-            indexList = [...this.#data.keys()];
-        }
+        const indexList = this.getIndex(index);
 
         // alle Keys durchgehen
         for (let i = 0; i < indexList.length; i++) {
@@ -1091,13 +1082,22 @@ export class GridList {
 
 
     /**
-     * Liefert eine Liste aller Datensatz(Zeilen) ID's zurück wenn kein "indexName" angegeben.  
-     * Bei "indexName" wird die ID-Liste vom bestehenden Index zurückgegeben.
-     * @param {string} [indexName] - Optionaler Name des Index
+     * Liefert eine Liste aller Datensatz(Zeilen) ID's zurück wenn kein "index" angegeben.  
+     * Bei "index" wird die ID-Liste vom bestehenden Index zurückgegeben.  
+     * Oder wenn "index" bereits eine Liste, dann wird die Liste zurück gegeben.
+     * @param {string|Array<string|number>} [index] - Optionaler Name des Index
      * @returns {Array<string|number>} Liste mit ID's vom Index
      */
-    getIndex(indexName) {
-        return this.#index.get(indexName || "") || [...this.#data.keys()];
+    getIndex(index) {
+        let rowList = [];
+        if (Array.isArray(index)) {
+            rowList = index;
+        } else if (typeof index == "string") {
+            rowList = this.#index.get(index) || [...this.#data.keys()];
+        } else {
+            rowList = [...this.#data.keys()];
+        }
+        return rowList;
     }
 
 
@@ -1109,7 +1109,7 @@ export class GridList {
     hasIndex(indexName) {
         return this.#index.has(indexName);
     }
-    
+
 
     /**
      * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.
@@ -1124,15 +1124,7 @@ export class GridList {
      */
     sortRows(sortCols, index, newIndexName) {
         // Alle Datenzeile in einer liste
-        let rowList = [];
-
-        if (Array.isArray(index)) {
-            rowList = index;
-        } else if (typeof index == "string") {
-            rowList = this.#index.get(index) || [...this.#data.keys()];
-        } else {
-            rowList = [...this.#data.keys()];
-        }
+        const rowList = this.getIndex(index);
 
         // wenn keine SortierungsSpalten angegeben
         if (!Array.isArray(sortCols)) {
@@ -1188,9 +1180,9 @@ export class GridList {
 
             // Prüfen
             for (let i = 0; i < colLength; i++) {
-                if (!aRow[colIndex[i]] && !bRow[colIndex[i]]){
+                if (!aRow[colIndex[i]] && !bRow[colIndex[i]]) {
                     continue;
-                } else if (aRow[colIndex[i]] && !bRow[colIndex[i]]){
+                } else if (aRow[colIndex[i]] && !bRow[colIndex[i]]) {
                     if (orderIndex[i] < 0) {
                         // Absteigend
                         return -1;
@@ -1198,7 +1190,7 @@ export class GridList {
                         // Aufsteigend
                         return 1;
                     }
-                } else if (!aRow[colIndex[i]] && bRow[colIndex[i]]){
+                } else if (!aRow[colIndex[i]] && bRow[colIndex[i]]) {
                     if (orderIndex[i] < 0) {
                         // Absteigend
                         return 1;
@@ -1207,7 +1199,7 @@ export class GridList {
                         return -1;
                     }
                 }
-                
+
                 // absteigend
                 if (orderIndex[i] < 0) {
                     //if (typeof aRow[colIndex[i]] == "string" && typeof bRow[colIndex[i]] == "string") {
@@ -1248,6 +1240,123 @@ export class GridList {
     } // getSortRows
 
 
+    // todo: Duchschnit(average), Mittelwert(mean)
+    /**
+     * Gruppiert die Daten anch angegeben Spalten, und liefert eine Liste mit Gruppierungs-Objekten zurück.  
+     * Für die Aggregate können "sum", "count", "min" oder "max" - angegeben werden.
+     * @param {string|Array<string>} cols - Spalten nach denen Gruppiert wird
+     * @param {string|Array<string>|undefined} [aggr] - Spalten nach denen Summe, Anzahl, Minimum oder Maximum berechnet wird.
+     * @param {string} [index] - Optional Index der für die Gruppierung verwerndet wird.
+     * @returns {Array<object>} ObjektListe mit einem Objekt das die Gruppe darsetellt und einer Eigenschaft "_sublist" welche die ID's der Datenzeilen die für die Gruppe verwendet worden sind beinhaltet.
+     * @example
+     * // pos = ID
+     * | pos | artikel | preis |
+     * | 1   | A       | 2     |
+     * | 2   | A       | 4     |
+     * | 3   | B       | 5     |
+     * 
+     * let list = getGroupByCols("artikel", ["preis sum", "artikel count"]);
+     * 
+     * list => 
+     * | pos | artikel | preis | preis_sum | artikel_count | _sublist |
+     * | 1   | A       | 2     | 6         | 2             | [1, 2]   |
+     * | 3   | B       | 5     | 5         | 1             | [3]      |
+     */
+    getGroupByCols(cols, aggr, index) {
+        let colList = [];
+        if (Array.isArray(cols)) {
+            colList = cols;
+        } else if (typeof cols == "string") {
+            colList = [cols];
+        } else {
+            return [];
+        }
+
+        const idList = this.getIndex(index);
+        let aggrCols = [];
+        const objList = [];
+        const keyMap = new Map();
+
+        // Aggregate lesen
+        if (Array.isArray(aggr)) {
+            for (let i = 0; i < aggr.length; i++) {
+                aggrCols.push(aggr[i].split(" "));
+            }
+        } else if (typeof aggr == "string") {
+            aggrCols = aggr.split(" ");
+        }
+
+        // Alle Datenzeilen durchgehen
+        for (let i = 0; i < idList.length; i++) {
+            // Objekt lesen
+            const obj = this.get(idList[i]);
+            let key = "";
+            for (let j = 0; j < colList.length; j++) {
+                if (j > 0) { key += "_"; }
+                key += obj[colList[j]];
+            }
+
+            // Vorhandenen Key prüfen
+            let keyObj = keyMap.get(key);
+            if (keyObj) {
+                // alle agregate prüfen
+                for (let j = 0; j < aggrCols.length; j++) {
+                    const colName = aggrCols[j][0];
+                    switch (aggrCols[j][1]) {
+                        case "sum":
+                            keyObj[colName + "_sum"] += obj[colName];
+                            break;
+                        case "count":
+                            keyObj[colName + "_count"] += 1;
+                            break;
+                        case "min":
+                            if (obj[colName] < keyObj[colName + "_min"]) {
+                                keyObj[colName + "_min"] = obj[colName];
+                            }
+                            break;
+                        case "max":
+                            if (obj[colName] > keyObj[colName + "_max"]) {
+                                keyObj[colName + "_max"] = obj[colName];
+                            }
+                            break;
+                    }
+                    keyObj._sublist.push(idList[i]);
+                } // alle Aggrgat Spalten
+            } else {
+                // Gruppierungsobjekt noch nicht vorhanden
+                // alle agregate prüfen
+                for (let j = 0; j < aggrCols.length; j++) {
+                    const colName = aggrCols[j][0];
+                    switch (aggrCols[j][1]) {
+                        case "sum":
+                            obj[colName + "_sum"] = obj[colName];
+                            break;
+                        case "count":
+                            obj[colName + "_count"] = 1;
+                            break;
+                        case "min":
+                            obj[colName + "_min"] = obj[colName];
+                            break;
+                        case "max":
+                            obj[colName + "_max"] = obj[colName];
+                            break;
+                    }
+                } // for alle Aggregierungs Spalten
+
+                // Liste für ID's
+                obj._sublist = [idList[i]];
+
+                // Objekt merken
+                keyMap.set(key, obj);
+                objList.push(obj);
+            }
+        } // alle ID's durchgehen
+
+        // Objektliste zurückgeben
+        return objList;
+    }
+
+
     /**
      * Gibt eine gefilterte Liste mit Datensätzen zurück.  
      * Wenn index Angegeben werden die Daten zum Filtern vom bestehenden Index genommen.  
@@ -1260,15 +1369,7 @@ export class GridList {
     filter(fu, index, newIndexName) {
 
         // Daten zum Filtern
-        let rowList = [];
-        if (Array.isArray(index)) {
-            rowList = index;
-        } else if (typeof index == "string") {
-            rowList = this.#index.get(index) || [...this.#data.keys()];
-        } else {
-            rowList = [...this.#data.keys()];
-        }
-
+        let rowList = this.getIndex(index);
         if (typeof fu != "function") { return rowList; }
 
         const newList = [];
@@ -1313,15 +1414,7 @@ export class GridList {
 
 
         // Daten zum Filtern
-        let rowList = [];
-        if (Array.isArray(index)) {
-            rowList = index;
-        } else if (typeof index == "string") {
-            rowList = this.#index.get(index) || [...this.#data.keys()];
-        } else {
-            rowList = [...this.#data.keys()];
-        }
-
+        const rowList = this.getIndex(index);
         if (typeof fu != "function") { return rowList; }
 
         const newList = [];
@@ -1379,6 +1472,7 @@ export class GridList {
     }
 
 
+
     /**
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
      * Als Parameter wird die Datenzeile als Objekt übergeben. 
@@ -1392,15 +1486,7 @@ export class GridList {
      */
     forEach(fu, index) {
         // Daten zum Filtern
-        let rowList = [];
-        if (Array.isArray(index)) {
-            rowList = index;
-        } else if (typeof index == "string") {
-            rowList = this.#index.get(index) || [...this.#data.keys()];
-        } else {
-            rowList = [...this.#data.keys()];
-        }
-
+        const rowList = this.getIndex(index);
         if (typeof fu != "function") { return; }
 
         // alle durchgehen
@@ -1419,7 +1505,7 @@ export class GridList {
      * @returns {void}
      */
     forCols(fu, cols) {
-        if (typeof fu != "function") {return;}
+        if (typeof fu != "function") { return; }
         if (!Array.isArray(cols)) {
             cols = this.#cols;
         }
@@ -1432,7 +1518,7 @@ export class GridList {
             colFormat.type = this.getColType(cols[i]);
 
             // Funktion ausführen
-            if (fu(colFormat, i, cols)) {break;};
+            if (fu(colFormat, i, cols)) { break; };
         }
     }
 
@@ -1454,15 +1540,7 @@ export class GridList {
 
 
         // Daten zum Filtern
-        let rowList = [];
-        if (Array.isArray(index)) {
-            rowList = index;
-        } else if (typeof index == "string") {
-            rowList = this.#index.get(index) || [...this.#data.keys()];
-        } else {
-            rowList = [...this.#data.keys()];
-        }
-
+        const rowList = this.getIndex(index);
         if (typeof fu != "function") { return; }
 
         const groupCols = this.getColNumbers(colList);
@@ -1500,7 +1578,7 @@ export class GridList {
         } // for jeder Datensatz
 
         // Letze Gruppe Funktion ausführen
-        fu(groupObjList, rowList.length -1, rowList);
+        fu(groupObjList, rowList.length - 1, rowList);
     }
 
 
@@ -1556,7 +1634,7 @@ export class TableView {
     /** @type {Array<string>} */
     #labels = [];
 
-    
+
 }
 
 
@@ -1679,7 +1757,7 @@ export class GridView {
      * @returns {string} HTML String der Datenzeile
      */
     getRowHtml(row, listIndex, list) {
-        if (!row) {return "";}
+        if (!row) { return ""; }
         const rowID = this.#gridList.getID(row);
         const tableRowID = this.#gridList.name + '_' + rowID;
         const tagName = this.#rowTag || "tr";
@@ -1754,7 +1832,7 @@ export class FormView {
 
     /** @type {Array<string>} */
     #cols = [];
-    
+
     /** @type {Array<string>} */
     #labels = [];
 
@@ -1771,7 +1849,7 @@ export class FormView {
 
 
     setCols(cols) {
-        if (!Array.isArray(cols)) {return;}
+        if (!Array.isArray(cols)) { return; }
 
         // zurücksetzen
         this.#cols = [];
@@ -1784,7 +1862,7 @@ export class FormView {
                 if (pos1 > 0) {
                     // Spaltenname und Label
                     this.#cols[i] = cols[i].substring(0, pos1);
-                    this.#labels[i] = cols[i].substring(pos1 +1);
+                    this.#labels[i] = cols[i].substring(pos1 + 1);
                 } else {
                     // nur Spaltenname
                     this.#cols[i] = cols[i];
@@ -1805,7 +1883,7 @@ export class FormView {
             // dann ist es eine ID - Holen aus den Daten
             obj = this.#gridlist.get(obj);
         }
-        if (!obj) {return ""};
+        if (!obj) { return "" };
         console.log("obj", obj);
 
         // Name der Liste
@@ -1819,7 +1897,7 @@ export class FormView {
             // Namen
             const colName = this.#cols[i];
             let colType = this.#gridlist.getColType(colName);
-            
+
             /** @type {DataFormat} */
             let colFormat = {};
             if (colType) {
@@ -1830,7 +1908,7 @@ export class FormView {
             }
             const inputName = "i_" + listName + "_" + colName;
             const labelText = this.#labels[i];
-            
+
             let inputType = "text";
             let readonly = "";
 
@@ -1853,7 +1931,7 @@ export class FormView {
                 }
             }
 
-        
+
             if (inputType == "checkbox") {
                 let checked = "";
                 if (obj[colName]) {
@@ -1861,7 +1939,7 @@ export class FormView {
                 }
                 // input
                 htmlString += `<p><input type="checkbox" id="${inputName}" data-list="${listName}" data-col="${colName}" value="${obj[colName]}"${checked}${readonly}>`;
-                
+
                 // label
                 htmlString += `<label for="${inputName}">${labelText}</label></p>`;
             } else {
@@ -1885,7 +1963,7 @@ export class FormView {
         if (gridList instanceof GridList) {
             this.setGridList(gridList);
         }
-    }    
+    }
 }
 
 
