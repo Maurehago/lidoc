@@ -1240,15 +1240,17 @@ export class GridList {
     } // getSortRows
 
 
-    // todo: Duchschnit(average), Mittelwert(mean)
+
     /**
      * Gruppiert die Daten anch angegeben Spalten, und liefert eine Liste mit Gruppierungs-Objekten zurück.  
      * Für die Aggregate können "sum", "count", "min" oder "max" - angegeben werden.
+     * noch nicht implementiert "average"(Durchschnitt), "mean"(mittelwert), "total"(laufende Summe)
      * @param {string|Array<string>} cols - Spalten nach denen Gruppiert wird
      * @param {string|Array<string>|undefined} [aggr] - Spalten nach denen Summe, Anzahl, Minimum oder Maximum berechnet wird.
      * @param {string} [index] - Optional Index der für die Gruppierung verwerndet wird.
      * @returns {Array<object>} ObjektListe mit einem Objekt das die Gruppe darsetellt und einer Eigenschaft "_sublist" welche die ID's der Datenzeilen die für die Gruppe verwendet worden sind beinhaltet.
      * @example
+     * // "sum", "count", "min", "max" - noch nicht implementiert "average"(Durchschnitt), "mean"(mittelwert), "total"(laufende Summe)
      * // pos = ID
      * | pos | artikel | preis |
      * | 1   | A       | 2     |
@@ -1609,6 +1611,31 @@ export class GridList {
     } // parse
 
 
+    // get Alias List
+    /**
+     * Erzeugt eine neue Liste mit referenzierten Datenzeilen und einer neuen ID-Spalte.
+     * @param {string} newName - neuer ListenName
+     * @param {string|Array<string>} newIdCols - Neue ID-Spalte(n)
+     * @returns {GridList}
+     */
+    getAliasList(newName, newIdCols) {
+        const newList = new GridList(newName, this.#cols, newIdCols);
+        newList.#types = this.#types;
+        newList.#formats = this.#formats;
+
+        // Daten nach neuem ID-Feld setzen
+        const rowList = this.getIndex();
+        for (let i = 0; i < rowList.length; i++) {
+            const row = this.#data.get(rowList[i]) || [];
+            const newID = newList.getID(row) || i;
+            newList.#data.set(newID, row);
+        }
+
+        newList.#data = this.#data;
+        return newList;
+    }
+
+
     /**
     * Konstruktor mit GridList Objekt oder JSON-String
     * @param {string} name - Javascript Objekt oder JSON-String
@@ -1628,14 +1655,120 @@ export class GridList {
 //   Anzeige UI
 // -------------
 
-export class TableView {
+export class InfoView {
     /** @type {Array<string>} */
     #cols = [];
     /** @type {Array<string>} */
     #labels = [];
 
 
-}
+    /**
+     * Setzt die Spalten
+     * @param {Array<string>} colList - Listen mit Spalten Namen und Labels.
+     * @returns {void}
+     */
+    setCols(colList) {
+        if (!Array.isArray(colList)) {return;}
+
+        // Spalten und Labels neu setzen
+        this.#cols = new Array(colList.length);
+        this.#labels = new Array(colList.length);
+
+        // Alle neuen Spalten durchgehen
+        for (let i = 0; i < colList.length; i++) {
+            const pos1 = colList[i].indexOf(" ");
+            if (pos1 > 0) {
+                this.#cols[i] = colList[i].substring(0, pos1);
+                this.#labels[i] = colList[i].substring(pos1 +1);
+            } else {
+                this.#cols[i] = colList[i];
+                this.#labels[i] = colList[i];
+            }
+        }
+    }
+
+
+    /**
+     * Gibt die Liste mit spalten zurück
+     * @returns {Array<string>}
+     */
+    getCols() {
+        return this.#cols;
+    }
+
+    /**
+     * Gibt die Liste mit Überschriften der Spalten zurück
+     * @returns {Array<string>}
+     */
+    getLabels() {
+        return this.#labels;
+    }
+
+
+    /**
+     * Liefert einen HTML-String inklusive dem "thead"-Tag zurück.
+     * @param {GridList} list - GridListe mit Einstellungen für die Spalten
+     * @returns {string} HTML-String mit "thead"-Tag 
+     */
+    getThead(list) {
+        let html = "<thead><tr>";
+        
+        // alle Spalten durchgehen
+        for (let i = 0; i < this.#cols.length; i++) {
+            const colName = this.#cols[i];
+            if (list.getColType(colName) == "number") {
+                html += "<th text-r>" + this.#labels[i] + "</th>";
+            } else {
+                html += "<th>" + this.#labels[i] + "</th>";
+            }
+        }
+        return html + "</tr></thead>";
+    }
+
+
+    /**
+     * 
+     * @param {GridList} list - Gridliste
+     * @param {string} index - Name vom Index
+     * @returns 
+     */
+    getTbody(list, index) {
+        let html = "<tbody>";
+        const idList = list.getIndex(index);
+
+        // alle ID's durchgehen
+        for (let i = 0; i < idList.length; i++) {
+            const obj = list.get(idList[i]);
+            html += "<tr>";
+
+            // Alle Spalten durchgehen
+            for (let j = 0; j < this.#cols.length; j++) {
+                const colName = this.#cols[j];
+                if (list.getColType(colName) == "number") {
+                    // todo: format Number
+                    html += "<td text-r>" + obj[colName] + "</td>";
+                } else {
+                    // todo: formatDate
+                    html += "<td>" + obj[colName] + "</td>";
+                }
+            }
+            html += "</tr>";
+        }
+
+        return html + "</tbody>";
+    }
+
+
+    /**
+     * @constructor
+     * @param {Array<string>} cols - Spalten für Liste oder Tabellen Anzeige
+     */
+    constructor(cols) {
+        if (cols) {
+            this.setCols(cols);
+        }
+    }
+} // InfoView
 
 
 
