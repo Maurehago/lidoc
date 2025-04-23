@@ -1706,12 +1706,12 @@ export class InfoView {
 
 
     /**
-     * Liefert einen HTML-String inklusive dem "thead"-Tag zurück.
+     * Liefert einen HTML-String ohne dem "thead"-Tag zurück.
      * @param {GridList} list - GridListe mit Einstellungen für die Spalten
-     * @returns {string} HTML-String mit "thead"-Tag 
+     * @returns {string} HTML-String ohne "thead"-Tag 
      */
     getThead(list) {
-        let html = "<thead><tr>";
+        let html = "<tr>";
         
         // alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
@@ -1722,46 +1722,80 @@ export class InfoView {
                 html += "<th>" + this.#labels[i] + "</th>";
             }
         }
-        return html + "</tr></thead>";
+        return html + "</tr>";
     }
 
 
     /**
-     * 
-     * @param {GridList} list - Gridliste
-     * @param {string} index - Name vom Index
-     * @returns 
+     * Lieftert einen HTML-String der Datenzeile zurück.
+     * @param {GridList} gridList - Liste mit den Daten
+     * @param {object} obj - Datensatz Objekt
+     * @returns {string} HTML Sting der Datenzeile
      */
-    getTbody(list, index) {
-        let html = "<tbody>";
-        const idList = list.getIndex(index);
+    getTr(gridList, obj) {
+        let html = "<tr>";
+
+        // Alle Spalten durchgehen
+        for (let j = 0; j < this.#cols.length; j++) {
+            const colName = this.#cols[j];
+            const colType = gridList.getColType[colName];
+            const colFormat = gridList.getColDataFormat(colName) || {};
+
+            // todo: Wertprüfung
+            if (colType == "number") {
+                // todo: format Number, basis "." oder ","???
+                let numString = formatNumber(obj[colName], colFormat.decimals || 0, ".", true);
+                html += "<td text-r>" + numString + "</td>";
+            } else {
+                // todo: formatDate
+                html += "<td>" + obj[colName] + "</td>";
+            }
+        }
+        return html + "</tr>";
+    }
+
+
+    /**
+     * Lieferet einen Table Body HTML-String ohne "tbody"-Tag zurück.
+     * @param {GridList} gridList - Gridliste
+     * @param {string} [index] - Name vom Index
+     * @returns {string} HTML-String ohne dem Tag "tbody"
+     */
+    getTbody(gridList, index) {
+        let html = "";
+        const idList = gridList.getIndex(index);
 
         // alle ID's durchgehen
         for (let i = 0; i < idList.length; i++) {
-            const obj = list.get(idList[i]);
-            html += "<tr>";
-
-            // Alle Spalten durchgehen
-            for (let j = 0; j < this.#cols.length; j++) {
-                const colName = this.#cols[j];
-                if (list.getColType(colName) == "number") {
-                    // todo: format Number
-                    html += "<td text-r>" + obj[colName] + "</td>";
-                } else {
-                    // todo: formatDate
-                    html += "<td>" + obj[colName] + "</td>";
-                }
-            }
-            html += "</tr>";
+            const obj = gridList.get(idList[i]);
+            html += this.getTr(gridList, obj);
         }
 
-        return html + "</tbody>";
+        return html;
+    }
+
+
+    /**
+     * Liefert einen HTML-String von einem TableBody(ohne "tbody"-Tag) zurück, 
+     * @param {GridList} gridList - GridListe mit den Daten
+     * @param {Array<object>} objList - Liste mit Objekten die aus der Gridliste heraus generiert worden sind.
+     * @returns {string} HTML-String ohne "tbody"-Tag
+     */
+    getTbodyFromObjList(gridList, objList) {
+        let html = "";
+
+        // alle ID's durchgehen
+        for (let i = 0; i < objList.length; i++) {
+            html += this.getTr(gridList, objList[i]);
+        }
+
+        return html;
     }
 
 
     /**
      * @constructor
-     * @param {Array<string>} cols - Spalten für Liste oder Tabellen Anzeige
+     * @param {Array<string>} [cols] - Spalten für Liste oder Tabellen Anzeige
      */
     constructor(cols) {
         if (cols) {
