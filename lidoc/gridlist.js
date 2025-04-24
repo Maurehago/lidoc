@@ -1257,7 +1257,7 @@ export class GridList {
      * | 2   | A       | 4     |
      * | 3   | B       | 5     |
      * 
-     * let list = getGroupByCols("artikel", ["preis sum", "artikel count"]);
+     * let list = gridList.getGroupByCols("artikel", ["preis sum", "artikel count"]);
      * 
      * list => 
      * | pos | artikel | preis | preis_sum | artikel_count | _sublist |
@@ -1265,14 +1265,12 @@ export class GridList {
      * | 3   | B       | 5     | 5         | 1             | [3]      |
      */
     getGroupByCols(cols, aggr, index) {
-        let colList = [];
+        let colList = ["_"];
         if (Array.isArray(cols)) {
             colList = cols;
-        } else if (typeof cols == "string") {
+        } else if (typeof cols == "string" && cols) {
             colList = [cols];
-        } else {
-            return [];
-        }
+        } 
 
         const idList = this.getIndex(index);
         let aggrCols = [];
@@ -1304,26 +1302,27 @@ export class GridList {
                 // alle agregate prüfen
                 for (let j = 0; j < aggrCols.length; j++) {
                     const colName = aggrCols[j][0];
+                    const value = obj[colName];
                     switch (aggrCols[j][1]) {
                         case "sum":
-                            keyObj[colName + "_sum"] += obj[colName];
+                            keyObj[colName + "_sum"] += value || 0;
                             break;
                         case "count":
                             keyObj[colName + "_count"] += 1;
                             break;
                         case "min":
-                            if (obj[colName] < keyObj[colName + "_min"]) {
-                                keyObj[colName + "_min"] = obj[colName];
+                            if (value != undefined && value < keyObj[colName + "_min"]) {
+                                keyObj[colName + "_min"] = value;
                             }
                             break;
                         case "max":
-                            if (obj[colName] > keyObj[colName + "_max"]) {
-                                keyObj[colName + "_max"] = obj[colName];
+                            if (value != undefined && value > keyObj[colName + "_max"]) {
+                                keyObj[colName + "_max"] = value;
                             }
                             break;
                     }
-                    keyObj._sublist.push(idList[i]);
                 } // alle Aggrgat Spalten
+                keyObj._sublist.push(idList[i]);
             } else {
                 // Gruppierungsobjekt noch nicht vorhanden
                 // alle agregate prüfen
@@ -1331,16 +1330,16 @@ export class GridList {
                     const colName = aggrCols[j][0];
                     switch (aggrCols[j][1]) {
                         case "sum":
-                            obj[colName + "_sum"] = obj[colName];
+                            obj[colName + "_sum"] = obj[colName] || 0;
                             break;
                         case "count":
                             obj[colName + "_count"] = 1;
                             break;
                         case "min":
-                            obj[colName + "_min"] = obj[colName];
+                            obj[colName + "_min"] = obj[colName] || "";
                             break;
                         case "max":
-                            obj[colName + "_max"] = obj[colName];
+                            obj[colName + "_max"] = obj[colName] || "";
                             break;
                     }
                 } // for alle Aggregierungs Spalten
@@ -1637,17 +1636,29 @@ export class GridList {
 
 
     /**
-    * Konstruktor mit GridList Objekt oder JSON-String
+    * Erstellt eine Instanz der GridList
+    * @constructor
     * @param {string} name - Javascript Objekt oder JSON-String
-    * @param {string[]} [colList] - Optionale Liste mit Spaltennamen
-    * @param {string|string[]} [idCol] - Name der ID Spalte oder mehreren Splalten die die ID ergeben. Muss angegeben werden wenn colList angegeben.
+    * @param {Array<string|object>} [colList] - Optionale Liste mit Spaltennamen, oder ein Array mit Objekten, die in die liste geschrieben werden.
+    * @param {string|Array<string>} [idCol] - Name der ID Spalte oder mehreren Splalten die die ID ergeben. Muss angegeben werden wenn colList angegeben.
     */
     constructor(name, colList, idCol) {
         this.name = name;
-        if (colList) {
-            this.setCols(colList, idCol || colList[0]);
-        }
-    }
+        if (Array.isArray(colList)) {
+            if (typeof colList[0] == "string") {
+                // Liste mit Spaltennamen
+                this.setCols(colList, idCol || colList[0]);
+            } else if (typeof colList[0] == "object") {
+                // Liste mit Objeken für die neue Gridlist
+                this.setColsFromObject(colList[0], idCol || "GSID");
+
+                // alle Objekte in die Liste schreiben
+                for (let i = 0; i < colList.length; i++) {
+                    this.setObject(colList[i]);
+                }
+            }
+        } // wenn colList
+    } // constructor
 } // Class GridList
 
 
