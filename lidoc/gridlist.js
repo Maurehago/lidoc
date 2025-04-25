@@ -3,6 +3,12 @@
 // ==================
 // @ts-check
 
+// ===============================
+//   Imports
+// --------------
+
+import { formatDate } from "./infodate.js";
+
 
 // ===============================
 //   Typen
@@ -21,7 +27,8 @@
  * @property {string} [domain] - Name eines Speziellen abgeleiteten Types 
  * @property {boolean} [optional] - Wenn der Wert NULL sein Kann oder nicht angegeben
  * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
- * @property {number} [size] - Größe (gesamt)
+ * @property {number} [minSize] - minimale String Länge
+ * @property {number} [maxSize] - maximale String Länge
  * @property {number} [decimals] - Anzahl der Dezimalstellen 
  * @property {number} [min] - Minimalwert
  * @property {number} [max] - Maimalwert
@@ -1270,7 +1277,7 @@ export class GridList {
             colList = cols;
         } else if (typeof cols == "string" && cols) {
             colList = [cols];
-        } 
+        }
 
         const idList = this.getIndex(index);
         let aggrCols = [];
@@ -1666,12 +1673,14 @@ export class GridList {
 //   Anzeige UI
 // -------------
 
-export class InfoView {
+export class GridView {
     /** @type {Array<string>} */
     #cols = [];
     /** @type {Array<string>} */
     #labels = [];
 
+
+    dateFormat = "yyyy-mm-dd HH:MM:SS";
 
     /**
      * Setzt die Spalten
@@ -1679,7 +1688,7 @@ export class InfoView {
      * @returns {void}
      */
     setCols(colList) {
-        if (!Array.isArray(colList)) {return;}
+        if (!Array.isArray(colList)) { return; }
 
         // Spalten und Labels neu setzen
         this.#cols = new Array(colList.length);
@@ -1690,7 +1699,7 @@ export class InfoView {
             const pos1 = colList[i].indexOf(" ");
             if (pos1 > 0) {
                 this.#cols[i] = colList[i].substring(0, pos1);
-                this.#labels[i] = colList[i].substring(pos1 +1);
+                this.#labels[i] = colList[i].substring(pos1 + 1);
             } else {
                 this.#cols[i] = colList[i];
                 this.#labels[i] = colList[i];
@@ -1723,7 +1732,7 @@ export class InfoView {
      */
     getThead(list) {
         let html = "<tr>";
-        
+
         // alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
             const colName = this.#cols[i];
@@ -1749,7 +1758,7 @@ export class InfoView {
         // Alle Spalten durchgehen
         for (let j = 0; j < this.#cols.length; j++) {
             const colName = this.#cols[j];
-            const colType = gridList.getColType[colName];
+            const colType = gridList.getColType(colName);
             const colFormat = gridList.getColDataFormat(colName) || {};
 
             // todo: Wertprüfung
@@ -1758,8 +1767,12 @@ export class InfoView {
                 let numString = formatNumber(obj[colName], colFormat.decimals || 0, ".", true);
                 html += "<td text-r>" + numString + "</td>";
             } else {
-                // todo: formatDate
-                html += "<td>" + obj[colName] + "</td>";
+                // auf Datum Prüfen
+                if (colFormat && colFormat.date && this.dateFormat) {
+                    html += "<td>" + formatDate(obj[colName], this.dateFormat) + "</td>";
+                } else {
+                    html += "<td>" + obj[colName] + "</td>";
+                }
             }
         }
         return html + "</tr>";
@@ -1805,6 +1818,127 @@ export class InfoView {
 
 
     /**
+     * Liefert eine Formular Eingabe HTML String zurück.
+     * @param {GridList} gridList - GridListe mit Daten
+     * @returns {string} HTML-String
+     */
+    getFormBody(gridList) {
+        let html = "";
+
+        // Alle Spalten durchgehen
+        for (let i = 0; i < this.#cols.length; i++) {
+            const colName = this.#cols[i];
+            const colLabel = this.#labels[i];
+            const colType = gridList.getColType(colName);
+            const colFormat = gridList.getColDataFormat(colName) || {};
+
+            let attr_required = "";
+            let attr_min = "";
+            let attr_max = "";
+            let attr_minSize = "";
+            let attr_maxSize = "";
+            let attr_step = "";
+            let attr_pattern = "";
+            let attr_readonly = "";
+
+
+            if (colFormat) {
+                // Erforderlich
+                if (!colFormat.optional) { attr_required = ' required'; }
+                if (colFormat.min != undefined) { attr_min = ` min="${colFormat.min}"`; }
+                if (colFormat.max != undefined) { attr_max = ` max="${colFormat.max}"`; }
+                if (colFormat.minSize != undefined) { attr_minSize = ` minlength="${colFormat.minSize}"`; };
+                if (colFormat.maxSize != undefined) { attr_maxSize = ` maxlength="${colFormat.maxSize}"`; };
+                if (colFormat.decimals != undefined) {
+                    let decimals = formatNumber(0, colFormat.decimals, ".");
+                    attr_step = ` step="${decimals}"`;
+                }
+                if (colFormat.regex != undefined) { attr_pattern = ` pattern="${colFormat.regex}"`; }
+                if (colFormat.readonly) { attr_readonly = " readonly"; }
+            }
+
+            // "required", "min", "max", "minlength", "maxlength", "step", "pattern"
+
+            let labelHTML = "";
+
+            // Jede eingabe in einen Absatz
+            html += "<p>";
+
+            // Label erstellen
+            labelHTML = `<label for="${colName}">${colLabel}</label>`;
+
+            console.log("colType:" ,colName , colType);
+            switch (colType) {
+                case "number":
+                    // wenn number
+                    html += labelHTML;
+
+                    // "required", "min", "max", "step", "pattern", "readonly"
+                    html += `<input id="${colName}" name="${colName}" type="number"${attr_min}${attr_max}${attr_step}${attr_pattern}${attr_required}${attr_readonly}>`;
+                    break;
+
+                case "boolean":
+                    // "required", "readonly"
+                    html += `<input id="${colName}" name="${colName}" type="checkbox"${attr_required}${attr_readonly}>`;
+                    html += labelHTML;
+                    break;
+
+                case "object":
+                    // todo:
+                    break;
+
+                case "list":
+                    // todo:
+                    break;
+
+                case "string":
+                    if (colFormat?.charToBool) {
+                        // "required", "readonly"
+                        html += `<input id="${colName}" name="${colName}" type="checkbox"${attr_required}${attr_readonly}>`;
+                        html += labelHTML;
+                    } else {
+                        html += labelHTML;
+
+                        // "required", "minlength", "maxlength", "pattern"
+                        if (colFormat?.date) {
+                            switch (colFormat.date) {
+                                case "date":
+                                    html += `<input id="${colName}" name="${colName}" type="date"${attr_required}${attr_readonly}>`;
+                                    break;
+                                case "datetime":
+                                    html += `<input id="${colName}" name="${colName}" type="date"${attr_required}${attr_readonly}>`;
+                                    break;
+                                case "period":
+                                    // todo: ???
+                                    //html += `<input id="${colName}" type="date">`;
+                                    break;
+                                case "time":
+                                    html += `<input id="${colName}" name="${colName}" type="text" style="width: 10em;${attr_required}${attr_readonly}">`;
+                                    break;
+                                default:
+                                    break;
+                            }
+                        } else if (colFormat?.password) {
+                            html += `<input id="${colName}" name="${colName}" type="password"${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
+                        } else {
+                            // kein Datum
+                            html += `<input id="${colName}" name="${colName}" type="text"${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
+                        }
+                    } // else Umwandlung in Boolean
+                    break;
+                default:
+                    break;
+            } // switch colType
+
+            // Absatz schiessen
+            html += "</p>";
+        } // for Cols
+
+        // HTML String zurückgeben
+        return html;
+    } // getFormBody
+
+    /**
      * @constructor
      * @param {Array<string>} [cols] - Spalten für Liste oder Tabellen Anzeige
      */
@@ -1814,334 +1948,5 @@ export class InfoView {
         }
     }
 } // InfoView
-
-
-
-
-// List -> row -> col -> cell
-
-//  GridView
-/**
- * @class
- */
-export class GridView {
-    /** @type {string[]} */
-    #colTags = [];
-    get colTags() {
-        return this.#colTags;
-    }
-
-    /** @type {string[]} */
-    #endColTags = [];
-
-    /** @type {string} */
-    #rowTag = "tr";
-    set rowTag(value) {
-        this.#rowTag = value;
-    }
-    get rowTag() {
-        return this.#rowTag;
-    }
-
-    /** @type {number[]} */
-    #colNumbers = [];
-
-    /** @type {string[]} */
-    #cols = [];
-    /** @param {string[]} value */
-    set cols(value) {
-        this.setCols(value);
-    }
-    get cols() {
-        return this.#cols;
-    }
-
-
-    /** @type {GridList} */
-    // @ts-ignore
-    #gridList
-    /** @param {GridList} value - GridListe */
-    set gridList(value) {
-        this.setGridList(value);
-    }
-    get gridList() {
-        return this.#gridList;
-    }
-
-    /** @type {Function|null} */
-    rowFunc = null;
-
-    /**
-     * Setzt die Spalten die im HTML erstellt werden
-     * @param {Array<string|number>} cols - Listen mit Spaltennamen. Optional mit Leerzeichen getrennt der TagName.
-     */
-    setCols(cols) {
-        this.#cols = [];
-        this.#colTags = [];
-        this.#endColTags = [];
-        this.#colNumbers = [];
-
-        for (let i = 0; i < cols.length; i++) {
-            const col = cols[i];
-            if (typeof col == "string") {
-                const pos1 = col.indexOf(" ");
-                if (pos1 > -1) {
-                    const name = col.substring(0, pos1);
-                    const tag = col.substring(pos1 + 1);
-                    this.#cols.push(name);
-                    this.#colTags.push(tag);
-                    this.#endColTags.push(tag.split(" ")[0]);
-                    this.#colNumbers.push(this.#gridList.getColNumber(name));
-                } else {
-                    this.#cols.push(col);
-                    this.#colTags.push("td");
-                    this.#endColTags.push("td");
-                    this.#colNumbers.push(this.#gridList.getColNumber(col));
-                }
-            } else if (typeof col == "number") {
-                this.#cols.push(this.#gridList.cols[col]);
-                this.#colTags.push("td");
-                this.#endColTags.push("td");
-                this.#colNumbers.push(col);
-            }
-        }
-    }
-
-
-    /**
-     * Setzt die Gridliste(Daten) für das Generieren des HTML-Strings
-     * @param {GridList} gridList - Gridliste mit Daten
-     */
-    setGridList(gridList) {
-        this.#gridList = gridList;
-    }
-
-
-    /**
-     * Gibt die ID des Datensatzobjektes zurück
-     * @param {object} row - Datensatz Objekt
-     * @returns {string|number|undefined} ID
-     */
-    getRowID(row) {
-        return this.#gridList.getID(row);
-    }
-
-
-    /**
-     * Liefert einen HTML-String der Datenzeile zurück
-     * @param {Object<string,any>} row - Datenzeile Objekt
-     * @param {number} [listIndex] - Index in der Liste
-     * @param {Array<string|number>} [list] - ID - Liste aus der die Datenzeile kommt
-     * @returns {string} HTML String der Datenzeile
-     */
-    getRowHtml(row, listIndex, list) {
-        if (!row) { return ""; }
-        const rowID = this.#gridList.getID(row);
-        const tableRowID = this.#gridList.name + '_' + rowID;
-        const tagName = this.#rowTag || "tr";
-        let rowAttr = "";
-        /** @type {Object<string,any>} */
-        const colAttr = {};
-
-        // Auf Zeilenanpassung prüfen
-        if (this.rowFunc) {
-            // Datensatz als Objekt / zusätzliche Arrtibute für Spalten / Position in der Liste / Liste
-            rowAttr = " " + this.rowFunc(row, colAttr, listIndex, list);
-        }
-
-        // Zeile Beginn
-        let html = `<${tagName} data-id="${rowID}"${rowAttr}>`;
-
-        // Alle Spalten durchgehen
-        for (let i = 0; i < this.#cols.length; i++) {
-            html += `<${this.#colTags[i]} ${colAttr[this.#cols[i]] || ""}>${row[this.#cols[i]]}</${this.#endColTags[i]}>`;
-        }
-
-        // Zeile Ende
-        return html + `</${tagName}>`;
-    }
-
-
-    /**
-     * Liefert den HTML-String von den Daten der GridList zurück.
-     * @param {string} [index] - optionaler Index-Name wenn die Daten von einem Index verwendet werden.
-     * @param {number} [rowNumbers] - Optionale Anzahl der gezeigten Datenzeilen.
-     * @param {number} [startRow] - Ab welcher Datenzeile die Anzahl der Zeilen angezeigt werden.
-     * @returns {string} HTML-String vom Table-Body
-     */
-    getHtml(index, rowNumbers, startRow) {
-        let html = "";
-        const idList = this.#gridList.getIndex(index);
-        const start = startRow || 0;
-        const end = rowNumbers ? start + rowNumbers : idList.length - 1;
-
-        // alle Zeilen durchgehen
-        // ForEach und ForEachObj macht keinen grossen Unterschied
-        for (let i = start; i <= end; i++) {
-            html += this.getRowHtml(this.#gridList.get(idList[i]), i, idList);
-        }
-
-        // html zurückgeben
-        return html;
-    }
-
-
-    /**
-     * GridView
-     * @constructor
-     * @param {GridList} gridList - GridListe mit daten
-     */
-    constructor(gridList) {
-        if (gridList instanceof GridList) {
-            this.setGridList(gridList);
-        }
-    }
-} // class GridView
-
-
-// ===============================
-//   Formular
-// --------------
-
-
-export class FormView {
-    /** @type {GridList} */
-    #gridlist;
-
-    /** @type {Array<string>} */
-    #cols = [];
-
-    /** @type {Array<string>} */
-    #labels = [];
-
-    formTag = "form";
-    formAttribute = "";
-
-    /**
-     * Mekrkt sich die Datenliste
-     * @param {GridList} gridList - Liste mit Daten
-     */
-    setGridList(gridList) {
-        this.#gridlist = gridList;
-    }
-
-
-    setCols(cols) {
-        if (!Array.isArray(cols)) { return; }
-
-        // zurücksetzen
-        this.#cols = [];
-        this.#labels = [];
-
-        // Alle Spalten durchgehen
-        for (let i = 0; i < cols.length; i++) {
-            if (typeof cols[i] == "string") {
-                const pos1 = cols[i].indexOf(" ");
-                if (pos1 > 0) {
-                    // Spaltenname und Label
-                    this.#cols[i] = cols[i].substring(0, pos1);
-                    this.#labels[i] = cols[i].substring(pos1 + 1);
-                } else {
-                    // nur Spaltenname
-                    this.#cols[i] = cols[i];
-                    this.#labels[i] = cols[i];
-                }
-            }
-        }
-    }
-
-    /**
-     * Liefert den Inner-Htmlstring für das Formular zurück.
-     * @param {object|string|number} obj - Datensatz Objekt oder ID
-     * @returns {string} HTML String
-     */
-    getHTML(obj) {
-        // wenn kein Objekt
-        if (typeof obj != "object") {
-            // dann ist es eine ID - Holen aus den Daten
-            obj = this.#gridlist.get(obj);
-        }
-        if (!obj) { return "" };
-        console.log("obj", obj);
-
-        // Name der Liste
-        const listName = this.#gridlist.name;
-
-        //let htmlString = `<${this.formTag} id="form_${listName}" ${this.formAttribute}>`;
-        let htmlString = "";
-
-        // alle Anzeigespalten durchgehen
-        for (let i = 0; i < this.#cols.length; i++) {
-            // Namen
-            const colName = this.#cols[i];
-            let colType = this.#gridlist.getColType(colName);
-
-            /** @type {DataFormat} */
-            let colFormat = {};
-            if (colType) {
-                colFormat = this.#gridlist.getColDataFormat(colName) || {};
-            } else {
-                colType = "string";
-                colFormat = {};
-            }
-            const inputName = "i_" + listName + "_" + colName;
-            const labelText = this.#labels[i];
-
-            let inputType = "text";
-            let readonly = "";
-
-            if (colType == "number") {
-                inputType = "number";
-            } else if (colType == "boolean") {
-                inputType = "checkbox";
-            }
-
-            // Wenn Spalten Daten Formatierung
-            if (colFormat) {
-                if (colFormat.date) {
-                    inputType = "date";
-                }
-                if (colFormat.password) {
-                    inputType = "password";
-                }
-                if (colFormat.readonly) {
-                    readonly = " readonly";
-                }
-            }
-
-
-            if (inputType == "checkbox") {
-                let checked = "";
-                if (obj[colName]) {
-                    checked = " checked";
-                }
-                // input
-                htmlString += `<p><input type="checkbox" id="${inputName}" data-list="${listName}" data-col="${colName}" value="${obj[colName]}"${checked}${readonly}>`;
-
-                // label
-                htmlString += `<label for="${inputName}">${labelText}</label></p>`;
-            } else {
-                // label
-                htmlString += `<p><label for="${inputName}">${labelText}</label>`;
-
-                // input
-                htmlString += `<input type="${inputType}" id="${inputName}" data-list="${listName}" data-col="${colName}" value="${obj[colName]}"${readonly}></p>`;
-            }
-        }
-
-        // todo: Events ("change")
-        // todo: Button "speichern" / "abbrechen" / "zurücksetzen"
-
-        // HTML String zurück geben
-        //return htmlString + `</${this.formTag}>`;
-        return htmlString;
-    }
-
-    constructor(gridList) {
-        if (gridList instanceof GridList) {
-            this.setGridList(gridList);
-        }
-    }
-}
 
 

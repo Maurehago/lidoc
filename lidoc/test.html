@@ -25,7 +25,7 @@
 
 <script type="module">
     //@ts-check
-    import { GridList, GridView, GSID, lists, FormView, formatNumber, maskString } from "./gridlist.js";
+    import { GridList, GridView, GSID, lists, formatNumber, maskString } from "./gridlist.js";
     import { isDate, getWeek, getDateDiff, formatDate, formatWeek } from "./infodate.js";
     import { onInputNumber } from "./infoform.js";
     globalThis.isDate = isDate;
@@ -35,6 +35,8 @@
     globalThis.maskString = maskString;
     globalThis.formatDate = formatDate;
     globalThis.formatWeek = formatWeek;
+    globalThis.GridView = GridView;
+    globalThis.lists = lists;
 
     // Anzahl der Zeilen
     const countRows = 10000;
@@ -43,10 +45,11 @@
     /** @type {GridList} */
     //const list = new GridList("test", ["id number", "name", "info"], "GSID");
     const list = new GridList("test", ["id number", "name", "info", "test"], "id");
-    list.setColDataFormat("test", {date: "date"});
+    list.setColDataFormat("test", { date: "date" });
+    list.setColDataFormat("id", {readonly: true});
 
     for (let i = 0; i < countRows; i++) {
-        list.setObject({ id: i, name: "Name " + i, info: "Info " + i });
+        list.setObject({ id: i, name: "Name " + i, info: "Info " + i, test: new Date() });
     }
     console.timeLog("erstellen", countRows + " Zeilen einfügen");
 
@@ -67,7 +70,7 @@
     const newTableElm = document.createElement("table");
     document.getElementById("table")?.appendChild(newTableElm);
     newTableElm.setAttribute("table-stripes", "");
-    newTableElm.setAttribute("w-50", "");
+    newTableElm.setAttribute("w-66", "");
     newTableElm.dataset.current = "-1";
 
     //const newTableElm = document.createElement("div");
@@ -75,27 +78,29 @@
 
     console.time("tabelle");
 
-    let withTableObj = false;
+    let withTableObj = true;
     if (withTableObj) {
-        const newTable = new GridView(list);
-        //newTable.rowTag = "f-row";
-        newTable.rowFunc = (row, colAttr) => {
-            if ((row.id + "").endsWith("0")) {
-                colAttr.name = "color-green";
-                return "border-t";
-            }
-            return "";
-        }
-        newTable.setCols(["id th text-c", "name", "info"]);
+        const newTable = new GridView(["id ID", "name Name", "info", "test Zeit"]);
+        globalThis.gridView = newTable;
+        newTable.dateFormat = "HH:MM:SS.sss";
 
         console.timeLog("tabelle", "erstellen");
-        const html = newTable.getHtml("name");
+        let html = `<thead>${newTable.getThead(list)}</thead>`;
+        html += `<tbody>${newTable.getTbody(list, "name")}</tbody>`;
         console.timeLog("tabelle", "HTML lesen");
         newTableElm.insertAdjacentHTML("afterbegin", html);
         console.timeLog("tabelle", "anzeigen");
+
+
+        // Formular
+        let formHTML = newTable.getFormBody(list);
+        let formColumn = document.getElementById("form");
+        if (formColumn instanceof HTMLElement) {
+            formColumn.innerHTML = formHTML;
+        }
     } else {
         // Template funktion
-        const rowTemplate = function(obj) {
+        const rowTemplate = function (obj) {
             let attr = "";
             let nameAttr = "";
             if ((obj.id + "").endsWith("0")) {
@@ -106,7 +111,7 @@
                 <th>${obj.id}</th>
                 <td${nameAttr}>${obj.name}</td>
                 <td>${obj.info}</td>
-                <td>${obj.test}</td>
+                <td>${formatDate(obj.test, "HH:MM:SS.sss")}</td>
             </tr>`;
         }
         console.timeLog("tabelle", "erstellen");
@@ -133,16 +138,16 @@
     //list.setColDataFormat("id", {password: true});
 
     const formTemplate = function () {
-        return 
+        return
     }
 
-    const form = new FormView(list);
-    form.setCols(["id ID", "name Name", "info Info", "test"]);
-    let formHTML = form.getHTML(9990);
-    let formColumn = document.getElementById("form");
-    if (formColumn instanceof HTMLElement) {
-        formColumn.innerHTML = formHTML;
-    }
+    // const form = new FormView(list);
+    // form.setCols(["id ID", "name Name", "info Info", "test"]);
+    // let formHTML = form.getHTML(9990);
+    // let formColumn = document.getElementById("form");
+    // if (formColumn instanceof HTMLElement) {
+    //     formColumn.innerHTML = formHTML;
+    // }
 
     // EreignissHandler
     const idElm = document.getElementById("i_test_id");

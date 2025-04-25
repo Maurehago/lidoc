@@ -101,7 +101,13 @@ export function formatDate(date, formatString) {
     let newString = formatString;
     // 2025-04-08T13:05:23.094Z
     // 0123456789 123456789 123
-    const dateString = date.toISOString(); 
+    const dateString = newDate.toISOString(); 
+    const hours = newDate.getHours(); // Wegen Locale Zeit
+    const minutes = newDate.getMinutes(); // Wegen Locale Zeit
+    const seconds = newDate.getSeconds(); // Wegen Locale Zeit
+    const hourString = hours < 10 ? "0" + hours : "" + hours;
+    const minuteString = minutes < 10 ? "0" + minutes : "" + minutes;
+    const secondString = seconds < 10 ? "0" + seconds : "" + seconds;
 
     // Jahr ersetzen
     newString = newString.replaceAll("yyyy", dateString.substring(0,4));
@@ -117,19 +123,19 @@ export function formatDate(date, formatString) {
     newString = newString.replaceAll("d", dateString.substring(8, 10));
 
     // Stunden ersetzen
-    newString = newString.replaceAll("HH", dateString.substring(11, 13));
-    newString = newString.replaceAll("H", dateString.substring(11, 13));
+    newString = newString.replaceAll("HH", hourString);
+    newString = newString.replaceAll("H", hourString);
 
     // Minuten ersetzen
-    newString = newString.replaceAll("MM", dateString.substring(14, 16));
-    newString = newString.replaceAll("M", dateString.substring(14, 16));
+    newString = newString.replaceAll("MM", minuteString);
+    newString = newString.replaceAll("M", minuteString);
     
     // Sekunden ersetzen
-    newString = newString.replaceAll("SS", dateString.substring(17, 19));
-    newString = newString.replaceAll("S", dateString.substring(17, 19));
+    newString = newString.replaceAll("SS", secondString);
+    newString = newString.replaceAll("S", secondString);
    
     // Milli-Sekunden ersetzen
-    newString = newString.replaceAll("sss", "" + date.getMilliseconds());
+    newString = newString.replaceAll("sss", "" + newDate.getMilliseconds());
 
     return newString;
 }
