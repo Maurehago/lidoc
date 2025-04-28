@@ -1679,8 +1679,12 @@ export class GridView {
     /** @type {Array<string>} */
     #labels = [];
 
-
+    /** Datum Anzeige Format @type {string} */
     dateFormat = "yyyy-mm-dd HH:MM:SS";
+
+    /** Angezeigtes Dezimal Trennzeichen @type {string} */
+    decimalSeparator = ".";
+
 
     /**
      * Setzt die Spalten
@@ -1753,7 +1757,7 @@ export class GridView {
      * @returns {string} HTML Sting der Datenzeile
      */
     getTr(gridList, obj) {
-        let html = "<tr>";
+        let html = `<tr border-t data-id="">`;
 
         // Alle Spalten durchgehen
         for (let j = 0; j < this.#cols.length; j++) {
@@ -1764,7 +1768,7 @@ export class GridView {
             // todo: Wertprüfung
             if (colType == "number") {
                 // todo: format Number, basis "." oder ","???
-                let numString = formatNumber(obj[colName], colFormat.decimals || 0, ".", true);
+                let numString = formatNumber(obj[colName], colFormat.decimals || 0, this.decimalSeparator, true);
                 html += "<td text-r>" + numString + "</td>";
             } else {
                 // auf Datum Prüfen
@@ -1851,6 +1855,7 @@ export class GridView {
                 if (colFormat.maxSize != undefined) { attr_maxSize = ` maxlength="${colFormat.maxSize}"`; };
                 if (colFormat.decimals != undefined) {
                     let decimals = formatNumber(0, colFormat.decimals, ".");
+                    decimals = decimals.substring(0, decimals.length -1) + "1";
                     attr_step = ` step="${decimals}"`;
                 }
                 if (colFormat.regex != undefined) { attr_pattern = ` pattern="${colFormat.regex}"`; }
@@ -1865,7 +1870,7 @@ export class GridView {
             html += "<p>";
 
             // Label erstellen
-            labelHTML = `<label for="${colName}">${colLabel}</label>`;
+            labelHTML = `<label for="${colName}">${colLabel}</label><br>`;
 
             console.log("colType:" ,colName , colType);
             switch (colType) {

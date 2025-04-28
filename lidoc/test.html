@@ -44,12 +44,15 @@
     console.time("erstellen");
     /** @type {GridList} */
     //const list = new GridList("test", ["id number", "name", "info"], "GSID");
-    const list = new GridList("test", ["id number", "name", "info", "test"], "id");
+    const list = new GridList("test", ["id number", "name", "info number", "test"], "id");
     list.setColDataFormat("test", { date: "date" });
     list.setColDataFormat("id", {readonly: true});
-
+    list.setColDataFormat("info", {decimals: 2});
+    
+    let count = 1234.56789;
     for (let i = 0; i < countRows; i++) {
-        list.setObject({ id: i, name: "Name " + i, info: "Info " + i, test: new Date() });
+        list.setObject({ id: i, name: "Name " + i, info: count, test: new Date() });
+        count += 54.321;
     }
     console.timeLog("erstellen", countRows + " Zeilen einfügen");
 
@@ -83,6 +86,7 @@
         const newTable = new GridView(["id ID", "name Name", "info", "test Zeit"]);
         globalThis.gridView = newTable;
         newTable.dateFormat = "HH:MM:SS.sss";
+        newTable.decimalSeparator = ",";
 
         console.timeLog("tabelle", "erstellen");
         let html = `<thead>${newTable.getThead(list)}</thead>`;
