@@ -371,7 +371,7 @@ export class GridList {
     /**
      * Holt aus einer Datenzeile die ID laut gespeicherten idIndex
      * @function getID
-     * @param {any[]|Object<string,any>} dataRow - Datenzeile Array
+     * @param {any[]|Object<string,any>} dataRow - Datenzeile Array oder Objekt
      * @returns {string|number|undefined} ID
      */
     getID(dataRow) {
@@ -1757,7 +1757,8 @@ export class GridView {
      * @returns {string} HTML Sting der Datenzeile
      */
     getTr(gridList, obj) {
-        let html = `<tr border-t data-id="">`;
+        const id = gridList.getID(obj);
+        let html = `<tr data-id="${id}">`;
 
         // Alle Spalten durchgehen
         for (let j = 0; j < this.#cols.length; j++) {

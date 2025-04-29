@@ -73,6 +73,7 @@
     const newTableElm = document.createElement("table");
     document.getElementById("table")?.appendChild(newTableElm);
     newTableElm.setAttribute("table-stripes", "");
+    newTableElm.setAttribute("table-rowborder", "");
     newTableElm.setAttribute("w-66", "");
     newTableElm.dataset.current = "-1";
 
@@ -85,11 +86,11 @@
     if (withTableObj) {
         const newTable = new GridView(["id ID", "name Name", "info", "test Zeit"]);
         globalThis.gridView = newTable;
-        newTable.dateFormat = "HH:MM:SS.sss";
+        newTable.dateFormat = "HH:MM:SS";
         newTable.decimalSeparator = ",";
 
         console.timeLog("tabelle", "erstellen");
-        let html = `<thead>${newTable.getThead(list)}</thead>`;
+        let html = `<thead pos-sticky pos-t-l color-grey>${newTable.getThead(list)}</thead>`;
         html += `<tbody>${newTable.getTbody(list, "name")}</tbody>`;
         console.timeLog("tabelle", "HTML lesen");
         newTableElm.insertAdjacentHTML("afterbegin", html);
