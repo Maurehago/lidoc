@@ -371,7 +371,7 @@ export class GridList {
     /**
      * Holt aus einer Datenzeile die ID laut gespeicherten idIndex
      * @function getID
-     * @param {any[]|Object<string,any>} dataRow - Datenzeile Array oder Objekt
+     * @param {any[]|Object<string,any>|FormData} dataRow - Datenzeile Array oder Objekt
      * @returns {string|number|undefined} ID
      */
     getID(dataRow) {
@@ -412,7 +412,12 @@ export class GridList {
             if (this.#idColNumber < 0) {
                 let id = "";
                 for (let i = 0; i < this.#idColNumbers.length; i++) {
-                    let id2 = dataRow[this.#cols[this.#idColNumbers[i]]];
+                    let id2;
+                    if (dataRow instanceof FormData) {
+                        id2 = dataRow.get(this.#cols[this.#idColNumbers[i]]);
+                    } else {
+                        id2 = dataRow[this.#cols[this.#idColNumbers[i]]];
+                    }
                     if (id2 == undefined || id2 == null || id2 === "") {
                         return undefined;
                     }
@@ -420,11 +425,20 @@ export class GridList {
                 }
                 return id;
             } else {
-                let id = dataRow[this.#cols[this.#idColNumber]];
+                let id;
+                if (dataRow instanceof FormData) {
+                    id = dataRow.get(this.#cols[this.#idColNumber]);
+                } else {
+                    id = dataRow[this.#cols[this.#idColNumber]];
+                }
                 if (id == undefined || id == null || id === "") {
                     if (isGSID) {
                         id = GSID();
-                        dataRow.GSID = id;
+                        if (dataRow instanceof FormData) {
+                            dataRow.set("GSID", id);
+                        } else {
+                            dataRow.GSID = id;
+                        }
                     } else {
                         return undefined;
                     }
@@ -922,6 +936,49 @@ export class GridList {
         return id;
     }
 
+
+    /**
+     * Setzt Formdaten in die Liste
+     * @param {FormData} formData - Formular Daten Objekt
+     * @returns {string|number|undefined} ID des Datensatzes
+     */
+    setFormData(formData) {
+        if (!formData || typeof formData != "object") { return; }
+
+        // neue Datenzeilen
+        // Prüfen / lesen von bestehender Datenzeile
+        let isNewRow = false;
+        const id = this.getID(formData);
+
+        // nur Datensätze mit ID kommen in die Liste
+        if (id == undefined) { return id; }
+
+        let dataRow = this.#getRow(id)
+        if (dataRow == undefined) {
+            dataRow = this.#newRow(id);
+            isNewRow = true;
+        }
+
+        // alle registrierten Spalten durchgehen        
+        for (let i = 0; i < this.#cols.length; i++) {
+            const key = this.#cols[i];
+
+            // nur wenn Objekt den Key hat
+            if (!formData.has(key)) { continue; }
+
+            // Wert lesen
+            let value = formData.get(key);
+
+            this.#setCellValue(dataRow, i, value);
+        } // for this#cols
+
+        // Neue Datenzeile wird schon bei "this.#newRow(id)" angelegt.
+        // wenn neue Datenzeile
+        //if (isNewRow) {
+        //    this.#data.set(id, dataRow);
+        //}
+        return id;
+    }
 
     /**
      * Liefert auf Grund des angegebenen Spaltennamen
@@ -1856,7 +1913,7 @@ export class GridView {
                 if (colFormat.maxSize != undefined) { attr_maxSize = ` maxlength="${colFormat.maxSize}"`; };
                 if (colFormat.decimals != undefined) {
                     let decimals = formatNumber(0, colFormat.decimals, ".");
-                    decimals = decimals.substring(0, decimals.length -1) + "1";
+                    decimals = decimals.substring(0, decimals.length - 1) + "1";
                     attr_step = ` step="${decimals}"`;
                 }
                 if (colFormat.regex != undefined) { attr_pattern = ` pattern="${colFormat.regex}"`; }
@@ -1873,7 +1930,7 @@ export class GridView {
             // Label erstellen
             labelHTML = `<label for="${colName}">${colLabel}</label><br>`;
 
-            console.log("colType:" ,colName , colType);
+            console.log("colType:", colName, colType);
             switch (colType) {
                 case "number":
                     // wenn number
@@ -1956,3 +2013,170 @@ export class GridView {
 } // InfoView
 
 
+// =================================
+//   Navigation
+// -------------
+
+export class GridNav {
+    #rowIndex = -1;
+    #colIndex = -1;
+
+    #minRow = 0;
+    #minCol = -1;
+
+    #maxRow = -1;
+    #maxCol = -1;
+
+    #isForm = false;
+    #isTable = false;
+
+    /** @type {function} */
+    okFunction;
+    /** @type {function} */
+    addFunction;
+    /** @type {function} */
+    removeFunction;
+    /** @type {function} */
+    cancelFunction;
+
+
+    /** @type {HTMLElement} */
+    #elm
+    set elm(newElm) {
+        this.#elm = newElm;
+        if (newElm instanceof HTMLFormElement) {
+            this.#isForm = true;
+            this.#isTable = false;
+        } else if (newElm instanceof HTMLTableElement) {
+            this.#isTable = true;
+            this.#isForm = false;
+        }
+    }
+    get elm() {
+        return this.#elm;
+    }
+
+    /**
+    * Wenn eine Taste gedrückt wird
+    * @param {KeyboardEvent} e - Tastatur Event
+    */
+    onKeyDown(e) {
+        //console.log("repeat:", e.repeat);
+        //console.log("key:", e.key);
+
+        // Wenn wiederholung(Taste wird lange gehalten) dann abbrechen
+        if (e.repeat) { return; }
+
+        // toto: auf Liste, Zeile und Spalte prüfen oder auf Formular prüfen
+        let rowIndex = this.#rowIndex;
+        let colIndex = this.#colIndex;
+
+        // wenn CTRL
+        if (e.ctrlKey) {
+            switch (e.key) {
+                case "s":
+                    // todo: Speichern
+                    if (this.#isForm) {
+                        e.preventDefault();
+                        if (this.#elm instanceof HTMLFormElement) {
+                            // Formdaten an OK Funktion schicken
+                            const formData = new FormData(this.#elm);
+                            if (typeof this.okFunction == "function") {
+                                this.okFunction(formData);
+                            }
+                        }
+                    }
+                    break;
+            }
+            return;
+        } // wenn CTRL
+
+        // Je nach taste
+        switch (e.key) {
+            case "Tab":
+                // index ändern
+                // todo: colIndex
+                e.preventDefault();
+                if (e.shiftKey) {
+                    rowIndex -= 1;
+                } else {
+                    rowIndex += 1;
+                }
+                break;
+            case "Insert":
+                // neue zeile hinzufügen
+                if (typeof this.addFunction == "function") {
+                    // todo Parameter
+                    this.addFunction();
+                }
+                break;
+            case "Delete":
+                // Zeile löschen
+                if (typeof this.removeFunction == "function") {
+                    // todo: parameter
+                    this.removeFunction();
+                }
+                break;
+            case "Enter":
+                // Zeile Bearbeiten
+
+                // wenn Formular
+                if (this.#isForm) {
+                    e.preventDefault();
+                    rowIndex += 1;
+                    // todo: colIndex
+                } else if (typeof this.okFunction == "function") {
+                    e.preventDefault();
+                    // todo: parameter
+                    this.okFunction();
+                }
+                break;
+            case " ":
+                // todo: Zeile Bearbeiten??? oder andere auswahl
+                break;
+            case "ArrowDown":
+                // Nächte Zeile
+                e.preventDefault();
+                rowIndex += 1;
+                break;
+            case "ArrowUp":
+                // vorige Zeile
+                e.preventDefault();
+                rowIndex -= 1;
+                break;
+            case "ArrowRight":
+                // todo: nach rechts
+                break;
+            case "ArrowLeft":
+                // todo: nach links
+                break;
+            case "PageDown":
+                // todo: Seite nach unten
+                break;
+            case "PageUp":
+                // todo: Seite nach oben
+                break;
+            case "Escape":
+                // Abbrechen
+                if (typeof this.cancelFunction == "function") {
+                    // todo: Abbruch Funktion
+                    this.cancelFunction();
+                }
+                break;
+        }
+
+
+        // Wenn sich der Index geäntert hat
+        if (rowIndex != this.#rowIndex) {
+            if (rowIndex > this.#maxRow) {
+                rowIndex = this.#maxRow;
+            }
+            if (rowIndex < this.#minRow) {
+                rowIndex = this.#minRow;
+            }
+            this.#rowIndex = rowIndex;
+            
+            // todo: showAktiveElement
+        }
+    } // Taste prüfen
+} 
