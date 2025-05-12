@@ -2018,6 +2018,9 @@ export class GridView {
 // -------------
 
 export class GridNav {
+    /** @type {GridNav} */
+    self = this;
+
     #rowIndex = -1;
     #colIndex = -1;
 
@@ -2040,21 +2043,67 @@ export class GridNav {
     cancelFunction;
 
 
+    /** @type {string|number} */
+    #activeID
+    get id(){return this.#activeID;}
+
+    /** @type {HTMLElement|null} */
+    #activeElm
+
     /** @type {HTMLElement} */
     #elm
     set elm(newElm) {
         this.#elm = newElm;
+        this.#isForm = false;
+        this.#isTable = false;
         if (newElm instanceof HTMLFormElement) {
             this.#isForm = true;
             this.#isTable = false;
+            this.#maxRow = newElm.children.length -1;
+            this.#minRow = 0;
         } else if (newElm instanceof HTMLTableElement) {
             this.#isTable = true;
             this.#isForm = false;
+            this.#maxRow = newElm.rows.length -1;
+            this.#minRow = 1;
         }
     }
     get elm() {
         return this.#elm;
     }
+
+    /** ob die View Aktiv ist */
+    #isActive = false;
+    set isActive(value) {
+        this.#isActive = value; 
+        if (this.#isForm) {
+            this.#rowIndex = -1;
+        }
+        // Element neu setzen, da sich die Anzahl der Rows oder Kind-Elemente verändertr haben könnte.
+        this.elm = this.elm;
+        this.setActiveElm(this.#activeElm);
+    }
+    get isActive(){return this.#isActive;}
+
+
+    /**
+     * Setzt ein HTMLElement als aktives Element
+     * @param {HTMLElement|Element|null} elm - Element welches "active" gesetzt wird 
+     */
+    setActiveElm(elm) {
+        // Wenn bereits ein Aktives Element
+        if (this.#activeElm instanceof HTMLElement) {
+            this.#activeElm.classList.remove("active");
+        }
+
+        if (elm instanceof HTMLElement) {
+            elm.classList.add("active");
+            this.#activeElm = elm;
+        } else {
+            this.#activeElm = null;
+        }
+    }
+
 
     /**
     * Wenn eine Taste gedrückt wird
@@ -2063,6 +2112,10 @@ export class GridNav {
     onKeyDown(e) {
         //console.log("repeat:", e.repeat);
         //console.log("key:", e.key);
+        //console.log("isActive:", this.isActive);
+
+        // wenn nicht aktiv dann nicht darauf reagieren
+        if (this.isActive == false) { return; }
 
         // Wenn wiederholung(Taste wird lange gehalten) dann abbrechen
         if (e.repeat) { return; }
@@ -2167,6 +2220,8 @@ export class GridNav {
 
 
         // Wenn sich der Index geäntert hat
+        //console.log("rowindex:", rowIndex, this.#rowIndex);
+        //console.log("maxRow:", this.#maxRow);
         if (rowIndex != this.#rowIndex) {
             if (rowIndex > this.#maxRow) {
                 rowIndex = this.#maxRow;
@@ -2175,8 +2230,70 @@ export class GridNav {
                 rowIndex = this.#minRow;
             }
             this.#rowIndex = rowIndex;
-            
+
             // todo: showAktiveElement
+            if (this.#isTable && this.#elm instanceof HTMLTableElement) {
+                const elm = this.#elm.rows[rowIndex || 0];
+                this.#activeID = elm.dataset.id || -1;
+                this.setActiveElm(elm);
+                this.setActiveElm(this.#elm.rows[rowIndex]);
+            } else if (this.#elm instanceof HTMLElement) {
+                // Kindelement suchen
+                let elm = this.#elm?.children[this.#rowIndex];
+                if (elm) {
+                    // Aktives Element setzen
+                    this.setActiveElm(elm);
+
+                    // Wenn Formular, dann INPUT fokusieren
+                    if (this.#elm instanceof HTMLFormElement) {
+                        const input = elm.querySelector("input");
+                        if (input instanceof HTMLInputElement) {
+                            input.focus();
+                            input.select();
+                            //input.setSelectionRange(0, input.value.length);
+                        }
+                    } // wenn Formular
+                } // wenn element
+            } // if else Tabellenelement
         }
     } // Taste prüfen
-} 
+
+
+    /**
+     * Wenn auf ein Element geklickt wird
+     * @param {MouseEvent} e - Maus Event  
+     */
+    onClick(e) {
+        if (this.isActive == false) {return;}
+        // wenn Liste
+        if (this.#isTable) {
+            let target = e.target;
+            if (target instanceof HTMLElement) {
+                let rowElm = target.closest("tr");
+                if (rowElm instanceof HTMLTableRowElement) {
+                    this.#activeID = rowElm.dataset.id || -1;
+                    this.setActiveElm(rowElm);
+
+                    // wenn OK Funktion
+                    if (typeof this.okFunction == "function") {
+                        e.preventDefault();
+                        // todo: parameter
+                        this.okFunction();
+                    }
+                }
+            }
+        }
+    } // onClick
+
+
+    /**
+     * Bindet eine Navigation an ein HTML Element
+     * @param {HTMLElement|null|undefined} [elm] - HTML Tabelle oder Formular
+     */
+    constructor(elm) {
+        this.self = this;
+        if (elm instanceof HTMLElement) {
+            this.elm = elm;
+        }
+    }
+} // GridNav
