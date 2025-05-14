@@ -25,7 +25,8 @@ import { formatDate } from "./infodate.js";
  * @property {string} [name] - Name der Spalte
  * @property {string} [type] - Typ der Spalte
  * @property {string} [domain] - Name eines Speziellen abgeleiteten Types 
- * @property {boolean} [optional] - Wenn der Wert NULL sein Kann oder nicht angegeben
+ * @property {boolean} [required] - Wenn der Wert erforderlich ist
+ * @property {string} [inlist] - Name einer Aufzählung. Muss Inhalt von angegebener Aufzählung sein
  * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
  * @property {number} [minSize] - minimale String Länge
  * @property {number} [maxSize] - maximale String Länge
@@ -68,8 +69,11 @@ const regexFor = /{{(for)}}/g;
  * Auflistung aller GridListen
  * @type {Map<string,GridList>}
  */
-export const lists = new Map();
-
+export const LIST = new Map();
+export const ENUM = {
+    colDataType: ["string", "number", "boolean", "object", "list"]
+    , colDateType: ["date", "datetime", "time", "period"]
+};
 
 
 // ===============================
@@ -222,6 +226,39 @@ function templateMe(template, obj) {
 }
 
 
+export function newColList() {
+    const cols = [
+        "GSID"
+        , "name"
+        , "type"
+        , "required boolean"
+        , "link"
+        , "date"
+        , "inlist"
+        , "domain"
+        , "minSize number"
+        , "maxSize number"
+        , "decimals number"
+        , "min number"
+        , "max number"
+        , "greater number"
+        , "lower number"
+        , "regex"
+        , "defaultValue"
+        , "charToBool boolean"
+        , "readonly boolean"
+        , "password boolean"
+    ];
+
+    const newList = new GridList("_cols", cols, "GSID");
+    newList.setColDataFormat("GSID", { readonly: true, required: true });
+    newList.setColDataFormat("name", { required: true });
+    newList.setColDataFormat("type", { required: true, inlist: "colDataType" });
+    newList.setColDataFormat("date", { inlist: "colDateType" });
+    return newList;
+}
+
+
 // ===============================
 //   Klasse
 // --------------
@@ -239,7 +276,7 @@ export class GridList {
         this.#name = newName;
 
         // name registrieren
-        lists.set(this.name, this);
+        LIST.set(this.name, this);
     }
     get name() {
         return this.#name;
@@ -322,26 +359,52 @@ export class GridList {
                 this.#idColNumber = cIndex;
             }
             this.#idColNumbers = [];
+
+            // Format erforderlich setzen
+            const colFormat = this.getColDataFormat(this.#idColNumber);
+            if (!colFormat) {
+                this.setColDataFormat(this.#idColNumber, { required: true });
+            } else {
+                colFormat.required = true;
+            }
         } else if (typeof colName == "number") {
             this.#idColNumber = colName;
             this.#idColNumbers = [];
+            // Format erforderlich setzen
+            const colFormat = this.getColDataFormat(colName);
+            if (!colFormat) {
+                this.setColDataFormat(colName, { required: true });
+            } else {
+                colFormat.required = true;
+            }
         } else if (Array.isArray(colName)) {
             this.#idColNumber = -1;
             this.#idColNumbers = [];
 
             // Alle Einträge Prüfen
             for (let i = 0; i < colName.length; i++) {
+                let colNumber = -1;
                 switch (typeof colName[i]) {
                     case "string":
                         //this.#idColNumbers.push(this.#cols.indexOf(col[i] + ""));
-                        this.#idColNumbers.push(this.#findex[colName[i] + ""]);
+                        colNumber = this.#findex[colName[i] + ""];
                         break;
                     case "number":
-                        this.#idColNumbers.push(parseInt(colName[i] + ""));
+                        colNumber = parseInt(colName[i] + "");
+                        // this.#idColNumbers.push(parseInt(colName[i] + ""));
                         break;
 
                     default:
                         break;
+                }
+                this.#idColNumbers.push(colNumber);
+                
+                // Format erforderlich setzen
+                const colFormat = this.getColDataFormat(colNumber);
+                if (!colFormat) {
+                    this.setColDataFormat(colNumber, { required: true });
+                } else {
+                    colFormat.required = true;
                 }
             }
         }
@@ -600,6 +663,145 @@ export class GridList {
 
 
     /**
+     * Fügt eine neue Spalte der Liste hinzu.
+     * @param {string|Array<string>} colName - Name (und Type, link) der Spalte oder eine Liste von Spalten
+     * @returns {number|Array<number>} Index oder Liste von Indexes für die hinzugefügten Spalten.
+     */
+    addCol(colName) {
+        // Liste im ID's
+        const idList = this.getIndex();
+
+        if (Array.isArray(colName)) {
+            /** @type {Array<number>} */
+            const indexList = [];
+            for (let i = 0; i < colName.length; i++) {
+                // Spalte hinzufügen neu aufrufen
+                let newIndex = this.addCol(colName[i]);
+                if (typeof newIndex == "number") {
+                    indexList.push(newIndex);
+                }
+            }
+            return indexList;
+        }
+
+        if (typeof colName != "string") { return -1; }
+
+        let index = -1;
+
+        // Wenn ein leerzeichen im Namen
+        if (colName.indexOf(" ") > -1) {
+            // Type steht nach namen
+            const nameType = colName.split(" ");
+
+            // Spalte hinzufügen
+            index = this.#cols.push(nameType[0]) - 1;
+
+            // SpaltenIndex merken
+            this.#findex[nameType[0]] = index;
+
+            if (nameType[2]) {
+                this.#links[index] = nameType[2];
+            }
+
+            // auf richtige Typen prüfen
+            if ("|string|number|boolean|object|list|".indexOf(nameType[1]) > -1) {
+                //@ts-ignore
+                this.#types[index] = nameType[1];
+
+                //  Wenn keine verknüpfte Liste
+                if ((nameType[1] == "object" || nameType[1] == "list") && !nameType[2]) {
+                    // Liste Name wird vom SpaltenNamen angenommen
+                    this.#links[index] = nameType[0];
+                }
+            } else {
+                // wenn kein Typ angegeben dann immer "string"
+                this.#types[index] = "string";
+            }
+        } else {
+            // Spalte hinzufügen
+            index = this.#cols.push(colName) - 1;
+            //this.#cols[i] = name;
+
+            // SpaltenIndex merken
+            this.#findex[colName] = index;
+
+            // Standard Typ
+            this.#types[index] = "string";
+        } // if else indexof(" ")
+
+        // Spalte in Daten einfügen
+        let value;
+        switch (this.#types[index]) {
+            case "number":
+                value = 0;
+                break;
+            case "boolean":
+                value = false;
+                break;
+            case "object":
+                value = {};
+                break;
+            case "list":
+                value = [];
+                break;
+            default:
+                // string
+                value = "";
+                break;
+        }
+        for (let i = 0; i < idList.length; i++) {
+            if (index > 0) {
+                const row = this.#data.get(idList[i]);
+                row?.push(value);
+            }
+        }
+
+        // index der neuen Spalte zurückgeben
+        return index;
+    } // addCol
+
+
+    /**
+     * Entfernt eine Spalte aus der Liste.  
+     * ACHTUNG! Die Daten der Spalte werden gelöscht.  
+     * ID-Spalten können nicht gelöscht werden.
+     * @param {string} colName - Name der Spalte die entfernt wird
+     * @returns {void}
+     */
+    removeCol(colName) {
+        if (typeof colName != "string") { return; }
+        const colIndex = this.getColNumber(colName);
+
+        // ID Spalten dürfen nicht gelöscht werden
+        if (colIndex < 0 || colIndex == this.#idColNumber || this.#idColNumbers.indexOf(colIndex) > -1) {
+            return;
+        }
+
+        // Liste im ID's
+        const idList = this.getIndex();
+
+        // Es darf beim löschen kein Fehler passieren.
+        try {
+            // Spalten aus Daten löschen
+            for (let i = 0; i < idList.length; i++) {
+                const row = this.#data.get(idList[i]);
+                // todo: Verlinkte Daten löschen ????
+                row?.splice(colIndex, 1);
+            }
+
+            // Spalte löschen
+            delete this.#findex[colName];
+            this.#links.splice(colIndex, 1);
+            this.#formats.splice(colIndex, 1);
+            this.#types.splice(colIndex, 1);
+            this.#cols.splice(colIndex, 1);
+        } catch (err) {
+            // todo: bei Fehler zurücksetzen???
+        }
+    } // removeCol
+
+
+    /**
      * Git den Typ der Spalte als String zurück
      * @param {string|number} col - Spaltenname oder Nummer
      * @returns {InfoTypes} Typ als string
@@ -834,7 +1036,7 @@ export class GridList {
                     // Wert nicht ändern
                 } else if (typeof value == "object") {
                     // FremdListe lesen
-                    let foreignList = lists.get(link);
+                    let foreignList = LIST.get(link);
                     if (foreignList == undefined) {
                         // neue Liste
                         foreignList = new GridList(link);
@@ -857,7 +1059,7 @@ export class GridList {
             case "list":
                 if (Array.isArray(value)) {
                     if (typeof value[0] == "object") {
-                        let foreignList = lists.get(link);
+                        let foreignList = LIST.get(link);
                         if (foreignList == undefined) {
                             // neue Liste
                             foreignList = new GridList(link);
@@ -1879,13 +2081,34 @@ export class GridView {
     }
 
 
+    getDatalistHTML(id, list) {
+        let html = `<datalist id="${id}">`;
+
+        // Wenn Array
+        if (Array.isArray(list)) {
+            for (let i=0; i < list.length; i++) {
+                html += `<option value="${list[i]}">`;
+            }
+        } else if (typeof list == "object") {
+            const keys = Object.keys(list);
+            for (let i=0; i < keys.length; i++) {
+                html += `<option value="${list[keys[i]]}">${keys[i]}</option>`;
+            }
+        }
+
+        return html + "</datalist>";
+    }
+
     /**
      * Liefert eine Formular Eingabe HTML String zurück.
      * @param {GridList} gridList - GridListe mit Daten
      * @returns {string} HTML-String
      */
     getFormBody(gridList) {
+        let optionListHtml = "";
+        let optionNames = new Map();
         let html = "";
+
 
         // Alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
@@ -1902,11 +2125,20 @@ export class GridView {
             let attr_step = "";
             let attr_pattern = "";
             let attr_readonly = "";
+            let attr_list = "";
 
 
             if (colFormat) {
                 // Erforderlich
-                if (!colFormat.optional) { attr_required = ' required'; }
+                if (colFormat.required) { attr_required = ' required'; }
+                if (colFormat.inlist) { 
+                    // Wenn noch kein HTML für Optionen vorhanden
+                    if (!optionNames.has(colFormat.inlist)) {
+                        optionListHtml += this.getDatalistHTML(colFormat.inlist, ENUM[colFormat.inlist]);
+                        optionNames.set(colFormat.inlist, "OK");
+                    }
+                    attr_list = ` list="${colFormat.inlist}"`;
+                }
                 if (colFormat.min != undefined) { attr_min = ` min="${colFormat.min}"`; }
                 if (colFormat.max != undefined) { attr_max = ` max="${colFormat.max}"`; }
                 if (colFormat.minSize != undefined) { attr_minSize = ` minlength="${colFormat.minSize}"`; };
@@ -1930,14 +2162,14 @@ export class GridView {
             // Label erstellen
             labelHTML = `<label for="${colName}">${colLabel}</label><br>`;
 
-            console.log("colType:", colName, colType);
+            //console.log("colType:", colName, colType);
             switch (colType) {
                 case "number":
                     // wenn number
                     html += labelHTML;
 
                     // "required", "min", "max", "step", "pattern", "readonly"
-                    html += `<input id="${colName}" name="${colName}" type="number"${attr_min}${attr_max}${attr_step}${attr_pattern}${attr_required}${attr_readonly}>`;
+                    html += `<input id="${colName}" name="${colName}" type="number"${attr_list}${attr_min}${attr_max}${attr_step}${attr_pattern}${attr_required}${attr_readonly}>`;
                     break;
 
                 case "boolean":
@@ -1952,6 +2184,10 @@ export class GridView {
 
                 case "list":
                     // todo:
+                    html += labelHTML;
+
+                    // "required", "readonly"
+                    html += `<input id="${colName}" name="${colName}" type="number"${attr_list}${attr_required}${attr_readonly}>`;
                     break;
 
                 case "string":
@@ -1983,9 +2219,12 @@ export class GridView {
                             }
                         } else if (colFormat?.password) {
                             html += `<input id="${colName}" name="${colName}" type="password"${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
+                        } else if (attr_list) {
+                            // Auswahl Liste
+                            html += `<input id="${colName}" name="${colName}" type="select"${attr_list}${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
                         } else {
                             // kein Datum
-                            html += `<input id="${colName}" name="${colName}" type="text"${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
+                            html += `<input id="${colName}" name="${colName}" type="text"${attr_list}${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
                         }
                     } // else Umwandlung in Boolean
                     break;
@@ -1998,7 +2237,7 @@ export class GridView {
         } // for Cols
 
         // HTML String zurückgeben
-        return html;
+        return optionListHtml + html;
     } // getFormBody
 
     /**
@@ -2018,9 +2257,6 @@ export class GridView {
 // -------------
 
 export class GridNav {
-    /** @type {GridNav} */
-    self = this;
-
     #rowIndex = -1;
     #colIndex = -1;
 
@@ -2033,19 +2269,21 @@ export class GridNav {
     #isForm = false;
     #isTable = false;
 
-    /** @type {function} */
+    /** Wenn "Enter" gedrückt wird @type {function} */
     okFunction;
-    /** @type {function} */
+    /** Wenn "CTRL"+"Enter" gedrückt wird @type {function} */
+    ctrlOkFunction;
+    /** Wenn "Insert" gedrückt wird @type {function} */
     addFunction;
-    /** @type {function} */
+    /** Wenn "Delete" gedrückt wird @type {function} */
     removeFunction;
-    /** @type {function} */
+    /** Wenn "ESC" gedrückt wird @type {function} */
     cancelFunction;
 
 
     /** @type {string|number} */
     #activeID
-    get id(){return this.#activeID;}
+    get id() { return this.#activeID; }
 
     /** @type {HTMLElement|null} */
     #activeElm
@@ -2059,12 +2297,12 @@ export class GridNav {
         if (newElm instanceof HTMLFormElement) {
             this.#isForm = true;
             this.#isTable = false;
-            this.#maxRow = newElm.children.length -1;
+            this.#maxRow = newElm.children.length - 1;
             this.#minRow = 0;
         } else if (newElm instanceof HTMLTableElement) {
             this.#isTable = true;
             this.#isForm = false;
-            this.#maxRow = newElm.rows.length -1;
+            this.#maxRow = newElm.rows.length - 1;
             this.#minRow = 1;
         }
     }
@@ -2075,7 +2313,7 @@ export class GridNav {
     /** ob die View Aktiv ist */
     #isActive = false;
     set isActive(value) {
-        this.#isActive = value; 
+        this.#isActive = value;
         if (this.#isForm) {
             this.#rowIndex = -1;
         }
@@ -2083,7 +2321,7 @@ export class GridNav {
         this.elm = this.elm;
         this.setActiveElm(this.#activeElm);
     }
-    get isActive(){return this.#isActive;}
+    get isActive() { return this.#isActive; }
 
 
     /**
@@ -2140,7 +2378,16 @@ export class GridNav {
                         }
                     }
                     break;
-            }
+                case "Enter":
+                    // Zeile Bearbeiten
+
+                    if (typeof this.ctrlOkFunction == "function") {
+                        e.preventDefault();
+                        // todo: parameter
+                        this.ctrlOkFunction();
+                    }
+                    break;
+            } // switch
             return;
         } // wenn CTRL
 
@@ -2264,7 +2511,7 @@ export class GridNav {
      * @param {MouseEvent} e - Maus Event  
      */
     onClick(e) {
-        if (this.isActive == false) {return;}
+        if (this.isActive == false) { return; }
         // wenn Liste
         if (this.#isTable) {
             let target = e.target;
@@ -2291,7 +2538,6 @@ export class GridNav {
      * @param {HTMLElement|null|undefined} [elm] - HTML Tabelle oder Formular
      */
     constructor(elm) {
-        this.self = this;
         if (elm instanceof HTMLElement) {
             this.elm = elm;
         }

@@ -1,5 +1,5 @@
 //@ts-check
-import { GridList, GridNav, GridView, GSID, lists } from "./gridlist.js";
+import { GridList, GridNav, GridView, newColList, GSID, LIST } from "./gridlist.js";
 
 
 // ================================
@@ -33,6 +33,7 @@ const INDEXCOLS = ["id", "path", "info"];
 // _index
 let indexList = new GridList("_index");
 indexList.setCols(INDEXCOLS, "id");
+
 
 // Liste für Index
 const indexView = new GridView(INDEXCOLS);
@@ -120,6 +121,17 @@ function showList(list, view) {
         tableBodyElm.innerHTML = "";
         tableBodyElm.insertAdjacentHTML("afterbegin", view.getTbody(list));
     }
+}
+
+
+/**
+ * Entfernt einen Eintrag aus der aktiven Liste
+ */
+function removeFromList() {
+    const id = listNav.id;
+    activeList.deleteRow(id);
+    showList(activeList, activeView);
+    postList(activeList, activePath);
 }
 
 
@@ -227,6 +239,7 @@ export async function init() {
         showForm(activeList, activeView, listNav.id);
         listNav.isActive = false;
     }
+    listNav.removeFunction = removeFromList;
 
     // neue Formular Navigation
     formNav = new GridNav(formElm);
@@ -234,6 +247,12 @@ export async function init() {
     formNav.okFunction = saveForm;
     formNav.cancelFunction = cancelForm;
 
+    let colList = newColList();
+    console.log("colList:", colList);
+    //console.log("colList form:", new GridView(colList.cols).getFormBody(colList));
+    if (formElm instanceof HTMLFormElement) {
+        formElm.innerHTML = new GridView(colList.cols).getFormBody(colList);
+    }
 
     // Tastatur eingabe registrieren
     //document.addEventListener("keydown", onKeyDown);
