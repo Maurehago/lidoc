@@ -75,6 +75,8 @@ export const ENUM = {
     , colDateType: ["date", "datetime", "time", "period"]
 };
 
+/** @type {GridNav} */
+export let activeNav;
 
 // ===============================
 //   Funktionen
@@ -224,6 +226,35 @@ function templateMe(template, obj) {
         return obj[capture] || "";
     });
 }
+
+
+/**
+ * Registriert Tastatur-/ Maus-Ereigniss für die Navigation
+ */
+export function setNavEvents() {
+    /**
+     * @param {KeyboardEvent} e - Maus Event  
+     */
+    function keydown(e) {
+        if (activeNav instanceof GridNav) {
+            activeNav.onKeyDown(e);
+        }
+    }
+
+    /**
+     * @param {MouseEvent} e - Maus Event  
+     */
+    function click(e) {
+        if (activeNav instanceof GridNav) {
+            activeNav.onClick(e);
+        }
+    }
+
+    // Tastatur und Maus Event registrieren
+    document.addEventListener("keydown", (e) => keydown(e));
+    document.addEventListener("click", (e) => click(e));
+}
+
 
 
 export function newColList() {
@@ -398,7 +429,7 @@ export class GridList {
                         break;
                 }
                 this.#idColNumbers.push(colNumber);
-                
+
                 // Format erforderlich setzen
                 const colFormat = this.getColDataFormat(colNumber);
                 if (!colFormat) {
@@ -685,7 +716,7 @@ export class GridList {
         }
 
         if (typeof colName != "string") { return -1; }
-
+        colName = colName.trim();
         let index = -1;
 
         // Wenn ein leerzeichen im Namen
@@ -2086,12 +2117,12 @@ export class GridView {
 
         // Wenn Array
         if (Array.isArray(list)) {
-            for (let i=0; i < list.length; i++) {
+            for (let i = 0; i < list.length; i++) {
                 html += `<option value="${list[i]}">`;
             }
         } else if (typeof list == "object") {
             const keys = Object.keys(list);
-            for (let i=0; i < keys.length; i++) {
+            for (let i = 0; i < keys.length; i++) {
                 html += `<option value="${list[keys[i]]}">${keys[i]}</option>`;
             }
         }
@@ -2131,7 +2162,7 @@ export class GridView {
             if (colFormat) {
                 // Erforderlich
                 if (colFormat.required) { attr_required = ' required'; }
-                if (colFormat.inlist) { 
+                if (colFormat.inlist) {
                     // Wenn noch kein HTML für Optionen vorhanden
                     if (!optionNames.has(colFormat.inlist)) {
                         optionListHtml += this.getDatalistHTML(colFormat.inlist, ENUM[colFormat.inlist]);
@@ -2257,6 +2288,9 @@ export class GridView {
 // -------------
 
 export class GridNav {
+    /** Navigation Name */
+    name = "";
+
     #rowIndex = -1;
     #colIndex = -1;
 
@@ -2271,15 +2305,32 @@ export class GridNav {
 
     /** Wenn "Enter" gedrückt wird @type {function} */
     okFunction;
+
     /** Wenn "CTRL"+"Enter" gedrückt wird @type {function} */
     ctrlOkFunction;
+
     /** Wenn "Insert" gedrückt wird @type {function} */
     addFunction;
+
     /** Wenn "Delete" gedrückt wird @type {function} */
     removeFunction;
+
     /** Wenn "ESC" gedrückt wird @type {function} */
     cancelFunction;
 
+    /** Wenn diese Navigation AKTIV gesetzt wird @type {function} */
+    onActiveFunction;
+
+    /** @type {GridNav} */
+    #lastNav
+    get lastNav() {
+        return this.#lastNav;
+    }
+    set lastNav(value) {
+        if (value instanceof GridNav) {
+            this.#lastNav = value;
+        }
+    }
 
     /** @type {string|number} */
     #activeID
@@ -2288,9 +2339,10 @@ export class GridNav {
     /** @type {HTMLElement|null} */
     #activeElm
 
-    /** @type {HTMLElement} */
+    /** @type {HTMLElement|null|undefined} */
     #elm
     set elm(newElm) {
+        if (!newElm) { return; }
         this.#elm = newElm;
         this.#isForm = false;
         this.#isTable = false;
@@ -2304,6 +2356,7 @@ export class GridNav {
             this.#isForm = false;
             this.#maxRow = newElm.rows.length - 1;
             this.#minRow = 1;
+            this.#maxCol = newElm.rows[0].cells.length -1;
         }
     }
     get elm() {
@@ -2313,16 +2366,44 @@ export class GridNav {
     /** ob die View Aktiv ist */
     #isActive = false;
     set isActive(value) {
-        this.#isActive = value;
-        if (this.#isForm) {
-            this.#rowIndex = -1;
+        if (value == true) {
+            if (activeNav instanceof GridNav) {
+                // nur setzen wenn noch keine letzte Navigation vorhanden
+                if (!this.#lastNav) {
+                    this.#lastNav = activeNav;
+                }
+                activeNav.isActive = false;
+            }
+            activeNav = this;
+
+            if (this.#isForm) {
+                this.#rowIndex = -1;
+            }
+            // Element neu setzen, da sich die Anzahl der Rows oder Kind-Elemente verändertr haben könnte.
+            this.elm = this.elm;
+            this.setActiveElm(this.#activeElm);
+
+            // Wenn Funktion gesetzt
+            if (typeof this.onActiveFunction == "function") {
+                this.onActiveFunction();
+            }
         }
-        // Element neu setzen, da sich die Anzahl der Rows oder Kind-Elemente verändertr haben könnte.
-        this.elm = this.elm;
-        this.setActiveElm(this.#activeElm);
+
+        this.#isActive = value;
     }
     get isActive() { return this.#isActive; }
 
+
+    // /**
+    //  * Setzt diese Navigation als AKTIV und bestimmt das Navigations-Objekt zu dem zurück gekehrt werden kann.
+    //  * @param {GridNav} lastNav - Navigation-Objekt zu dem zurück gesprungen werden kann
+    //  */
+    // setActive(lastNav) {
+    //     this.isActive = true;
+    //     if (lastNav instanceof GridNav) {
+    //         this.#lastNav = lastNav;
+    //     }
+    // }
 
     /**
      * Setzt ein HTMLElement als aktives Element
@@ -2350,10 +2431,10 @@ export class GridNav {
     onKeyDown(e) {
         //console.log("repeat:", e.repeat);
         //console.log("key:", e.key);
-        //console.log("isActive:", this.isActive);
+        // console.log("isActive:", this.isActive);
 
         // wenn nicht aktiv dann nicht darauf reagieren
-        if (this.isActive == false) { return; }
+        if (!this.isActive == true) { return; }
 
         // Wenn wiederholung(Taste wird lange gehalten) dann abbrechen
         if (e.repeat) { return; }
@@ -2420,13 +2501,11 @@ export class GridNav {
             case "Enter":
                 // Zeile Bearbeiten
 
-                // wenn Formular
-                if (this.#isForm) {
-                    e.preventDefault();
-                    rowIndex += 1;
-                    // todo: colIndex
-                } else if (typeof this.okFunction == "function") {
-                    e.preventDefault();
+                // alles Stoppen
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                if (typeof this.okFunction == "function") {
                     // todo: parameter
                     this.okFunction();
                 }
@@ -2446,9 +2525,17 @@ export class GridNav {
                 break;
             case "ArrowRight":
                 // todo: nach rechts
+                if (this.#isTable) {
+                    e.preventDefault();
+                    colIndex += 1;
+                }
                 break;
             case "ArrowLeft":
                 // todo: nach links
+                if (this.#isTable) {
+                    e.preventDefault();
+                    colIndex -= 1;
+                }
                 break;
             case "PageDown":
                 // todo: Seite nach unten
@@ -2483,7 +2570,7 @@ export class GridNav {
                 const elm = this.#elm.rows[rowIndex || 0];
                 this.#activeID = elm.dataset.id || -1;
                 this.setActiveElm(elm);
-                this.setActiveElm(this.#elm.rows[rowIndex]);
+                //this.setActiveElm(this.#elm.rows[rowIndex]);
             } else if (this.#elm instanceof HTMLElement) {
                 // Kindelement suchen
                 let elm = this.#elm?.children[this.#rowIndex];
@@ -2502,6 +2589,16 @@ export class GridNav {
                     } // wenn Formular
                 } // wenn element
             } // if else Tabellenelement
+        } if (colIndex != this.#colIndex) {
+            if (colIndex > this.#maxCol) { colIndex = this.#maxCol; }
+            if (colIndex < 0) { colIndex = 0; }
+            
+            if (this.#isTable && this.#elm instanceof HTMLTableElement) {
+                const elm = this.#elm.rows[rowIndex || 0];
+                this.#activeID = elm.dataset.id || -1;
+                this.setActiveElm(elm.cells[colIndex]);
+            }
+            this.#colIndex = colIndex;
         }
     } // Taste prüfen
 
@@ -2535,9 +2632,11 @@ export class GridNav {
 
     /**
      * Bindet eine Navigation an ein HTML Element
+     * @param {string} name - Name der Navigation
      * @param {HTMLElement|null|undefined} [elm] - HTML Tabelle oder Formular
      */
-    constructor(elm) {
+    constructor(name, elm) {
+        this.name = name;
         if (elm instanceof HTMLElement) {
             this.elm = elm;
         }

@@ -201,6 +201,11 @@ async function loadModule(module) {
         const modulName = module[i];
         if (!modulName.startsWith("/")) {continue;}
         let m = await import(modulName);
+
+        // init Funktion aufrufen wenn vorhanden
+        if (typeof m?.init == "function") {
+            m.init();
+        }
     }
 }
 

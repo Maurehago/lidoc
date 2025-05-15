@@ -38,6 +38,21 @@
 
 Hallo
 
+## Data liste
+[ table-stripes table-border]
++++ list /data/test
+- id
+- name Name
+- info Info
+
+
+## Data Formular
+[ id="testForm" color-s]
++++ form
+- id
+- name Name
+- info Info
+
 ## Form
 
 [ color-s ma-all w-50]

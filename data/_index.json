@@ -1,1 +1,1 @@
-{"name":"_index","cols":["id","path","info"],"findex":{"id":0,"path":1,"info":2},"types":["string","string","string"],"links":[null,null,null],"formats":[],"idColNumber":0,"idColNumbers":[],"data":[["aaa","data/a","asdsfds"],["bbb","data/b11","dsfdsf"],["ccc","data/c","dsfdsfsd"],["sdasda","data/b","dsfdsf"]]}
+{"name":"_index","cols":["path","info","view"],"findex":{"path":0,"info":1,"view":2},"types":["string","string","string"],"links":[null,null,null],"formats":[{"required":true}],"idColNumber":0,"idColNumbers":[],"data":[["/data/test.json","Test","id, name, info"]]}

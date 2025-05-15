@@ -1,5 +1,5 @@
 //@ts-check
-import { GridList, GridNav, GridView, newColList, GSID, LIST } from "./gridlist.js";
+import { GridList, GridNav, GridView, newColList, setNavEvents, GSID, LIST } from "./gridlist.js";
 
 
 // ================================
@@ -28,19 +28,24 @@ const formElm = document.getElementById("form");
 // ----------------------------
 
 const INDEXPATH = "/data/_index.json";
-const INDEXCOLS = ["id", "path", "info"];
+const INDEXCOLS = ["path", "info", "view"];
 
 // _index
 let indexList = new GridList("_index");
-indexList.setCols(INDEXCOLS, "id");
+indexList.setCols(INDEXCOLS, "path");
 
-
-// Liste für Index
+// view für Index
 const indexView = new GridView(INDEXCOLS);
 
 
-// *** Aktive ***
-let activeElm = null;
+// neue Liste
+const newList = new GridList("newlist", ["id", "name", "columns"], "id");
+const newListView = new GridView(["name Name", "columns Cols separated with ','"]);
+const newListNav = new GridNav("newList");
+
+
+// *** aktuelle Ansicht ***
+let currentView = "indexlist";
 
 /** @type {GridList} */
 let activeList;
@@ -49,10 +54,13 @@ let activeList;
 let activeView;
 
 let activePath = "";
-let activeIndex;
 
-let listNav;
-let formNav;
+/** @type {GridNav} */
+let activeListNav;
+
+let indexNav = new GridNav("index");
+let listNav = new GridNav("list");
+let formNav = new GridNav("form");
 
 
 /** @type {string|number|undefined} */
@@ -67,22 +75,23 @@ let isList = true;
 
 /**
  * Liest eine Liste vom Server
- * @param {string} listName - Name der Liste
  * @param {string} listPath - Pfad zu der JSON Datei mit den Listen Daten
  * @returns {Promise<GridList|number>} Gridliste oder Undefined
  */
-async function getList(listName, listPath) {
-    if (typeof listName != "string") { return -1; }
+async function getList(listPath) {
     if (typeof listPath != "string") { return -1; }
 
     // Vom Server holen
     const res = await fetch(listPath);
     if (res.ok) {
-        const json = await res.json();
-        const newList = new GridList(listName);
-        newList.createFromGridObject(json);
+        const bodyLength = res.headers.get("content-length");
+        if (bodyLength != null && bodyLength == "0") { return 404; }
+        const obj = await res.json();
+        const newList = new GridList(obj.name);
+        newList.createFromGridObject(obj);
         return newList;
     } else {
+        console.error("fetchError:", res);
         return res.status;
     }
 }
@@ -147,6 +156,7 @@ function showForm(list, form, id) {
         formElm.insertAdjacentHTML("afterbegin", form.getFormBody(list));
     }
 
+
     // wenn eine ID
     if (id !== undefined) {
         let obj = list.get(id);
@@ -166,7 +176,33 @@ function showForm(list, form, id) {
 }
 
 
+function indexShowList() {
+    const listData = indexList.get(indexNav.id);
+
+    // liste vom Server holen
+    getList(listData.path).then((list) => {
+        if (typeof list == "number") {
+            console.error("Fehler beim laden der liste:", listData.path, list);
+            return;
+        }
+
+        // view erstellen
+        const view = new GridView(listData.view.split(","));
+        showList(list, view);
+        currentView = "list";
+    }).catch((err) => {
+        console.error(err);
+    })
+}
+
+function indexShowForm() {
+    showForm(indexList, indexView, indexNav.id);
+    currentView = "indexform";
+}
+
+
 function saveForm() {
+    const formElm = formNav.elm;
     if (formElm instanceof HTMLFormElement) {
         // Daten in Liste
         const formData = new FormData(formElm);
@@ -174,13 +210,19 @@ function saveForm() {
 
         // formular entfernen
         formElm.innerHTML = "saved!";
-        formNav.isActive = false;
+        //formNav.isActive = false;
 
         postList(activeList, activePath);
 
         // liste neu zeichen
         showList(activeList, activeView);
-        listNav.isActive = true;
+        if (currentView == "indexform") {
+            indexNav.isActive = true;
+            currentView = "indexlist";
+        } else {
+            listNav.isActive = true;
+            currentView = "list";
+        }
 
         //isList = true;
         //isForm = false;
@@ -193,8 +235,25 @@ function cancelForm() {
     if (formElm instanceof HTMLFormElement) {
         formElm.innerHTML = "Canceld!";
     }
-    formNav.isActive = false;
-    listNav.isActive = true;
+
+    // letzte Navigation lesen
+    const lastNav = formNav.lastNav;
+    if (lastNav instanceof GridNav) {
+        showList(activeList, activeView);
+        lastNav.isActive = true;
+    } else {
+        // indexliste anzeigen
+        showList(indexList, indexView);
+        indexNav.isActive = true;
+    }
+
+    // if (currentView == "indexform") {
+    //     indexNav.isActive = true;
+    //     currentView = "indexlist";
+    // } else {
+    //     listNav.isActive = true;
+    //     currentView = "list";
+    // }
 }
 
 
@@ -210,7 +269,8 @@ function cancelForm() {
 
 export async function init() {
     // IndexListe holen / anlegen
-    const newList = await getList("_index", INDEXPATH);
+    const newList = await getList(INDEXPATH);
+    console.log("newList:", newList);
     if (newList instanceof GridList) {
         indexList = newList;
     } else if (typeof newList == "number") {
@@ -218,7 +278,7 @@ export async function init() {
         if (newList == 404) {
             // todo: neu anlegen
             indexList = new GridList("_index");
-            indexList.setCols(INDEXCOLS, "id");
+            indexList.setCols(INDEXCOLS, "path");
             await postList(indexList, INDEXPATH);
         }
     }
@@ -226,39 +286,49 @@ export async function init() {
     // indexliste anzeigen
     showList(indexList, indexView);
 
+
+
+    // Index Navigation 
+    if (tableElm) {
+        indexNav.elm = tableElm;
+    }
+    indexNav.okFunction = indexShowList;
+    indexNav.ctrlOkFunction = indexShowForm;
+
+    // Aktive setzen
     activeList = indexList;
     activeView = indexView;
     activePath = INDEXPATH;
-    //activeIndex = 1;
-    //setActiveRowElm(1);
+    activeListNav = indexNav;
+    indexNav.isActive = true;
 
-    // neue Listen Navigation
-    listNav = new GridNav(tableElm);
-    listNav.isActive = true;
-    listNav.okFunction = () => {
-        showForm(activeList, activeView, listNav.id);
-        listNav.isActive = false;
-    }
-    listNav.removeFunction = removeFromList;
+    // // neue Listen Navigation
+    // listNav = new GridNav(tableElm);
+    // listNav.isActive = true;
+    // listNav.okFunction = () => {
+    //     showForm(activeList, activeView, listNav.id);
+    //     listNav.isActive = false;
+    // }
+    // listNav.removeFunction = removeFromList;
 
-    // neue Formular Navigation
-    formNav = new GridNav(formElm);
-    formNav.isActive = false;
+    // Formular Navigation
+    formNav.elm = formElm;
     formNav.okFunction = saveForm;
     formNav.cancelFunction = cancelForm;
 
     let colList = newColList();
-    console.log("colList:", colList);
+    //console.log("Form active:", formNav.isActive);
     //console.log("colList form:", new GridView(colList.cols).getFormBody(colList));
     if (formElm instanceof HTMLFormElement) {
         formElm.innerHTML = new GridView(colList.cols).getFormBody(colList);
     }
 
     // Tastatur eingabe registrieren
-    //document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("keydown", (e) => listNav.onKeyDown(e));
-    document.addEventListener("keydown", (e) => formNav.onKeyDown(e));
-    //document.addEventListener("click", onClick);
-    document.addEventListener("click", (e) => listNav.onClick(e));
-    document.addEventListener("click", (e) => formNav.onClick(e));
+    setNavEvents();
+    // //document.addEventListener("keydown", onKeyDown);
+    // document.addEventListener("keydown", (e) => listNav.onKeyDown(e));
+    // document.addEventListener("keydown", (e) => formNav.onKeyDown(e));
+    // //document.addEventListener("click", onClick);
+    // document.addEventListener("click", (e) => listNav.onClick(e));
+    // document.addEventListener("click", (e) => formNav.onClick(e));
 }

@@ -103,9 +103,13 @@ export function parseMd(mdString, options) {
         if (isLi) {
             const stepListLength = stepList.length;
 
-            // Wenn bereits ein List-Item
-            for (let i = stepListLength -1; i > -1; i--) {
-                htmlString += "</li></" + stepTagList[i] + ">";
+            if (stepListLength < 1) {
+                htmlString += "</li></" + listTag + ">";
+            } else {
+                // Wenn bereits ein List-Item
+                for (let i = stepListLength -1; i > -1; i--) {
+                    htmlString += "</li></" + stepTagList[i] + ">";
+                }
             }
 
             isLi = false;
