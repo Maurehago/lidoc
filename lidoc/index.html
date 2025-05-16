@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>LiDoc</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="" />
+    <link rel="icon" href="/img/icon.png">
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex-colors.css" />
+
+    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
+    <!-- <script src="/prism/prism.js"></script> -->
+</head>
+
+<body>
+    <f-row color-p ma-b-s>
+        <f-item ma-auto pa-v>LiDoc List and Doc Generator</f-item>
+    </f-row>
+    <f-col id="menue" ma-auto w-xs>
+        <button data-id="list">Lists</button>
+        <button data-id="doc">Documents</button>
+    </f-col>
+
+    <table id="table" ma-auto table-stripes table-rowborder table-border class="hidden"></table>
+    <form id="form" ma-auto w-xs class="hidden"></form>
+</body>
+
+<script type="module">
+    //@ts-check
+    import { init } from "./index.js";
+
+    // Init ausführen
+    init();
+</script>
+
+</html>

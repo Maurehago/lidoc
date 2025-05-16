@@ -2357,6 +2357,9 @@ export class GridNav {
             this.#maxRow = newElm.rows.length - 1;
             this.#minRow = 1;
             this.#maxCol = newElm.rows[0].cells.length -1;
+        } else {
+            this.#maxRow = newElm.children.length - 1;
+            this.#minRow = 0;
         }
     }
     get elm() {
@@ -2577,6 +2580,9 @@ export class GridNav {
                 if (elm) {
                     // Aktives Element setzen
                     this.setActiveElm(elm);
+                    if (elm instanceof HTMLElement) {
+                        this.#activeID = elm.dataset.id || -1;
+                    }
 
                     // Wenn Formular, dann INPUT fokusieren
                     if (this.#elm instanceof HTMLFormElement) {

@@ -7,81 +7,126 @@
 //   Imports
 // ----------
 
-import { showSite, showContent, setSublist } from "./lidoc.js";
+import { GridNav, setNavEvents } from "./gridlist.js";
+
+
+// =======================
+//   Elemente
+// ------------
+
+const menuElm = document.getElementById("menue");
+const tableElm = document.getElementById("table");
+const formElm = document.getElementById("form");
+
+
+// =======================
+//   Instanzen
+// --------------
+const menueNav = new GridNav("menue", menuElm);
+const dataListNav = new GridNav("dataList");
 
 // =======================
 //   Variablen
 // ------------
 
-// Selectoren
-const $ = document.querySelector.bind(document);
-const $$ = document.querySelectorAll.bind(document);
-
-// Elemente lesen
-const gridElm = $("f-grid");
-const headerElm = $("#header");
-const menueElm = $("#menue");
-const toggleMenueElm = $("#toggle_menue");
-const contentElm = $("#content");
-const footerElm = $("#footer");
 
 
 // =======================
 //   Funktionen
 // --------------
 
+function showMenue() {
+    tableElm?.classList.add("hidden");
+    formElm?.classList.add("hidden");
+    menuElm?.classList.remove("hidden");
+}
+
+
+function showTable() {
+    formElm?.classList.add("hidden");
+    menuElm?.classList.add("hidden");
+    tableElm?.classList.remove("hidden");
+}
+
+
+function showForm() {
+    menuElm?.classList.add("hidden");
+    tableElm?.classList.add("hidden");
+    formElm?.classList.remove("hidden");
+}
+
+
+function showDataList(dataList) {
+    let html = "<thead><tr><th>Path</th></tr></thead>";
+    html += "<tbody>";
+
+    for(let i=0;i < dataList.length; i++) {
+        html += `<tr data-id="${dataList[i]}"><td>${dataList[i]}</td></tr>`;
+    }
+
+    html += "</tbody>";
+    if (tableElm instanceof HTMLTableElement) {
+        tableElm.innerHTML = "";
+        tableElm.insertAdjacentHTML("afterbegin", html);
+    }
+    showTable();
+    dataListNav.elm = tableElm;
+}
+
+
+async function getDataList() {
+    const res = await fetch("/dir/?path=/data/&pattern=**/*.json");
+    if (res.ok) {
+        const fileList = await res.json();
+        showDataList(fileList);
+    }
+}
+
+
+function cancelDatalist() {
+    menueNav.isActive = true;
+}
+
+function menueSelect() {
+    switch (menueNav.id) {
+        case "list":
+            // todo: Liste Navigation
+            console.log("menue List");
+            dataListNav.isActive = true;
+            break;
+
+        case "doc":
+            // todo: Dokumente Navigation
+            console.log("menue Doc");
+            break;
+
+        default:
+            break;
+    }
+}
+
+
 
 // =======================
-//   Main
+//   Init
 // --------------
+export function init() {
+    // --- Menü ---
+    menueNav.onActiveFunction = showMenue;
+    menueNav.okFunction = menueSelect;
 
-export function main() {
-    // Header u. Footer und Index laden
-    showContent(headerElm, "/doc/_header.md");
-    showContent(footerElm, "/doc/_footer.md");
+    // --- Daten Navigation ---
+    dataListNav.onActiveFunction = getDataList;
+    dataListNav.cancelFunction = cancelDatalist;
 
-    // Menues laden und Seite anzeigen
-    showContent(menueElm, "/doc/_menue.md").then(() => {
-        // [sub-list] Erstellen
-        setSublist();
-        showSite(contentElm);
-    });
 
-    // Menue Anzeigen wenn Hash
-    if (window.location.hash?.length > 2) {
-        gridElm.classList.remove("home");
-    } else {
-        gridElm.classList.add("home");
-    }
+    // aktive Navigation setzen
+    menueNav.isActive = true;
+
+    // events Registrieren
+    setNavEvents();
 }
 
 // =======================
 //   Events
 // ------------
-
-export function setEvents() {
-    // Wenn sich der Hash ändert
-    addEventListener("hashchange", (e) => {
-        if (window.location.hash?.length > 2) {
-            gridElm.classList.remove("home");
-        } else {
-            gridElm.classList.add("home");
-        }
-
-        showSite($("#content"));
-
-        // @ts-ignore
-        Prism.highlightAll();
-    });
-
-    // Menü anzeigen / ausblenden auf schmalen Bildschirmen
-    toggleMenueElm.addEventListener("click", (/** @type {Event} */ e) => {
-        console.log(menueElm.style.display);
-        if (!menueElm.style.display || menueElm.style.display == "none") {
-            menueElm.style.display = "block";
-        } else {
-            menueElm.style.display = "none";
-        }
-    })
-
-}
