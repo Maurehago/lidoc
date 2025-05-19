@@ -1990,13 +1990,14 @@ export class GridView {
 
         // Alle neuen Spalten durchgehen
         for (let i = 0; i < colList.length; i++) {
-            const pos1 = colList[i].indexOf(" ");
+            const names = colList[i].trim();
+            const pos1 = names.indexOf(" ");
             if (pos1 > 0) {
-                this.#cols[i] = colList[i].substring(0, pos1);
-                this.#labels[i] = colList[i].substring(pos1 + 1);
+                this.#cols[i] = names.substring(0, pos1);
+                this.#labels[i] = names.substring(pos1 + 1);
             } else {
-                this.#cols[i] = colList[i];
-                this.#labels[i] = colList[i];
+                this.#cols[i] = names;
+                this.#labels[i] = names;
             }
         }
     }
@@ -2133,13 +2134,18 @@ export class GridView {
     /**
      * Liefert eine Formular Eingabe HTML String zurück.
      * @param {GridList} gridList - GridListe mit Daten
+     * @param {string|number} [id] - Optionale Datensatz ID wenn Werte im Formular angezeigt werden sollen 
      * @returns {string} HTML-String
      */
-    getFormBody(gridList) {
+    getFormBody(gridList, id) {
         let optionListHtml = "";
         let optionNames = new Map();
         let html = "";
 
+        let obj = {};
+        if (id != undefined) {
+            obj = gridList.get(id);
+        }
 
         // Alle Spalten durchgehen
         for (let i = 0; i < this.#cols.length; i++) {
@@ -2147,6 +2153,7 @@ export class GridView {
             const colLabel = this.#labels[i];
             const colType = gridList.getColType(colName);
             const colFormat = gridList.getColDataFormat(colName) || {};
+
 
             let attr_required = "";
             let attr_min = "";
@@ -2157,7 +2164,12 @@ export class GridView {
             let attr_pattern = "";
             let attr_readonly = "";
             let attr_list = "";
+            let attr_value = "";
 
+            // wenn eine ID
+            if (id !== undefined) {
+                attr_value = ` value="${obj[colName]}"`;
+            }
 
             if (colFormat) {
                 // Erforderlich
@@ -2200,12 +2212,12 @@ export class GridView {
                     html += labelHTML;
 
                     // "required", "min", "max", "step", "pattern", "readonly"
-                    html += `<input id="${colName}" name="${colName}" type="number"${attr_list}${attr_min}${attr_max}${attr_step}${attr_pattern}${attr_required}${attr_readonly}>`;
+                    html += `<input id="${colName}" name="${colName}" type="number"${attr_list}${attr_min}${attr_max}${attr_step}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
                     break;
 
                 case "boolean":
                     // "required", "readonly"
-                    html += `<input id="${colName}" name="${colName}" type="checkbox"${attr_required}${attr_readonly}>`;
+                    html += `<input id="${colName}" name="${colName}" type="checkbox"${attr_required}${attr_readonly}${attr_value}>`;
                     html += labelHTML;
                     break;
 
@@ -2218,13 +2230,13 @@ export class GridView {
                     html += labelHTML;
 
                     // "required", "readonly"
-                    html += `<input id="${colName}" name="${colName}" type="number"${attr_list}${attr_required}${attr_readonly}>`;
+                    html += `<input id="${colName}" name="${colName}" type="number"${attr_list}${attr_required}${attr_readonly}${attr_value}>`;
                     break;
 
                 case "string":
                     if (colFormat?.charToBool) {
                         // "required", "readonly"
-                        html += `<input id="${colName}" name="${colName}" type="checkbox"${attr_required}${attr_readonly}>`;
+                        html += `<input id="${colName}" name="${colName}" type="checkbox"${attr_required}${attr_readonly}${attr_value}>`;
                         html += labelHTML;
                     } else {
                         html += labelHTML;
@@ -2233,29 +2245,29 @@ export class GridView {
                         if (colFormat?.date) {
                             switch (colFormat.date) {
                                 case "date":
-                                    html += `<input id="${colName}" name="${colName}" type="date"${attr_required}${attr_readonly}>`;
+                                    html += `<input id="${colName}" name="${colName}" type="date"${attr_required}${attr_readonly}${attr_value}>`;
                                     break;
                                 case "datetime":
-                                    html += `<input id="${colName}" name="${colName}" type="date"${attr_required}${attr_readonly}>`;
+                                    html += `<input id="${colName}" name="${colName}" type="date"${attr_required}${attr_readonly}${attr_value}>`;
                                     break;
                                 case "period":
                                     // todo: ???
                                     //html += `<input id="${colName}" type="date">`;
                                     break;
                                 case "time":
-                                    html += `<input id="${colName}" name="${colName}" type="text" style="width: 10em;${attr_required}${attr_readonly}">`;
+                                    html += `<input id="${colName}" name="${colName}" type="text" style="width: 10em;${attr_required}${attr_readonly}"${attr_value}>`;
                                     break;
                                 default:
                                     break;
                             }
                         } else if (colFormat?.password) {
-                            html += `<input id="${colName}" name="${colName}" type="password"${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
+                            html += `<input id="${colName}" name="${colName}" type="password"${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
                         } else if (attr_list) {
                             // Auswahl Liste
-                            html += `<input id="${colName}" name="${colName}" type="select"${attr_list}${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
+                            html += `<input id="${colName}" name="${colName}" type="select"${attr_list}${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
                         } else {
                             // kein Datum
-                            html += `<input id="${colName}" name="${colName}" type="text"${attr_list}${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}>`;
+                            html += `<input id="${colName}" name="${colName}" type="text"${attr_list}${attr_minSize}${attr_maxSize}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
                         }
                     } // else Umwandlung in Boolean
                     break;
@@ -2270,6 +2282,31 @@ export class GridView {
         // HTML String zurückgeben
         return optionListHtml + html;
     } // getFormBody
+
+
+    /**
+     * Setzt die Werte in ein HTML Formular
+     * @param {HTMLFormElement} formElm - HTML Form
+     * @param {GridList} gridList - GridListe mit den Daten
+     * @param {string|number} id - ID des Datensatzes
+     * @returns {void}
+     */
+    setFormValues(formElm, gridList, id) {
+        if (!(formElm instanceof HTMLFormElement)) {return;}
+        // wenn eine ID
+        if (id !== undefined) {
+            let obj = gridList.get(id);
+            let cols = this.getCols();
+            // alle FormularFelder
+            for (let i = 0; i < cols.length; i++) {
+                const elm = formElm?.querySelector(`[name="${cols[i]}"`);
+                if (elm instanceof HTMLInputElement) {
+                    elm.value = obj[cols[i]];
+                }
+            }
+        }
+    }
+
 
     /**
      * @constructor
@@ -2356,7 +2393,7 @@ export class GridNav {
             this.#isForm = false;
             this.#maxRow = newElm.rows.length - 1;
             this.#minRow = 1;
-            this.#maxCol = newElm.rows[0].cells.length -1;
+            this.#maxCol = newElm.rows[0].cells.length - 1;
         } else {
             this.#maxRow = newElm.children.length - 1;
             this.#minRow = 0;
@@ -2397,16 +2434,13 @@ export class GridNav {
     get isActive() { return this.#isActive; }
 
 
-    // /**
-    //  * Setzt diese Navigation als AKTIV und bestimmt das Navigations-Objekt zu dem zurück gekehrt werden kann.
-    //  * @param {GridNav} lastNav - Navigation-Objekt zu dem zurück gesprungen werden kann
-    //  */
-    // setActive(lastNav) {
-    //     this.isActive = true;
-    //     if (lastNav instanceof GridNav) {
-    //         this.#lastNav = lastNav;
-    //     }
-    // }
+    /**
+     * Setzt diese Navigation als AKTIV
+     */
+    setActive() {
+        this.isActive = true;
+    }
+
 
     /**
      * Setzt ein HTMLElement als aktives Element
@@ -2571,8 +2605,10 @@ export class GridNav {
             // todo: showAktiveElement
             if (this.#isTable && this.#elm instanceof HTMLTableElement) {
                 const elm = this.#elm.rows[rowIndex || 0];
-                this.#activeID = elm.dataset.id || -1;
-                this.setActiveElm(elm);
+                if (elm) {
+                    this.#activeID = elm.dataset.id || -1;
+                    this.setActiveElm(elm);
+                }
                 //this.setActiveElm(this.#elm.rows[rowIndex]);
             } else if (this.#elm instanceof HTMLElement) {
                 // Kindelement suchen
@@ -2598,7 +2634,7 @@ export class GridNav {
         } if (colIndex != this.#colIndex) {
             if (colIndex > this.#maxCol) { colIndex = this.#maxCol; }
             if (colIndex < 0) { colIndex = 0; }
-            
+
             if (this.#isTable && this.#elm instanceof HTMLTableElement) {
                 const elm = this.#elm.rows[rowIndex || 0];
                 this.#activeID = elm.dataset.id || -1;

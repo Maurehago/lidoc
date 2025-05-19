@@ -1,0 +1,1 @@
+{"name":"test","cols":["GSID","name","beschreibung"],"findex":{"GSID":0,"name":1,"beschreibung":2},"types":["string","string","string"],"links":[null,null,null],"formats":[{"required":true}],"idColNumber":0,"idColNumbers":[],"data":[["dsfks","test 2","Ein Test"]]}
