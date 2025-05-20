@@ -2169,6 +2169,8 @@ export class GridView {
             // wenn eine ID
             if (id !== undefined) {
                 attr_value = ` value="${obj[colName]}"`;
+            } else if (colName == "GSID") {
+                attr_value = ` value="${GSID()}"`;
             }
 
             if (colFormat) {
@@ -2292,7 +2294,7 @@ export class GridView {
      * @returns {void}
      */
     setFormValues(formElm, gridList, id) {
-        if (!(formElm instanceof HTMLFormElement)) {return;}
+        if (!(formElm instanceof HTMLFormElement)) { return; }
         // wenn eine ID
         if (id !== undefined) {
             let obj = gridList.get(id);
@@ -2329,10 +2331,12 @@ export class GridNav {
     name = "";
 
     #rowIndex = -1;
-    #colIndex = -1;
+    get rowIndex() { return this.#rowIndex; }
+    #colIndex = 0;
+    get colIndex() { return this.#colIndex; }
 
     #minRow = 0;
-    #minCol = -1;
+    #minCol = 0;
 
     #maxRow = -1;
     #maxCol = -1;
@@ -2345,6 +2349,9 @@ export class GridNav {
 
     /** Wenn "CTRL"+"Enter" gedrückt wird @type {function} */
     ctrlOkFunction;
+
+    /** Wenn " " (Leerzeichen) gedrückt wird @type {function} */
+    spaceFunction;
 
     /** Wenn "Insert" gedrückt wird @type {function} */
     addFunction;
@@ -2416,12 +2423,40 @@ export class GridNav {
             }
             activeNav = this;
 
-            if (this.#isForm) {
-                this.#rowIndex = -1;
-            }
+            // if (this.#isForm) {
+            //     this.#rowIndex = -1;
+            // }
             // Element neu setzen, da sich die Anzahl der Rows oder Kind-Elemente verändertr haben könnte.
             this.elm = this.elm;
-            this.setActiveElm(this.#activeElm);
+            // console.log("#activeElm:", this.#activeElm);
+
+            // Wen Index größer als max
+            if (this.#rowIndex > this.#maxRow) {
+                this.#rowIndex = this.#maxRow;
+            }
+            if (this.#colIndex > this.#maxCol) {
+                this.#colIndex = this.#maxCol;
+            }
+            // Wen Index kleiner als max
+            if (this.#rowIndex < this.#minRow) {
+                this.#rowIndex = this.#minRow;
+            }
+            if (this.#colIndex < this.#minCol) {
+                this.#colIndex = this.#minCol;
+            }
+
+            let aElm;
+            if (this.#isTable && this.#elm instanceof HTMLTableElement) {
+                aElm = this.#elm.rows[this.#rowIndex || 0];
+                if (aElm instanceof HTMLTableRowElement) {
+                    aElm = aElm.cells[this.#colIndex || 0];
+                }
+            } else {
+                aElm = this.#elm?.children[this.#rowIndex];
+            }
+            if (aElm instanceof HTMLElement) {
+                this.setActiveElm(aElm);
+            }
 
             // Wenn Funktion gesetzt
             if (typeof this.onActiveFunction == "function") {
@@ -2436,8 +2471,16 @@ export class GridNav {
 
     /**
      * Setzt diese Navigation als AKTIV
+     * @param {number} [rowNumber] - Optional ZeilenNummer
+     * @param {number} [colNumber] - Optional SpaltenNummer
      */
-    setActive() {
+    setActive(rowNumber, colNumber) {
+        if (rowNumber != undefined && rowNumber >= 0) {
+            this.#rowIndex = rowNumber;
+        }
+        if (colNumber != undefined && colNumber >= 0) {
+            this.#colIndex = colNumber;
+        }
         this.isActive = true;
     }
 
@@ -2455,6 +2498,18 @@ export class GridNav {
         if (elm instanceof HTMLElement) {
             elm.classList.add("active");
             this.#activeElm = elm;
+            elm.scrollIntoView({ behavior: "auto", block: "center", inline: "center" });
+
+            // Wenn Formular, dann INPUT fokusieren
+            if (this.#elm instanceof HTMLFormElement) {
+                const input = elm.querySelector("input");
+                if (input instanceof HTMLInputElement) {
+                    input.focus();
+                    input.select();
+                    //input.setSelectionRange(0, input.value.length);
+                }
+            } // wenn Formular
+
         } else {
             this.#activeElm = null;
         }
@@ -2474,7 +2529,11 @@ export class GridNav {
         if (!this.isActive == true) { return; }
 
         // Wenn wiederholung(Taste wird lange gehalten) dann abbrechen
-        if (e.repeat) { return; }
+        if (e.repeat) {
+            if ("ArrowDown,ArrowUp,ArrowRight,ArrowLeft,PageDown,PageUp".indexOf(e.key) < 0) {
+                return;
+            }
+        }
 
         // toto: auf Liste, Zeile und Spalte prüfen oder auf Formular prüfen
         let rowIndex = this.#rowIndex;
@@ -2495,6 +2554,7 @@ export class GridNav {
                             }
                         }
                     }
+                    return;
                     break;
                 case "Enter":
                     // Zeile Bearbeiten
@@ -2504,90 +2564,144 @@ export class GridNav {
                         // todo: parameter
                         this.ctrlOkFunction();
                     }
+                    return;
+                    break;
+                case "Home":
+                    // Ganz nach links
+                    e.preventDefault();
+                    colIndex = this.#minCol;
+                    break;
+                case "End":
+                    // ans Ende der Zeile
+                    e.preventDefault();
+                    colIndex = this.#maxCol;
+                    break;
+                case "ArrowLeft":
+                    // Ganz nach links
+                    e.preventDefault();
+                    colIndex = this.#minCol;
+                    break;
+                case "ArrowRight":
+                    // ans Ende der Zeile
+                    e.preventDefault();
+                    colIndex = this.#maxCol;
+                    break;
+
+            } // switch
+        } else {
+            // hier keine CTRL Taste
+
+            // Je nach taste
+            switch (e.key) {
+                case "Tab":
+                    // index ändern
+                    // todo: colIndex
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        rowIndex -= 1;
+                    } else {
+                        rowIndex += 1;
+                    }
+                    break;
+                case "Insert":
+                    // neue zeile hinzufügen
+                    if (typeof this.addFunction == "function") {
+                        // todo Parameter
+                        this.addFunction();
+                    }
+                    break;
+                case "Delete":
+                    // Zeile löschen
+                    if (typeof this.removeFunction == "function") {
+                        // todo: parameter
+                        this.removeFunction();
+                    }
+                    break;
+                case "Enter":
+                    // Zeile Bearbeiten
+
+                    // alles Stoppen
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    if (typeof this.okFunction == "function") {
+                        // todo: parameter
+                        this.okFunction();
+                    }
+                    break;
+                case " ": // Spacebar (neu)
+                    // Leertaste
+                    if (typeof this.spaceFunction == "function") {
+                        e.preventDefault();
+                        // todo: parameter
+                        this.spaceFunction();
+                    }
+                    break;
+                case "Spacebar": // (alt)
+                    // Leertaste
+                    if (typeof this.spaceFunction == "function") {
+                        e.preventDefault();
+                        // todo: parameter
+                        this.spaceFunction();
+                    }
+                    break
+                case "ArrowDown":
+                    // Nächte Zeile
+                    e.preventDefault();
+                    rowIndex += 1;
+                    break;
+                case "ArrowUp":
+                    // vorige Zeile
+                    e.preventDefault();
+                    rowIndex -= 1;
+                    break;
+                case "Home":
+                    // Ganz nach oben
+                    if (!this.#isForm) {
+                        e.preventDefault();
+                        rowIndex = this.#minRow;
+                    }
+                    break;
+                case "End":
+                    // ans Ende
+                    if (!this.#isForm) {
+                        e.preventDefault();
+                        rowIndex = this.#maxRow;
+                    }
+                    break;
+                case "ArrowRight":
+                    // todo: nach rechts
+                    if (this.#isTable) {
+                        e.preventDefault();
+                        colIndex += 1;
+                    }
+                    break;
+                case "ArrowLeft":
+                    // todo: nach links
+                    if (this.#isTable) {
+                        e.preventDefault();
+                        colIndex -= 1;
+                    }
+                    break;
+                case "PageDown":
+                    // 10 Zeilen nach unten
+                    e.preventDefault();
+                    rowIndex += 10;
+                    break;
+                case "PageUp":
+                    // 10 Zeilen nach oben
+                    e.preventDefault();
+                    rowIndex -= 10;
+                    break;
+                case "Escape":
+                    // Abbrechen
+                    if (typeof this.cancelFunction == "function") {
+                        // todo: Abbruch Funktion
+                        this.cancelFunction();
+                    }
                     break;
             } // switch
-            return;
-        } // wenn CTRL
-
-        // Je nach taste
-        switch (e.key) {
-            case "Tab":
-                // index ändern
-                // todo: colIndex
-                e.preventDefault();
-                if (e.shiftKey) {
-                    rowIndex -= 1;
-                } else {
-                    rowIndex += 1;
-                }
-                break;
-            case "Insert":
-                // neue zeile hinzufügen
-                if (typeof this.addFunction == "function") {
-                    // todo Parameter
-                    this.addFunction();
-                }
-                break;
-            case "Delete":
-                // Zeile löschen
-                if (typeof this.removeFunction == "function") {
-                    // todo: parameter
-                    this.removeFunction();
-                }
-                break;
-            case "Enter":
-                // Zeile Bearbeiten
-
-                // alles Stoppen
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                if (typeof this.okFunction == "function") {
-                    // todo: parameter
-                    this.okFunction();
-                }
-                break;
-            case " ":
-                // todo: Zeile Bearbeiten??? oder andere auswahl
-                break;
-            case "ArrowDown":
-                // Nächte Zeile
-                e.preventDefault();
-                rowIndex += 1;
-                break;
-            case "ArrowUp":
-                // vorige Zeile
-                e.preventDefault();
-                rowIndex -= 1;
-                break;
-            case "ArrowRight":
-                // todo: nach rechts
-                if (this.#isTable) {
-                    e.preventDefault();
-                    colIndex += 1;
-                }
-                break;
-            case "ArrowLeft":
-                // todo: nach links
-                if (this.#isTable) {
-                    e.preventDefault();
-                    colIndex -= 1;
-                }
-                break;
-            case "PageDown":
-                // todo: Seite nach unten
-                break;
-            case "PageUp":
-                // todo: Seite nach oben
-                break;
-            case "Escape":
-                // Abbrechen
-                if (typeof this.cancelFunction == "function") {
-                    // todo: Abbruch Funktion
-                    this.cancelFunction();
-                }
-                break;
-        }
+        } // else CTRL
 
 
         // Wenn sich der Index geäntert hat
@@ -2607,7 +2721,7 @@ export class GridNav {
                 const elm = this.#elm.rows[rowIndex || 0];
                 if (elm) {
                     this.#activeID = elm.dataset.id || -1;
-                    this.setActiveElm(elm);
+                    this.setActiveElm(elm.cells[this.#colIndex || 0]);
                 }
                 //this.setActiveElm(this.#elm.rows[rowIndex]);
             } else if (this.#elm instanceof HTMLElement) {
@@ -2620,18 +2734,19 @@ export class GridNav {
                         this.#activeID = elm.dataset.id || -1;
                     }
 
-                    // Wenn Formular, dann INPUT fokusieren
-                    if (this.#elm instanceof HTMLFormElement) {
-                        const input = elm.querySelector("input");
-                        if (input instanceof HTMLInputElement) {
-                            input.focus();
-                            input.select();
-                            //input.setSelectionRange(0, input.value.length);
-                        }
-                    } // wenn Formular
+                    // // Wenn Formular, dann INPUT fokusieren
+                    // if (this.#elm instanceof HTMLFormElement) {
+                    //     const input = elm.querySelector("input");
+                    //     if (input instanceof HTMLInputElement) {
+                    //         input.focus();
+                    //         input.select();
+                    //         //input.setSelectionRange(0, input.value.length);
+                    //     }
+                    // } // wenn Formular
                 } // wenn element
             } // if else Tabellenelement
-        } if (colIndex != this.#colIndex) {
+        }
+        if (colIndex != this.#colIndex) {
             if (colIndex > this.#maxCol) { colIndex = this.#maxCol; }
             if (colIndex < 0) { colIndex = 0; }
 
@@ -2652,23 +2767,23 @@ export class GridNav {
     onClick(e) {
         if (this.isActive == false) { return; }
         // wenn Liste
-        if (this.#isTable) {
-            let target = e.target;
-            if (target instanceof HTMLElement) {
-                let rowElm = target.closest("tr");
-                if (rowElm instanceof HTMLTableRowElement) {
-                    this.#activeID = rowElm.dataset.id || -1;
-                    this.setActiveElm(rowElm);
+        //if (this.#isTable) {
+        let target = e.target;
+        if (target instanceof HTMLElement) {
+            let rowElm = target.closest("[data-id]");
+            if (rowElm instanceof HTMLElement) {
+                this.#activeID = rowElm.dataset.id || -1;
+                this.setActiveElm(rowElm);
 
-                    // wenn OK Funktion
-                    if (typeof this.okFunction == "function") {
-                        e.preventDefault();
-                        // todo: parameter
-                        this.okFunction();
-                    }
+                // wenn OK Funktion
+                if (typeof this.okFunction == "function") {
+                    e.preventDefault();
+                    // todo: parameter
+                    this.okFunction();
                 }
             }
         }
+        //}
     } // onClick
 
 

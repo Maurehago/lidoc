@@ -117,7 +117,7 @@ async function postList(list, path) {
  * @param {Array<string>} dataList - Liste mit Pfaden zu JSON InfoDatenListen
  */
 function showDataList(dataList) {
-    let html = "<thead><tr><th>Path</th></tr></thead>";
+    let html = "<thead color-p2 pos-sticky pos-t-l><tr><th>Path</th></tr></thead>";
     html += "<tbody>";
 
     for (let i = 0; i < dataList.length; i++) {
@@ -125,12 +125,13 @@ function showDataList(dataList) {
     }
 
     html += "</tbody>";
+    showTable();
     if (tableElm instanceof HTMLTableElement) {
         tableElm.innerHTML = "";
         tableElm.insertAdjacentHTML("afterbegin", html);
+        dataListNav.elm = tableElm;
+        dataListNav.setActiveElm(tableElm.rows[dataListNav.rowIndex]);
     }
-    showTable();
-    dataListNav.elm = tableElm;
 }
 
 
@@ -233,17 +234,24 @@ function createNewList() {
 }
 
 
-/** Zeigt die Aktuelle Daten als Tabelle an */
-function showList() {
+/** 
+ * Zeigt die Aktuelle Daten als Tabelle an 
+ * @param {boolean} [isNewList] - Optional wenn neue Liste, dann wird die Aktive Position(Cursor) auf 0, 0 gesetzt.
+ */
+function showList(isNewList) {
     if (tableElm instanceof HTMLTableElement) {
-        let html = `<thead>${tableView.getThead(tableGrid)}</thead>`;
+        let html = `<thead color-p2 pos-sticky pos-t-l>${tableView.getThead(tableGrid)}</thead>`;
         html += `<tbody>${tableView.getTbody(tableGrid)}</tbody>`;
         tableElm.innerHTML = "";
         tableElm.insertAdjacentHTML("afterbegin", html);
         tableNav.elm = tableElm;
-        tableNav.setActive();
+        showTable();
+        if (isNewList) {
+            tableNav.setActive(0, 0);
+        } else {
+            tableNav.setActive();
+        }
     }
-    showTable();
 }
 
 
@@ -252,7 +260,7 @@ function getAndShowList() {
     getList(activeListPath).then((obj) => {
         tableGrid.createFromGridObject(obj);
         tableView.setCols(tableGrid.cols);
-        showList();
+        showList(true);
     });
 }
 
@@ -285,7 +293,7 @@ function editDataRow() {
         showRowForm();
     }
     // Navigation Aktiv
-    formNav.setActive();
+    formNav.setActive(tableNav.colIndex);
 }
 
 
