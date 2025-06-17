@@ -43,6 +43,7 @@ const tableGrid = new GridList("table");
 
 // Views
 const tableView = new GridView();
+tableView.dateFormat = "yyyy-mm-dd";
 const newListFormView = new GridView(["name name (required)", "path path (required)", "cols cols comma(,) seperated (requred)", "idCol ID Column (required)"]);
 
 
