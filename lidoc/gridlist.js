@@ -3,6 +3,8 @@
 // ==================
 // @ts-check
 
+// todo: Umbauen so das Verknüpfte Tabellen(link) auch Daten abgerufen/ Gruppiert (max, min, sum, ..) werden können
+
 // ===============================
 //   Imports
 // --------------
@@ -1825,7 +1827,7 @@ export class GridList {
      * Führt die Angegebene Funktion, pro Gruppierung nach den Angegebenen Spalten, aus.
      * @param {function} fu - Funktion die für jede Gruppierung aufgerufen wird.
      * @param {Array<string|number>} colList - Liste der Spalten nach denen Gruppiert wird.
-     * @param {string|Array<string|number>} index - Optionaler Index der für die Gruppierung verwendet wird.
+     * @param {string|Array<string|number>} [index] - Optionaler Index der für die Gruppierung verwendet wird.
      * @returns {void}
      */
     forGroup(fu, colList, index) {
@@ -1838,7 +1840,8 @@ export class GridList {
 
 
         // Daten zum Filtern
-        const rowList = this.getIndex(index);
+        // const rowList = this.getIndex(index);
+        const rowList = this.sortRows(colList, index);
         if (typeof fu != "function") { return; }
 
         const groupCols = this.getColNumbers(colList);
@@ -1849,12 +1852,18 @@ export class GridList {
         // alle durchgehen
         for (let i = 0; i < rowList.length; i++) {
             let istNewGroup = false;
+            const obj = this.get(rowList[i]);
 
             // auf neue Gruppe prüfen
-            for (let j = 0; j < groupCols.length; j++) {
-                const value = this.getCellValue(rowList[i], groupCols[j]);
+            // for (let j = 0; j < groupCols.length; j++) {
+            for (let j = 0; j < colList.length; j++) {
+                //const value = this.getCellValue(rowList[i], groupCols[j]);
+                const value = obj[colList[j]]; // this.getCellValue(rowList[i], groupCols[j]);
                 if (value != groupValues[j]) {
-                    istNewGroup = true;
+                    // nur nach ersten Datensatz auf Gruppen Änderung prüfen
+                    if (i > 0) {istNewGroup = true;}
+
+                    // GruppenSpalten Wert merken
                     groupValues[j] = value;
                 }
             }
@@ -1862,7 +1871,7 @@ export class GridList {
             // wenn neue gruppe
             if (istNewGroup) {
                 // Funktion ausführen
-                if (fu(groupObjList, i, rowList)) { break; };
+                if (fu(groupObjList, groupList, rowList)) { break; };
 
                 // Gruppe zurücksetzen
                 groupList = [];
@@ -1872,11 +1881,12 @@ export class GridList {
 
             // Datensatz in Gruppe
             groupList.push(rowList[i])
-            groupObjList.push(this.get(rowList[i]));
+            //groupObjList.push(this.get(rowList[i]));
+            groupObjList.push(obj);
         } // for jeder Datensatz
 
         // Letze Gruppe Funktion ausführen
-        fu(groupObjList, rowList.length - 1, rowList);
+        fu(groupObjList, groupList, rowList);
     }
 
 
