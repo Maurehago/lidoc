@@ -601,7 +601,7 @@ export class GridList {
 
         // alle neuen Spalten durchgehen
         for (let i = 0; i < newFields.length; i++) {
-            let name = newFields[i].trim();
+            let name = ("" + newFields[i]).trim();
 
             // Wenn ein leerzeichen im Namen
             if (name.indexOf(" ") > -1) {
@@ -618,11 +618,14 @@ export class GridList {
                 }
 
                 // auf richtige Typen prüfen
-                if ("|string|number|boolean|object|list|".indexOf(nameType[1]) > -1) {
+                //if ("|string|number|boolean|object|list|".indexOf(nameType[1]) > -1) {
+                if (nameType[1] == "string" || nameType[1] == "number" || nameType[1] == "boolean") {
                     this.#types[i] = nameType[1];
-
+                } else if (nameType[1] == "object" || nameType[1] == "list") {
+                    this.#types[i] = nameType[1];
+                    
                     //  Wenn keine verknüpfte Liste
-                    if ((nameType[1] == "object" || nameType[1] == "list") && !nameType[2]) {
+                    if (!nameType[2]) {
                         // Liste Name wird vom SpaltenNamen angenommen
                         this.#links[i] = nameType[0];
                     }
@@ -1839,54 +1842,87 @@ export class GridList {
         // max()
 
 
+        // todo: Gruppen zusammenfassen auch wenn nicht soeriert
+
+
         // Daten zum Filtern
-        // const rowList = this.getIndex(index);
-        const rowList = this.sortRows(colList, index);
+        const rowList = this.getIndex(index);
+        // const rowList = this.sortRows(colList, index);
         if (typeof fu != "function") { return; }
 
-        const groupCols = this.getColNumbers(colList);
-        const groupValues = new Array(groupCols.length);
-        let groupList = [];
-        let groupObjList = [];
+        //const groupCols = this.getColNumbers(colList);
+        const groupValues = new Array(colList.length);
+
+        const groupIndex = new Map();
+
+        /** @type {Array<Array<string|number>>} */
+        const groupList = [];
+        /** @type {Array<Array<string|number>>} */
+        const groupObjList = [];
 
         // alle durchgehen
         for (let i = 0; i < rowList.length; i++) {
             let istNewGroup = false;
             const obj = this.get(rowList[i]);
 
-            // auf neue Gruppe prüfen
-            // for (let j = 0; j < groupCols.length; j++) {
-            for (let j = 0; j < colList.length; j++) {
-                //const value = this.getCellValue(rowList[i], groupCols[j]);
-                const value = obj[colList[j]]; // this.getCellValue(rowList[i], groupCols[j]);
-                if (value != groupValues[j]) {
-                    // nur nach ersten Datensatz auf Gruppen Änderung prüfen
-                    if (i > 0) {istNewGroup = true;}
+            // Gruppenwert lesen
+            //const groupValue = this.getColValues(rowList[i], colList).join("_");
+            const groupValue = this.getColValues(rowList[i], colList).join("_");
 
-                    // GruppenSpalten Wert merken
-                    groupValues[j] = value;
-                }
+            // Wenn Gruppenwert vorhanden
+            if (groupIndex.has(groupValue)) {
+                const j = groupIndex.get(groupValue);
+                groupList[j].push(rowList[i]);
+                groupObjList[j].push(obj);
+            } else {
+                // Gruppenwert noch nicht vorhanden
+                const newGroupList = [rowList[i]];
+                const newgroupObjList = [obj];
+                groupList.push(newGroupList);
+                groupObjList.push(newgroupObjList);
+                groupIndex.set(groupValue, groupList.length - 1);
             }
 
-            // wenn neue gruppe
-            if (istNewGroup) {
-                // Funktion ausführen
-                if (fu(groupObjList, groupList, rowList)) { break; };
 
-                // Gruppe zurücksetzen
-                groupList = [];
-                groupObjList = [];
-                istNewGroup = false;
-            }
+            // // auf neue Gruppe prüfen
+            // // for (let j = 0; j < groupCols.length; j++) {
+            // for (let j = 0; j < colList.length; j++) {
+            //     //const value = this.getCellValue(rowList[i], groupCols[j]);
+            //     const value = obj[colList[j]]; // this.getCellValue(rowList[i], groupCols[j]);
+            //     if (value != groupValues[j]) {
+            //         // nur nach ersten Datensatz auf Gruppen Änderung prüfen
+            //         if (i > 0) { istNewGroup = true; }
+
+            //         // GruppenSpalten Wert merken
+            //         groupValues[j] = value;
+            //     }
+            // }
+
+            // // wenn neue gruppe
+            // if (istNewGroup) {
+            //     // Funktion ausführen
+            //     if (fu(groupObjList, groupList, rowList)) { break; };
+
+            //     // Gruppe zurücksetzen
+            //     groupList = [];
+            //     groupObjList = [];
+            //     istNewGroup = false;
+            // }
 
             // Datensatz in Gruppe
-            groupList.push(rowList[i])
+            //groupList.push(rowList[i])
             //groupObjList.push(this.get(rowList[i]));
-            groupObjList.push(obj);
+            //groupObjList.push(obj);
         } // for jeder Datensatz
 
+        // alle Gruppierten Listen durchgehen
+        for (let i = 0; i < groupList.length; i++) {
+            // funktion ausführen
+            fu(groupObjList[i], groupList[i], rowList);
+        }
+
         // Letze Gruppe Funktion ausführen
-        fu(groupObjList, groupList, rowList);
+        // fu(groupObjList, groupList, rowList);
     }
 
 
