@@ -283,8 +283,9 @@ export function parseMd(mdString, options) {
         }
         
         // neues ListenElement
-        htmlString += "<li>" + text;
+        htmlString += "<li" + tagAttribute + ">" + text;
         isLi = true;
+        tagAttribute = "";
         
         // Stufe merken
         lastStep = step;

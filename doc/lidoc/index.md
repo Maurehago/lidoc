@@ -73,6 +73,29 @@ Das ist ein neuer Absatz.
 mit einer Leerzeile.
 ```
 
+### HTML-Tag Attribute
+In Eckigen Klammen können HTML-Attribute angegeben werden.
+
+Wenn das Attribut am Ende der Zeile angegeben wird, so gilt dieses für das Element dieser Zeile.
+Zum Beispiel für den Absatz, Spalte oder Listenelement.
+
+Wird das Attribut vor einer Zeile angegeben, gilt es für den ganzen Block.
+Zum Beispiel Für die Tabelle, oder die Liste.
+
+Beispiel für Liste
+```txt
+[ id="liste1" style="background-color:yellow;"]
+- Eintrag 1
+- Eintrag 2 [ style="color: red;"]
+- Eintrag 3
+```
+
+[ id="liste1" style="background-color:yellow;"]
+- Eintrag 1
+- Eintrag 2 [ style="color: red;"]
+- Eintrag 3
+
+
 ### Spalten
 Die Darstellung in Spalten startet mit einer Zeile "---". Die Spalten werden mit "---" getrennt und beendet.
 Nach der leten Spalte muss eine Leerzeile stehen.
