@@ -32,11 +32,11 @@ const documentListNav = new GridNav("documentList");
 const newListFormNav = new GridNav("newListForm");
 
 // Listen
-const newListGrid = new GridList("newList", ["name", "path", "cols", "idCol"], "path");
-newListGrid.setColDataFormat("name", { required: true });
-newListGrid.setColDataFormat("path", { required: true });
-newListGrid.setColDataFormat("cols", { required: true });
-newListGrid.setColDataFormat("idCol", { required: true });
+const newListGrid = new GridList("newList", ["name string*", "path string*", "cols string*", "idCol string*"], "path");
+// newListGrid.setColDataFormat("name", { required: true });
+// newListGrid.setColDataFormat("path", { required: true });
+// newListGrid.setColDataFormat("cols", { required: true });
+// newListGrid.setColDataFormat("idCol", { required: true });
 
 const tableGrid = new GridList("table");
 

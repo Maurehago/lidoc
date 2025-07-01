@@ -154,21 +154,23 @@ function showForm(list, form, id) {
     if (formElm instanceof HTMLFormElement) {
         formElm.innerHTML = "";
         formElm.insertAdjacentHTML("afterbegin", form.getFormBody(list));
+        
+        // Werte setzen
+        form.setFormValues(formElm, list, id || "");
     }
 
-
-    // wenn eine ID
-    if (id !== undefined) {
-        let obj = list.get(id);
-        let cols = form.getCols();
-        // alle FormularFelder
-        for (let i = 0; i < cols.length; i++) {
-            const elm = formElm?.querySelector(`[name="${cols[i]}"`);
-            if (elm instanceof HTMLInputElement) {
-                elm.value = obj[cols[i]];
-            }
-        }
-    }
+    // // wenn eine ID
+    // if (id !== undefined) {
+    //     let obj = list.get(id);
+    //     let cols = form.getCols();
+    //     // alle FormularFelder
+    //     for (let i = 0; i < cols.length; i++) {
+    //         const elm = formElm?.querySelector(`[name="${cols[i]}"`);
+    //         if (elm instanceof HTMLInputElement) {
+    //             elm.value = obj[cols[i]];
+    //         }
+    //     }
+    // }
 
     // 1. Formelement als Aktiv
     formNav.isActive = true;

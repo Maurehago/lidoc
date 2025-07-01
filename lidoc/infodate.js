@@ -94,7 +94,7 @@ export function formatDate(date, formatString) {
     if (!isDate(date)) { return ""; }
     let newDate = checkDate(date);
     
-    if (typeof formatString != "string" ) {
+    if (typeof formatString != "string" || formatString == "") {
         return newDate.toISOString();
     }
 
