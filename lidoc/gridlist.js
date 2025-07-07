@@ -3,7 +3,7 @@
 // ==================
 // @ts-check
 
-// todo: Umbauen so das Verknüpfte Tabellen(link) auch Daten abgerufen/ Gruppiert (max, min, sum, ..) werden können
+// todo: ??? Umbauen so das Verknüpfte Tabellen(link) auch Daten abgerufen/ Gruppiert (max, min, sum, ..) werden können
 
 // ===============================
 //   Imports
@@ -22,23 +22,53 @@ import { formatDate } from "./infodate.js";
 // colName = Caption/Label - Anzeige Überschrift/Titel für die Spalte
 // colname = ArributeID - es kann das Selbe Attribute bei mehreren Spalten angewendet werden - Listen Übergreifend
 
+/** 
+ * Callback Funktion die für jede Gruppe ausgefügrt wird
+ * @callback CallbackGroupFunction
+ * @param {Array<object>} objList - Liste mit gefilterten Datensatz Objekten, pro Gruppe
+ * @param {Array<string|number>} [idList] - Liste mit ID's der gefilterten Datenzeilen pro Gruppe
+ * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
+ */
+
+/** 
+ * Callback Funktion die für alle Datensätze ausgefügrt wird.  
+ * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
+ * @callback CallbackFilterFunction
+ * @param {object} obj - Datensatz Objekt
+ * @param {number} [index] - Position in der Liste nach Index
+ * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
+ * @returns {boolean|undefined} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste.
+ */
+
+/** 
+ * Callback Funktion die für alle Datensätze ausgefügrt wird.  
+ * Wenn die Funktion "true" zurückliefert, wird die ganze For-Schleife abgebochen.
+ * @callback CallbackForFunction
+ * @param {object} obj - Datensatz Objekt
+ * @param {number} [index] - Position in der Liste nach Index
+ * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
+ * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
+ */
+
 /** @typedef {"string"|"number"|"boolean"|"object"|"list"} InfoType */
 
 /**
- * @typedef {object} DataFormat
+ * @typedef {object} DataType
  * @property {string} id - Name Des Daten Formates
  * @property {InfoType} type - Typ der Spalte
- * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob das Format per Default vorhanden ist
+ * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
  * @property {string} [description] - Informationstext zu der Spalte
  * @property {string} [domain] - Name eines Speziellen abgeleiteten Types 
  * @property {boolean} [required] - Wenn der Wert erforderlich ist
  * @property {string} [inlist] - Name einer Aufzählung. Muss Inhalt von angegebener Aufzählung sein
  * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
  * @property {number} [decimals] - Anzahl der Dezimalstellen 
- * @property {number} [min] - Minimalwert(number) oder minimale String Länge(string)
- * @property {number} [max] - Maimalwert(number) oder maximale String Länge(string)
- * @property {number} [greater] - Größer als angegeben (exklusive der angegebenen zahl)
- * @property {number} [lower] - Kleiner als angegeben (kleiner der angegeben zahl)
+ * @property {number} [min] - Minimale Anzahl der Stellen(number) oder minimale String Länge(string)
+ * @property {number} [max] - Maximale Anzahl der Stellen(number) oder maximale String Länge(string)
+ * @property {number|string} [gt] - Größer als angegeben (exklusive der angegebenen zahl)
+ * @property {number|string} [lt] - Kleiner als angegeben (kleiner der angegeben zahl)
+ * @property {number|string} [ge] - Größer oder gleich als angegeben (inklusive der angegebenen zahl)
+ * @property {number|string} [le] - Kleiner oder gleich als angegeben (inklusive der angegeben zahl)
  * @property {string} [pattern] - Regular Expression zum Testen eines Wertes
  * @property {any} [default] - Standard-Wert der Eigenschafft
  * @property {boolean} [chartobool] - true wenn der Charakter "J" in "true" umgewandelt werden soll.
@@ -46,7 +76,7 @@ import { formatDate } from "./infodate.js";
  * @property {boolean} [password] - true wenn es ein Passwort Feld ist.
  * @property {string} [link] - Name der Verknüpften Liste. Wenn kein "linkindex" angegeben -> wird das ID-Feld als Verknüpfung angegeben.
  * @property {string} [linkindex] - Name des Indexes, das für die Verknüpfung verwendet wird. "link" MUSS angegeben werden
- * todo: Link / foregin Key zu anderer Tabelle
+ * todo: ??? Link / foregin Key zu anderer Tabelle oder doch immer das IDFeld verwenden ???
  */
 
 
@@ -80,26 +110,38 @@ export const ENUM = {
 };
 
 
-/** @type {Map<string,DataFormat>} */
+/** @type {Map<string,DataType>} */
 export const DATATYPE = new Map([
     ["string", { id: "string", type: "string", _:true }]
-    , ["GSID", { id: "GSID", type: "string", _:true }]
-    , ["number", { id: "number", type: "number", _:true }]
     , ["string*", { id: "string*", type: "string", _:true, required: true }]
     , ["string**", { id: "string*", type: "string", _:true, required: true, readonly: true }]
+    , ["password*", { id: "password*", type: "string", _:true, required: true, password: true, min: 8, pattern: "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$"}]
+    , ["GSID", { id: "GSID", type: "string", _:true }]
     , ["GSID*", { id: "GSID", type: "string", _:true, required: true }]
     , ["GSID**", { id: "GSID", type: "string", _:true, required: true, readonly: true }]
-    , ["number*", { id: "number", type: "number", _:true, required: true }]
-    , ["number**", { id: "number", type: "number", _:true, required: true, readonly: true }]
-    , ["int", { id: "int", type: "number", _:true, decimals: 0 }]
-    , ["int*", { id: "int", type: "number", _:true, decimals: 0, required: true }]
-    , ["int**", { id: "int", type: "number", _:true, decimals: 0, required: true, readonly: true }]
-    , ["boolean", { id: "boolean", type: "boolean", _:true }]
     , ["date", { id: "date", type: "string", _:true, date: "date" }]
+    , ["date*", { id: "date*", type: "string", _:true, date: "date", required: true }]
     , ["datetime", { id: "datetime", type: "string", _:true, date: "datetime" }]
+    , ["datetime*", { id: "datetime*", type: "string", _:true, date: "datetime", required: true }]
     , ["time", { id: "time", type: "string", _:true, date: "time" }]
+    , ["time*", { id: "time*", type: "string", _:true, date: "time", required: true }]
     , ["period", { id: "period", type: "string", _:true, date: "period" }]
-
+    , ["number", { id: "number", type: "number", _:true }]
+    , ["number*", { id: "number*", type: "number", _:true, required: true }]
+    , ["number**", { id: "number**", type: "number", _:true, required: true, readonly: true }]
+    , ["double", { id: "double", type: "number", _:true }]
+    , ["double*", { id: "double*", type: "number", _:true, required: true }]
+    , ["double**", { id: "double**", type: "number", _:true, required: true, readonly: true }]
+    , ["int", { id: "int", type: "number", _:true, decimals: 0 }]
+    , ["int*", { id: "int*", type: "number", _:true, decimals: 0, required: true }]
+    , ["int**", { id: "int**", type: "number", _:true, decimals: 0, required: true, readonly: true }]
+    , ["int64", { id: "int64", type: "number", _:true, decimals: 0 }]
+    , ["int64*", { id: "int64*", type: "number", _:true, decimals: 0, required: true }]
+    , ["int64**", { id: "int64**", type: "number", _:true, decimals: 0, required: true, readonly: true }]
+    , ["boolean", { id: "boolean", type: "boolean", _:true }]
+    , ["janein", { id: "janein", type: "string", _:true, min: 1, max: 1, chartobool: true }]
+    
+    
     , ["object", { id: "object", type: "object", _:true }]
     , ["list", { id: "list", type: "list", _:true }]
 ]);
@@ -346,26 +388,14 @@ export class GridList {
     /** Nummer der ID-Spalte @type {number|Array<number>} */
     #idColNumber = -1;
 
-    /** Nummern der ID-Spalte wenn mehrere Spalten eine eindeutige ID ergeben @type {number[]} */
-    //#idColNumbers = [];
-
     /** Liste Mit SpaltenNamen @type {string[]} */
     #cols = [];
     get cols() {
         return this.#cols;
     }
 
-    /** Objekt wo Key = Spaltenname und Value = Index der Spalte @type {Object<string,number>} */
-    //#findex = {};
-
     /** Liste mit Typbezeichnung für jede Spalte @type {Array<string>} */
     #types = [];
-
-    /** Liste mit Namen zu verlinkten Liste für die jeweilige Spalte @type {Array<string|undefined|null>} */
-    //#links = [];
-
-    /** Liste mit Format Objekten für die einzelnen Spalten @type {DataFormat[]} */
-    //#formats = [];
 
     /** Interner Datenspeicher @type {Map<string|number,any[]>} */
     #data = new Map();
@@ -397,7 +427,7 @@ export class GridList {
 
 
     /**
-     * Setzt das ID-Feld und mekt sich den ID-Index.
+     * Setzt das ID-Feld und merkt sich den ID-Index.
      * Felder müssen vorher in der Liste existieren.
      * @function setIdCol
      * @param {string|Array<string>} colName - ID Spaltenname oder Liste von Spalten, die eine eindeutige ID ergeben
@@ -408,7 +438,6 @@ export class GridList {
         }
 
         if (typeof colName == "string") {
-            //this.#idColNumber = this.#cols.indexOf(col);
             this.#idColNumber = this.#cols.indexOf(colName);
             if (this.#idColNumber < 0 && colName == "GSID") {
                 const cIndex = this.#cols.push("GSID") - 1;
@@ -416,28 +445,8 @@ export class GridList {
                 //this.#findex.GSID = cIndex;
                 this.#idColNumber = cIndex;
             }
-            //this.#idColNumbers = [];
-
-            // Format erforderlich setzen
-            //const colFormat = this.getColDataFormat(this.#idColNumber);
-            //if (!colFormat) {
-            //    this.setColDataFormat(this.#idColNumber, { required: true });
-            //} else {
-            //    colFormat.required = true;
-            //}
-            // } else if (typeof colName == "number") {
-            //     this.#idColNumber = colName;
-            //     this.#idColNumbers = [];
-            //     // Format erforderlich setzen
-            //     const colFormat = this.getColDataFormat(colName);
-            //     if (!colFormat) {
-            //         this.setColDataFormat(colName, { required: true });
-            //     } else {
-            //         colFormat.required = true;
-            //     }
         } else if (Array.isArray(colName)) {
             this.#idColNumber = [];
-            //this.#idColNumbers = [];
 
             // Alle Einträge Prüfen
             for (let i = 0; i < colName.length; i++) {
@@ -447,38 +456,20 @@ export class GridList {
                     this.#types[colNumber] = "GSID*";
                 }
 
-                // switch (typeof colName[i]) {
-                //     case "string":
-                //         //this.#idColNumbers.push(this.#cols.indexOf(col[i] + ""));
-                //         colNumber = this.#findex[colName[i] + ""];
-                //         break;
-                //     case "number":
-                //         colNumber = parseInt(colName[i] + "");
-                //         // this.#idColNumbers.push(parseInt(colName[i] + ""));
-                //         break;
-
-                //     default:
-                //         break;
-                // }
                 this.#idColNumber.push(colNumber);
-
-                // // Format erforderlich setzen
-                // const colFormat = this.getColDataFormat(colNumber);
-                // if (!colFormat) {
-                //     this.setColDataFormat(colNumber, { required: true });
-                // } else {
-                //     colFormat.required = true;
-                // }
             }
         }
     }
     /**
+     * Setzt das ID-Feld und merkt sich den ID-Index.
+     * Felder müssen vorher in der Liste existieren.
      * @param {string|Array<string>} colName - Name der Spalte
      */
     set idCol(colName) {
         this.setIdCol(colName);
     }
     /**
+     * Gibt den Namen der ID-Spalte zurück. Wenn mehrere Spalten die ID bilden, werden die Namen der Spalten in einer Liste zurück gegeben.
      * @returns {string|string[]}
      */
     get idCol() {
@@ -575,34 +566,10 @@ export class GridList {
     } // getID
 
 
-    // /**
-    //  * Setzt oder löscht, für die Angegebene Spalte, den Link(Verknüpfung) zu einer anderen Liste
-    //  * @function setColLink
-    //  * @param {string|number} col - Spaltenname oder Splaltennummer
-    //  * @param {string|undefined|null} [listName] - Name der GridListe. Wenn nicht angegeben wird der Link(Verknüpfung) gelöscht.
-    //  * @returns {void}
-    //  */
-    // setColLink(col, listName) {
-    //     this.#links[this.getColNumber(col)] = listName;
-    // }
-
-
-    // /**
-    //  * Liest den Listennamen der Verknüpften Liste vom angegebenen Feldindex aus
-    //  * @function getColLink
-    //  * @param {string|number} col - Spaltennummer oder Spaltenname
-    //  * @returns {string|undefined|null} Name der Liste. Kann mit lists.get(name) gelesen werden.
-    //  */
-    // getColLink(col) {
-    //     return this.#links[this.getColNumber(col)];
-    // }
-
-
     /**
      * Setzt die SpaltenNamen der GridListe  
-     * Der Typ der neuen Spalten wird auf "string" gesetzt, außer es wird nach dem Spaltennamen mit einem Leerzeichen getrennt, der Typ angegeben.  
-     * Der Typ darf nur einen der folgenden Texte enthalten:  
-     * "string" | "number" | "boolean" | "object" | "list"  
+     * Der TypName der neuen Spalten wird auf "string" gesetzt, außer es wird nach dem Spaltennamen mit einem Leerzeichen getrennt, der TypName angegeben.
+     * Die TypNamen müssen einem Eintrag in DATATYPE(Map) entsprechen 
      * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
      * @function setCols
      * @param {string|string[]} cols - Liste Mit Spaltennamen, oder String mit Trennzeichen getrennt
@@ -623,10 +590,7 @@ export class GridList {
         }
 
         // bestehende Spalten löschen
-        // todo: Eventuell mit bestehenden Spalten zusammenmergen ????
         this.#cols = new Array(newFields.length);
-        //this.#findex = {};
-        //this.#links = new Array(newFields.length);
         this.#types = new Array(newFields.length);
 
         // alle neuen Spalten durchgehen
@@ -640,34 +604,8 @@ export class GridList {
 
                 this.#cols[i] = nameType[0];
                 this.#types[i] = nameType[1];
-                // SpaltenIndex merken
-                //this.#findex[nameType[0]] = i;
-
-                // if (nameType[2]) {
-                //     this.#links[i] = nameType[2];
-                // }
-
-                // auf richtige Typen prüfen
-                //if ("|string|number|boolean|object|list|".indexOf(nameType[1]) > -1) {
-                // if (nameType[1] == "string" || nameType[1] == "number" || nameType[1] == "boolean") {
-                //     this.#types[i] = nameType[1];
-                // } else if (nameType[1] == "object" || nameType[1] == "list") {
-                //     this.#types[i] = nameType[1];
-
-                //     //  Wenn keine verknüpfte Liste
-                //     if (!nameType[2]) {
-                //         // Liste Name wird vom SpaltenNamen angenommen
-                //         this.#links[i] = nameType[0];
-                //     }
-                // } else {
-                //     // wenn kein Typ angegeben dann immer "string"
-                //     this.#types[i] = "string";
-                // }
             } else {
                 this.#cols[i] = name;
-
-                //// SpaltenIndex merken
-                //this.#findex[name] = i;
 
                 // Standard Typ
                 this.#types[i] = "string";
@@ -686,7 +624,7 @@ export class GridList {
      * Setzt die Spalten der Liste anhand eines Javascript Objektes.  
      * Die Feldtypen werden von den Werten in den Eigenschaften bestimmt.  
      * Ist der Wert nicht ermittelbar, wird "string" angenommen.  
-     * Ist der Wert ein "object" oder "array", so wird der ListenName(Verlinkung) gleich dem Eigenschaftsnamen angenommen.  
+     * Ist der Wert ein "object" oder "array", so wird der ListenName(Verlinkung) gleich dem Eigenschaftsnamen angenommen.
      * @function setColsFromObject
      * @param {Object<string,any>} obj - Objekt dessen Eigenschaften als Spaltennamen registriert werden
      * @param {string|Array<string>} idCol - Name der Eigenschaft die als Eindeutige ID genommen wird. Für eine ID Generierung kann auch "GSID" angegeben werden.
@@ -769,38 +707,6 @@ export class GridList {
             const nameType = colName.split(" ");
             colName = nameType[0];
             colType = nameType[1];
-
-            // SpaltenIndex merken
-            //this.#findex[nameType[0]] = index;
-
-            //if (nameType[2]) {
-            //    this.#links[index] = nameType[2];
-            //}
-
-            // auf richtige Typen prüfen
-            //     if ("|string|number|boolean|object|list|".indexOf(nameType[1]) > -1) {
-            //         //@ts-ignore
-            //         this.#types[index] = nameType[1];
-
-            //         //  Wenn keine verknüpfte Liste
-            //         if ((nameType[1] == "object" || nameType[1] == "list") && !nameType[2]) {
-            //             // Liste Name wird vom SpaltenNamen angenommen
-            //             this.#links[index] = nameType[0];
-            //         }
-            //     } else {
-            //         // wenn kein Typ angegeben dann immer "string"
-            //         this.#types[index] = "string";
-            //     }
-            // } else {
-            //     // Spalte hinzufügen
-            //     index = this.#cols.push(colName) - 1;
-            // //this.#cols[i] = name;
-
-            // // SpaltenIndex merken
-            // //this.#findex[colName] = index;
-
-            // // Standard Typ
-            // this.#types[index] = "string";
         } // if else indexof(" ")
 
         // Spalte hinzufügen
@@ -872,7 +778,7 @@ export class GridList {
             return;
         }
 
-        // Liste im ID's
+        // Liste mit ID's
         const idList = this.getIndex();
 
         // Es darf beim löschen kein Fehler passieren.
@@ -885,9 +791,6 @@ export class GridList {
             }
 
             // Spalte löschen
-            //delete this.#findex[colName];
-            //this.#links.splice(colIndex, 1);
-            //this.#formats.splice(colIndex, 1);
             this.#types.splice(colIndex, 1);
             this.#cols.splice(colIndex, 1);
         } catch (err) {
@@ -906,25 +809,42 @@ export class GridList {
     }
 
 
-    // /**
-    //  * Setzt für die angegebene Spalte die Format einstellungen
-    //  * @function setColDataFormat
-    //  * @param {string|number} col - Spaltenname oder Nummer
-    //  * @param {DataFormat} formatObj - FormatObjekt für die Spalte
-    //  */
-    // setColDataFormat(col, formatObj) {
-    //     if (!formatObj) { formatObj = {}; }
-    //     this.#formats[this.getColNumber(col)] = formatObj;
-    // }
+    /**
+     * Setzt für die angegebene Spalte den DATATYP-Namen.  
+     * !WICHTIG! funktioniert nur wenn wenn der grundlegende Typ("string", "number", "boolean") beider Datentypen gleich ist.  
+     * Es findet keine automatische konvertrierung der Werte in der Datentabelle statt.
+     * @function setColTypeName
+     * @param {string|number} col - Spaltenname oder Nummer
+     * @param {string} typeName - Name des Datentypes
+     * @returns {boolean} "true" wenn der neue Typ übernommen wurde
+     */
+    setColTypeName(col, typeName) {
+        if (!typeName || typeof typeName != "string") { return false; }
+        const colNumber = this.getColNumber(col);
+        if (colNumber < 0) {return false;}
+        const oldTypeName = this.#types[colNumber];
+
+        // alten Typ lesen
+        const oldType = DATATYPE.get(oldTypeName)?.type || "";
+        const newType = DATATYPE.get(typeName)?.type || "";
+
+        if (oldType == newType) {
+            // neuen Typ setzen
+            this.#types[colNumber] = typeName;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
 
     /**
-     * Liefert vom der angegebenen Spalte das Format Objekt zurück
+     * Liefert vom der angegebenen Spalte das DataTyp Objekt zurück
      * @param {string|number} col - Splatenname oder SplantenNummer 
-     * @returns {DataFormat|undefined} Format Objekt wenn vorhanden
+     * @returns {DataType|undefined} DatenTyp Objekt wenn vorhanden
      */
     getColType(col) {
         return DATATYPE.get(this.getColTypeName(col));
-        //return this.#formats[this.getColNumber(col)];
     }
 
 
@@ -941,14 +861,10 @@ export class GridList {
             // Standard Eigenschaften
             this.name = obj.name;
             this.#cols = obj.cols;
-            //this.#findex = obj.findex;
             this.#types = obj.types;
-            //this.#links = obj.links;
-            //this.#formats = obj.formats || [];
 
             // idIndex
             this.#idColNumber = obj.idColNumber;
-            //this.#idColNumbers = obj.idColNumbers;
 
             // Daten in Map
             this.#data = new Map();
@@ -982,28 +898,15 @@ export class GridList {
         // Standard Eigenschaften
         newObj.name = this.name;
         newObj.cols = this.#cols;
-        //newObj.findex = this.#findex;
         newObj.types = this.#types;
-        //newObj.links = this.#links;
-        //newObj.formats = this.#formats || [];
 
         newObj.idColNumber = this.#idColNumber;
-        //newObj.idColNumbers = this.#idColNumbers;
 
         // Daten aus Map
         const dataRows = [...this.#data.values()];
-        console.log("DataRows:", dataRows);
+        // console.log("DataRows:", dataRows);
 
-        ///** @type {Array<any>} */
-        //const data = [];
-        //newObj.data = data;
         newObj.data = dataRows;
-
-        // for (let i = 0; i < dataRows.length; i++) {
-        //     //valueList.forEach(value => {
-        //     //data.push(value);
-        //     data.push(dataRows[i][1]);
-        // }
 
         return newObj;
     } // getAsInfoObj()
@@ -1091,18 +994,6 @@ export class GridList {
                 // Neu anlegen
                 this.#data.set(id, dataRow);                
             }
-
-            // if (this.#idColNumber > -1) {
-            //     dataRow[this.#idColNumber] = id;
-            // } else if (typeof id == "string") {
-            //     const ids = id.split("_");
-            //     for (let i = 0; i < this.#idColNumbers.length; i++) {
-            //         dataRow[this.#idColNumbers[i]] = ids[i];
-            //     }
-            // }
-
-            // Neu anlegen
-            //this.#data.set(id, dataRow);
         }
 
         // neue Datenzeile zurückgeben
@@ -1153,7 +1044,7 @@ export class GridList {
                     dataRow[colNumber] = false;
                 }
                 break;
-            case "object":
+            case "obj":
                 if (Array.isArray(value)) {
                     // Wert nicht ändern
                 } else if (typeof value == "object") {
@@ -1179,7 +1070,7 @@ export class GridList {
                     dataRow[colNumber] = value;
                 }
                 break;
-            case "list":
+            case "lis":
                 if (Array.isArray(value)) {
                     if (typeof value[0] == "object") {
                         let listName = infoType.link || this.#cols[colNumber];
@@ -1229,7 +1120,6 @@ export class GridList {
 
         // neue Datenzeilen
         // Prüfen / lesen von bestehender Datenzeile
-        let isNewRow = false;
         const id = this.getID(obj);
 
         // nur Datensätze mit ID kommen in die Liste
@@ -1238,7 +1128,6 @@ export class GridList {
         let dataRow = this.#getRow(id)
         if (dataRow == undefined) {
             dataRow = this.#newRow(id);
-            isNewRow = true;
         }
 
         // alle registrierten Spalten durchgehen        
@@ -1252,17 +1141,12 @@ export class GridList {
             this.#setCellValue(dataRow, i, obj[key]);
         } // for this#cols
 
-        // Neue Datenzeile wird schon bei "this.#newRow(id)" angelegt.
-        // wenn neue Datenzeile
-        //if (isNewRow) {
-        //    this.#data.set(id, dataRow);
-        //}
         return id;
     }
 
 
     /**
-     * Setzt Formdaten in die Liste
+     * Setzt Daten aus einem Formular(FormData) in die Liste
      * @param {FormData} formData - Formular Daten Objekt
      * @returns {string|number|undefined} ID des Datensatzes
      */
@@ -1293,13 +1177,9 @@ export class GridList {
             this.#setCellValue(dataRow, i, formData.get(key));
         } // for this#cols
 
-        // Neue Datenzeile wird schon bei "this.#newRow(id)" angelegt.
-        // wenn neue Datenzeile
-        //if (isNewRow) {
-        //    this.#data.set(id, dataRow);
-        //}
         return id;
     }
+
 
     /**
      * Liefert auf Grund des angegebenen Spaltennamen
@@ -1312,9 +1192,7 @@ export class GridList {
             if (col.indexOf(" ") >= 0) {
                 col = col.split(" ")[0];
             }
-            //return this.#cols.indexOf(col);
             return this.#cols.indexOf(col);
-            //return this.#findex[col];
         } else if (typeof col == "number") {
             return col;
         }
@@ -1498,9 +1376,10 @@ export class GridList {
 
 
     /**
-     * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.
-     * Wenn "index" angegeben, und der Index vorhanden ist, werden die Daten unter diesem Index sortiert, und unter dem selben Index abgelegt.
-     * Wenn "index" angegeben, und noch nicht angelegt, werden alle Daten sortiert und unter dem Index abgelegt.
+     * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.  
+     * Wenn der "index" noch nicht existiert, werden alle Daten sortiert.
+     * Wenn "index" angegeben und "newIndex" nicht angegeben, werden die Daten unter diesem Index sortiert, und unter dem selben Index abgelegt.
+     * Wenn "index" und "newIndex" angegeben, werden alle Daten sortiert und unter "newIndex" abgelegt.
      * @param {Array<string|number>} sortCols - Liste mit Spalten nach denen Sortiert wird
      * @param {string|Array<string|number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird, oder wenn nicht vorhanden, nach dem Sortieren gesetzt wird.
      * @param {string} [newIndexName] - Index Name der nach dem Sortieren gesetzt wird.
@@ -1752,7 +1631,7 @@ export class GridList {
      * Gibt eine gefilterte Liste mit Datensätzen zurück.  
      * Wenn index Angegeben werden die Daten zum Filtern vom bestehenden Index genommen.  
      * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
-     * @param {Function} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" wird der Datensatz in die gefilterte Liste aufgenommen. 
+     * @param {CallbackFilterFunction} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" wird der Datensatz in die gefilterte Liste aufgenommen. 
      * @param {string|Array<string|number>} [index] - optionaler Index Name oder Liste von ID's, wenn Daten von einem bestehenden Index genommen werden. 
      * @param {string} [newIndexName] - Index unter dem die gefilterte Liste abgelegt wird.
      * @returns {Array<string|number>} Gefilterte Liste mit ID's 
@@ -1796,70 +1675,39 @@ export class GridList {
      * @returns {Array<string|number>} Gefilterte Liste mit ID's
      */
     filterGroup(colList, fu, index, newIndexName) {
-        // todo: Umbauen wie bei ForGroup
-        // Aggregatfunktionen
-        // count()
-        // sum()
-        // avg()
-        // min()
-        // max()
-
-
-        // Daten zum Filtern
-        const rowList = this.getIndex(index);
-        if (typeof fu != "function") { return rowList; }
+        // Wenn keine Funktion dann ganze IndexListe zurückgeben
+        if (typeof fu != "function") { return this.getIndex(index); }
 
         const newList = [];
         const newObjList = [];
-        const groupCols = this.getColNumbers(colList);
-        const groupValues = new Array(groupCols.length);
-        let groupList = [];
-        let groupObjList = [];
 
-        // alle durchgehen
-        for (let i = 0; i < rowList.length; i++) {
-            let istNewGroup = false;
 
-            // auf neue Gruppe prüfen
-            for (let j = 0; j < groupCols.length; j++) {
-                const value = this.getCellValue(rowList[i], groupCols[j]);
-                if (value != groupValues[j]) {
-                    istNewGroup = true;
-                    groupValues[j] = value;
+        /** 
+         * Funktion die für jede Gruppe ausgefügrt wird
+         * @param {Array<object>} objList - Liste mit gefilterten Datensatz Objekten, pro Gruppe
+         * @param {Array<string|number>} [idList] - Liste mit ID's der gefilterten Datenzeilen pro Gruppe
+         * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
+         */
+        function doFilter(objList, idList, list) {
+            // prüfen mit übergebener Funktion
+            if (/** @type {CallbackGroupFunction} */ fu(objList, idList, list)) {
+                if (idList) {
+                    newList.push(...idList);
                 }
-            }
-
-            // wenn neue gruppe
-            if (istNewGroup) {
-                // wenn FilterFunktion == true
-                if (i > 0 && fu(groupObjList)) {
-                    newList.push(...groupList);
-                    newObjList.push(...groupObjList);
-                }
-
-                // Gruppe zurücksetzen
-                groupList = [];
-                groupObjList = [];
-                istNewGroup = false;
-            }
-
-            // Datensatz in Gruppe
-            groupList.push(rowList[i])
-            groupObjList.push(this.get(rowList[i]));
-        } // for jeder Datensatz
-
-        // Letze Gruppe
-        if (fu(groupObjList)) {
-            newList.push(...groupList);
-            newObjList.push(...groupObjList);
+                newObjList.push(...objList);
+            }            
         }
 
+        // alle durchgehen
+        this.forGroup(doFilter, colList, index);
+        
         // neuen Index speichern
         if (typeof newIndexName == "string") {
             this.#index.set(newIndexName, newList);
         } else if (typeof index == "string") {
             this.#index.set(index, newList);
         }
+        
         return newList;
     }
 
@@ -1868,7 +1716,7 @@ export class GridList {
     /**
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
      * Als Parameter wird die Datenzeile als Objekt übergeben. 
-     * @param {Function} fu - Funktion die pro Datensatz ausgeführt wird
+     * @param {CallbackForFunction} fu - Funktion die pro Datensatz ausgeführt wird
      * @param {string} [index] - optionaler Index Name oder Liste von ID's der als Datenquelle verwendet wird
      * @returns {void}
      * @example
@@ -1911,9 +1759,6 @@ export class GridList {
             // Format lesen
             const typeName = this.#types[colNumbers[i]];
             const colType = DATATYPE.get(typeName) || {};
-            //const colFormat = this.getColDataFormat(cols[i]) || {};
-            //colFormat.name = cols[i];
-            //colFormat.type = this.getColType(cols[i]);
 
             // Funktion ausführen
             // (SpaltenName, SpaltenFormat, Liste mit SpaltenNamen)
@@ -1924,31 +1769,17 @@ export class GridList {
 
     /**
      * Führt die Angegebene Funktion, pro Gruppierung nach den Angegebenen Spalten, aus.
-     * @param {function} fu - Funktion die für jede Gruppierung aufgerufen wird.
+     * @param {CallbackGroupFunction} fu - Funktion die für jede Gruppierung aufgerufen wird.
      * @param {Array<string|number>} colList - Liste der Spalten nach denen Gruppiert wird.
      * @param {string|Array<string|number>} [index] - Optionaler Index der für die Gruppierung verwendet wird.
      * @returns {void}
      */
     forGroup(fu, colList, index) {
-        // Aggregatfunktionen
-        // count()
-        // sum()
-        // avg()
-        // min()
-        // max()
-
-
-        // todo: Gruppen zusammenfassen auch wenn nicht soeriert
-
-
         // Daten zum Filtern
         const rowList = this.getIndex(index);
-        // const rowList = this.sortRows(colList, index);
         if (typeof fu != "function") { return; }
 
-        //const groupCols = this.getColNumbers(colList);
         const groupValues = new Array(colList.length);
-
         const groupIndex = new Map();
 
         /** @type {Array<Array<string|number>>} */
@@ -1978,37 +1809,6 @@ export class GridList {
                 groupObjList.push(newgroupObjList);
                 groupIndex.set(groupValue, groupList.length - 1);
             }
-
-
-            // // auf neue Gruppe prüfen
-            // // for (let j = 0; j < groupCols.length; j++) {
-            // for (let j = 0; j < colList.length; j++) {
-            //     //const value = this.getCellValue(rowList[i], groupCols[j]);
-            //     const value = obj[colList[j]]; // this.getCellValue(rowList[i], groupCols[j]);
-            //     if (value != groupValues[j]) {
-            //         // nur nach ersten Datensatz auf Gruppen Änderung prüfen
-            //         if (i > 0) { istNewGroup = true; }
-
-            //         // GruppenSpalten Wert merken
-            //         groupValues[j] = value;
-            //     }
-            // }
-
-            // // wenn neue gruppe
-            // if (istNewGroup) {
-            //     // Funktion ausführen
-            //     if (fu(groupObjList, groupList, rowList)) { break; };
-
-            //     // Gruppe zurücksetzen
-            //     groupList = [];
-            //     groupObjList = [];
-            //     istNewGroup = false;
-            // }
-
-            // Datensatz in Gruppe
-            //groupList.push(rowList[i])
-            //groupObjList.push(this.get(rowList[i]));
-            //groupObjList.push(obj);
         } // for jeder Datensatz
 
         // alle Gruppierten Listen durchgehen
@@ -2016,13 +1816,10 @@ export class GridList {
             // funktion ausführen
             fu(groupObjList[i], groupList[i], rowList);
         }
-
-        // Letze Gruppe Funktion ausführen
-        // fu(groupObjList, groupList, rowList);
     }
 
 
-    // Gridliste in einen String umwandeln
+    // Gridliste in einen JSON-String umwandeln
     /**
      * liefert die GridListe als JSON String zurück
      * @returns {string} Gridliste als JSON String
@@ -2054,15 +1851,15 @@ export class GridList {
      * Erzeugt eine neue Liste mit **referenzierten** Datenzeilen und einer neuen ID-Spalte.
      * @param {string} newName - neuer ListenName
      * @param {string|Array<string>} newIdCols - Neue ID-Spalte(n)
+     * @param {string|Array<string|number>} [index] - Optionale Index in der alten Liste
      * @returns {GridList}
      */
-    getAliasList(newName, newIdCols) {
+    getAliasList(newName, newIdCols, index) {
         const newList = new GridList(newName, this.#cols, newIdCols);
         newList.#types = this.#types;
-        //newList.#formats = this.#formats;
 
         // Daten nach neuem ID-Feld setzen
-        const rowList = this.getIndex();
+        const rowList = this.getIndex(index);
         for (let i = 0; i < rowList.length; i++) {
             const row = this.#data.get(rowList[i]) || [];
             const newID = newList.getID(row) || i;
