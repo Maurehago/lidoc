@@ -50,7 +50,7 @@ import { formatDate } from "./infodate.js";
  * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
  */
 
-/** @typedef {"string"|"number"|"boolean"|"object"|"list"} InfoType */
+/** @typedef {"string"|"number"|"bigint"|"boolean"|"object"|"list"} InfoType */
 
 /**
  * @typedef {object} DataType
@@ -60,6 +60,7 @@ import { formatDate } from "./infodate.js";
  * @property {string} [description] - Informationstext zu der Spalte
  * @property {string} [domain] - Name eines Speziellen abgeleiteten Types 
  * @property {boolean} [required] - Wenn der Wert erforderlich ist
+ * @property {boolean} [attr] - Wenn die Spalte ein Attribute ist
  * @property {string} [inlist] - Name einer Aufzählung. Muss Inhalt von angegebener Aufzählung sein
  * @property {"date"|"datetime"|"time"|"period"|null} [date] - "null" oder "undefined" wenn nicht vorhanden. Wenn type "number" dann ist es ein UNIX timestamp in millisekunden. Monate("2024-11"), Wochen("2024W12") sind vom DateFormat "date"
  * @property {number} [decimals] - Anzahl der Dezimalstellen 
@@ -105,46 +106,118 @@ export const LIST = new Map();
 
 
 export const ENUM = {
-    colDataType: ["string", "number", "boolean", "object", "list"]
-    , colDateType: ["date", "datetime", "time", "period"]
+    colDataType: Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 })
+    , colDateType: Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 })
 };
 
+// todo: Typen vereinfachung
+// "aaa string_*" - Ein * am Ende heist Erforderlich
+// "aaa string_**" - Zwei ** am Ende heist Erforderlich und schreibgeschützt
+// "aaa string_123" - Eine _Zahl nach dem Typ ist die max einstellung
+// "aaa number_12_6" - "_ + Zahl" sind Decimalstellen (max: 12, decimal: 6)  
+// "aaa enum_Code" - "enum_" am Begin ist inlist: "Code" / ENUM umsetzen
+// "aaa obj_ObjektListe" - "obj_"/"object_" am Beginn für Objekte
+// "aaa list_Objektliste" - "list_" am Beginn für Auflistungen
+// "@aaa string_10" - @ am Beginn vom Variablenname für Attribute
+// "aaa string|number" - Oder/ mehrere Möglichkeiten zuweisen
+// typ "string_base64" - Typ festlegen?
 
-/** @type {Map<string,DataType>} */
-export const DATATYPE = new Map([
-    ["string", { id: "string", type: "string", _:true }]
-    , ["string*", { id: "string*", type: "string", _:true, required: true }]
-    , ["string**", { id: "string*", type: "string", _:true, required: true, readonly: true }]
-    , ["password*", { id: "password*", type: "string", _:true, required: true, password: true, min: 8, pattern: "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$"}]
-    , ["GSID", { id: "GSID", type: "string", _:true }]
-    , ["GSID*", { id: "GSID", type: "string", _:true, required: true }]
-    , ["GSID**", { id: "GSID", type: "string", _:true, required: true, readonly: true }]
-    , ["date", { id: "date", type: "string", _:true, date: "date" }]
-    , ["date*", { id: "date*", type: "string", _:true, date: "date", required: true }]
-    , ["datetime", { id: "datetime", type: "string", _:true, date: "datetime" }]
-    , ["datetime*", { id: "datetime*", type: "string", _:true, date: "datetime", required: true }]
-    , ["time", { id: "time", type: "string", _:true, date: "time" }]
-    , ["time*", { id: "time*", type: "string", _:true, date: "time", required: true }]
-    , ["period", { id: "period", type: "string", _:true, date: "period" }]
-    , ["number", { id: "number", type: "number", _:true }]
-    , ["number*", { id: "number*", type: "number", _:true, required: true }]
-    , ["number**", { id: "number**", type: "number", _:true, required: true, readonly: true }]
-    , ["double", { id: "double", type: "number", _:true }]
-    , ["double*", { id: "double*", type: "number", _:true, required: true }]
-    , ["double**", { id: "double**", type: "number", _:true, required: true, readonly: true }]
-    , ["int", { id: "int", type: "number", _:true, decimals: 0 }]
-    , ["int*", { id: "int*", type: "number", _:true, decimals: 0, required: true }]
-    , ["int**", { id: "int**", type: "number", _:true, decimals: 0, required: true, readonly: true }]
-    , ["int64", { id: "int64", type: "number", _:true, decimals: 0 }]
-    , ["int64*", { id: "int64*", type: "number", _:true, decimals: 0, required: true }]
-    , ["int64**", { id: "int64**", type: "number", _:true, decimals: 0, required: true, readonly: true }]
-    , ["boolean", { id: "boolean", type: "boolean", _:true }]
-    , ["janein", { id: "janein", type: "string", _:true, min: 1, max: 1, chartobool: true }]
+
+/**
+ * Globaler Speicher für Spalten Datentypen
+ */
+export class DATATYPE {
+    /** @type {Map<string,Object>} */
+    static #datatype = new Map([
+        ["string", { id: "string", type: "string", _: true }]
+        , ["number", { id: "number", type: "number", _: true }]
+        , ["bigint", { id: "bigint", type: "bigint", _: true, decimals: 0 }]
+        , ["boolean", { id: "boolean", type: "boolean", _: true }]
+        , ["password*", { id: "password*", type: "string", _: true, required: true, password: true, min: 8, pattern: "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$" }]
+        , ["GSID", { id: "GSID", type: "string", _: true }]
+        , ["date", { id: "date", type: "string", _: true, date: "date" }]
+        , ["datetime", { id: "datetime", type: "string", _: true, date: "datetime" }]
+        , ["time", { id: "time", type: "string", _: true, date: "time" }]
+        , ["period", { id: "period", type: "string", _: true, date: "period" }]
+        , ["double", { id: "double", type: "number", _: true }]
+        , ["int", { id: "int", type: "number", _: true, decimals: 0 }]
+        , ["janein", { id: "janein", type: "string", _: true, min: 1, max: 1, chartobool: true }]
+        , ["*", { id: "*", required: true }]
+        , ["**", { id: "**", required: true, readonly: true }]
+
+        , ["object", { id: "object", type: "object", _: true }]
+        , ["obj", { id: "obj", type: "object", _: true }]
+        , ["list", { id: "list", type: "list", _: true }]
+    ]);
+
+    /**
+     * 
+     * @param {string} type - Die Spalten Type Bezeichnung
+     * @returns {DataType}
+     */
+    static get(type) {
+        /** @type {DataType} */
+        let obj = {id: "undefined", type: "string"};
+        if (!type || typeof type != "string") { return obj; }
+
+        // Typ aufsplitten
+        let parts = type.split("_");
+        let isDecimal = false;
+
+        // Alle teile durchgehen
+        for (let i = 0; i < parts.length; i++) {
+            switch (parts[i]) {
+                case "obj":
+                    Object.assign(obj, this.#datatype.get("obj"));
+                    obj.link = parts[i +1];
+                    i += 1;
+                    break;
+                case "object":
+                    Object.assign(obj, this.#datatype.get("object"));
+                    obj.link = parts[i +1];
+                    i += 1;
+                    break;
+                case "list":
+                    Object.assign(obj, this.#datatype.get("list"));
+                    obj.link = parts[i +1];
+                    i += 1;
+                    break;
+                case "enum":
+                    obj.inlist = parts[i +1];
+                    i += 1;
+
+                default:
+                    if (isNumber(parts[i])) {
+                        if (isDecimal) {
+                            obj.decimals = parseInt(parts[i]);
+                        } else {
+                            obj.max = parseInt(parts[i]);
+                            isDecimal = true;
+                        }
+                    } else {
+                        Object.assign(obj, this.#datatype.get(parts[i]));
+                    }
+                    break;
+            }
+        }
+        return obj;
+    } // get
+
     
-    
-    , ["object", { id: "object", type: "object", _:true }]
-    , ["list", { id: "list", type: "list", _:true }]
-]);
+    /**
+     * 
+     * @param {string} typeName - Typname
+     * @param {DataType} typeObj - Typ Objekt im Format von DataType
+     * @returns 
+     */
+    static set(typeName, typeObj) {
+        if (!typeName || typeof typeName != "string") {return;}
+        if (Array.isArray(typeObj)) {return;}
+        if (typeof typeObj != "object") {return;}
+        this.#datatype.set(typeName, typeObj);
+    }
+}
+
 
 /** @type {GridNav} */
 export let activeNav;
@@ -227,6 +300,10 @@ export function maskString(text, mask, pattern, base) {
     return (firstMask + base + lastMask).replaceAll(pattern, "");
 }
 
+
+function isNumber(string) {
+    return !isNaN(Number(string));
+}
 
 /**
  * Gibt einen String mit formartierter Zahl zurück.  
@@ -821,7 +898,7 @@ export class GridList {
     setColTypeName(col, typeName) {
         if (!typeName || typeof typeName != "string") { return false; }
         const colNumber = this.getColNumber(col);
-        if (colNumber < 0) {return false;}
+        if (colNumber < 0) { return false; }
         const oldTypeName = this.#types[colNumber];
 
         // alten Typ lesen
@@ -988,11 +1065,11 @@ export class GridList {
                     }
                 }
                 // Neu anlegen
-                this.#data.set(newID, dataRow);                
+                this.#data.set(newID, dataRow);
             } else if (typeof this.#idColNumber == "number") {
                 dataRow[this.#idColNumber] = id;
                 // Neu anlegen
-                this.#data.set(id, dataRow);                
+                this.#data.set(id, dataRow);
             }
         }
 
@@ -1018,18 +1095,18 @@ export class GridList {
         //const link = this.#links[i] || "";
 
         // Typ prüfen
-        switch (infoType?.type.substring(0,3)) {
-            case "str":
+        switch (infoType?.type) {
+            case "string":
                 dataRow[colNumber] = value + "";
                 break;
-            case "num":
+            case "number":
                 if (!Number.isNaN(value)) {
                     dataRow[colNumber] = value;
                 } else {
                     dataRow[colNumber] = -1;
                 }
                 break;
-            case "boo":
+            case "boolean":
                 if (typeof value == "boolean") {
                     dataRow[colNumber] = value;
                 } else if (typeof value == "string") {
@@ -1044,7 +1121,7 @@ export class GridList {
                     dataRow[colNumber] = false;
                 }
                 break;
-            case "obj":
+            case "object":
                 if (Array.isArray(value)) {
                     // Wert nicht ändern
                 } else if (typeof value == "object") {
@@ -1070,7 +1147,7 @@ export class GridList {
                     dataRow[colNumber] = value;
                 }
                 break;
-            case "lis":
+            case "list":
                 if (Array.isArray(value)) {
                     if (typeof value[0] == "object") {
                         let listName = infoType.link || this.#cols[colNumber];
@@ -1695,19 +1772,19 @@ export class GridList {
                     newList.push(...idList);
                 }
                 newObjList.push(...objList);
-            }            
+            }
         }
 
         // alle durchgehen
         this.forGroup(doFilter, colList, index);
-        
+
         // neuen Index speichern
         if (typeof newIndexName == "string") {
             this.#index.set(newIndexName, newList);
         } else if (typeof index == "string") {
             this.#index.set(index, newList);
         }
-        
+
         return newList;
     }
 
@@ -1749,7 +1826,7 @@ export class GridList {
         if (!Array.isArray(cols)) {
             cols = this.#cols;
         }
-        
+
         // Index Position der Spalten lesen
         const colNumbers = this.getColNumbers(cols);
 
@@ -2009,8 +2086,8 @@ export class GridView {
                 // auf Datum Prüfen
                 if (colType && colType.date) {
                     let format = this.dateFormat;
-                    if (colType.date == "datetime") {format = this.datetimeFormat;}
-                    if (colType.date == "time") {format = this.timeFormat;}
+                    if (colType.date == "datetime") { format = this.datetimeFormat; }
+                    if (colType.date == "time") { format = this.timeFormat; }
                     html += "<td>" + formatDate(obj[colName], format) + "</td>";
                 } else {
                     html += "<td>" + obj[colName] + "</td>";
@@ -2104,6 +2181,8 @@ export class GridView {
             let attr_required = "";
             let attr_min = "";
             let attr_max = "";
+            let attr_minlength = "";
+            let attr_maxlength = "";
             let attr_step = "";
             let attr_pattern = "";
             let attr_readonly = "";
@@ -2123,15 +2202,15 @@ export class GridView {
                 if (colType.inlist) {
                     // Wenn noch kein HTML für Optionen vorhanden
                     if (!optionNames.has(colType.inlist)) {
-                        optionListHtml += this.getDatalistHTML(colType.inlist, ENUM[colType.inlist]);
+                        optionListHtml += this.getDatalistHTML(colType.inlist, Object.keys(ENUM[colType.inlist]));
                         optionNames.set(colType.inlist, "OK");
                     }
                     attr_list = ` list="${colType.inlist}"`;
                 }
-                if (colType.type == "number" && colType.min != undefined) { attr_min = ` min="${colType.min}"`; }
-                if (colType.type == "number" && colType.max != undefined) { attr_max = ` max="${colType.max}"`; }
-                if (colType.type == "string" && colType.min != undefined) { attr_min = ` minlength="${colType.min}"`; };
-                if (colType.type == "string" && colType.max != undefined) { attr_max = ` maxlength="${colType.max}"`; };
+                if (colType.ge != undefined) { attr_min = ` min="${colType.ge}"`; }
+                if (colType.le != undefined) { attr_max = ` max="${colType.le}"`; }
+                if (colType.type == "string" && colType.min != undefined) { attr_minlength = ` minlength="${colType.min}"`; };
+                if (colType.type == "string" && colType.max != undefined) { attr_maxlength = ` maxlength="${colType.max}"`; };
                 if (colType.decimals != undefined) {
                     let decimals = formatNumber(0, colType.decimals, ".");
                     decimals = decimals.substring(0, decimals.length - 1) + "1";
@@ -2207,13 +2286,13 @@ export class GridView {
                                     break;
                             }
                         } else if (colType?.password) {
-                            html += `<input id="${colName}" name="${colName}" type="password"${attr_min}${attr_max}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
+                            html += `<input id="${colName}" name="${colName}" type="password"${attr_minlength}${attr_maxlength}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
                         } else if (attr_list) {
                             // Auswahl Liste
                             html += `<input id="${colName}" name="${colName}" type="select"${attr_list}${attr_min}${attr_max}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
                         } else {
                             // kein Datum
-                            html += `<input id="${colName}" name="${colName}" type="text"${attr_list}${attr_min}${attr_max}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
+                            html += `<input id="${colName}" name="${colName}" type="text"${attr_list}${attr_minlength}${attr_maxlength}${attr_min}${attr_max}${attr_pattern}${attr_required}${attr_readonly}${attr_value}>`;
                         }
                     } // else Umwandlung in Boolean
                     break;
