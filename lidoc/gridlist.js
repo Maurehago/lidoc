@@ -103,14 +103,14 @@ const regexFor = /{{(for)}}/g;
  * @type {Map<string,GridList>}
  */
 export const LIST = new Map();
-
+// todo: Namespaces????
 
 export const ENUM = {
     colDataType: Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 })
     , colDateType: Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 })
 };
 
-// todo: Typen vereinfachung
+// Typen vereinfachung
 // "aaa string_*" - Ein * am Ende heist Erforderlich
 // "aaa string_**" - Zwei ** am Ende heist Erforderlich und schreibgeschützt
 // "aaa string_123" - Eine _Zahl nach dem Typ ist die max einstellung
@@ -119,6 +119,8 @@ export const ENUM = {
 // "aaa obj_ObjektListe" - "obj_"/"object_" am Beginn für Objekte
 // "aaa list_Objektliste" - "list_" am Beginn für Auflistungen
 // "@aaa string_10" - @ am Beginn vom Variablenname für Attribute
+
+// todo: Mehrere Typen zuweisen????
 // "aaa string|number" - Oder/ mehrere Möglichkeiten zuweisen
 // typ "string_base64" - Typ festlegen?
 
@@ -141,6 +143,9 @@ export class DATATYPE {
         , ["period", { id: "period", type: "string", _: true, date: "period" }]
         , ["double", { id: "double", type: "number", _: true }]
         , ["int", { id: "int", type: "number", _: true, decimals: 0 }]
+        , ["uint", { id: "uint", type: "number", _: true, ge: 0, decimals: 0 }]
+        , ["short", { id: "short", type: "number", _: true, ge: -32768, le: 32767, decimals: 0 }]
+        , ["ushort", { id: "ushort", type: "number", _: true, ge: 0, le: 65535, decimals: 0 }]
         , ["janein", { id: "janein", type: "string", _: true, min: 1, max: 1, chartobool: true }]
         , ["*", { id: "*", required: true }]
         , ["**", { id: "**", required: true, readonly: true }]
@@ -181,6 +186,10 @@ export class DATATYPE {
                     Object.assign(obj, this.#datatype.get("list"));
                     obj.link = parts[i +1];
                     i += 1;
+                    break;
+                case "double":
+                    Object.assign(obj, this.#datatype.get("double"));
+                    isDecimal = true; // Dezimalstellen bei Double
                     break;
                 case "enum":
                     obj.inlist = parts[i +1];
@@ -1745,13 +1754,13 @@ export class GridList {
      * Die Filterfunktion wird mit einer Liste von Datensätzen aufgerufen, die in der angegebenen Spaltenliste(colList) den selben Wert haben.  
      * Wenn index angegeben werden die Daten zum Filtern vom bestehenden Index genommen.
      * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
-     * @param {Array<string|number>} colList - Spalten Namen oder Nummern nach dem Gruppiert wird. 
      * @param {Function} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" werden alle Datensätze der Gruppe in die gefilterte Liste aufgenommen.
+     * @param {Array<string|number>} colList - Spalten Namen oder Nummern nach dem Gruppiert wird. 
      * @param {string|Array<string|number>} [index] - optionaler Index oder Liste von ID's, wenn Daten von einem bestehenden Index genommen werden. 
      * @param {string} [newIndexName] - Index unter dem die gefilterte Liste abgelegt wird.
      * @returns {Array<string|number>} Gefilterte Liste mit ID's
      */
-    filterGroup(colList, fu, index, newIndexName) {
+    filterGroup(fu, colList, index, newIndexName) {
         // Wenn keine Funktion dann ganze IndexListe zurückgeben
         if (typeof fu != "function") { return this.getIndex(index); }
 
@@ -1946,7 +1955,7 @@ export class GridList {
         //newList.#data = this.#data;
         return newList;
     }
-
+    getNewList = this.getAliasList;
 
     /**
     * Erstellt eine Instanz der GridList
