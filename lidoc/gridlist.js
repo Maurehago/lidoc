@@ -142,6 +142,7 @@ export class DATATYPE {
         , ["time", { id: "time", type: "string", _: true, date: "time" }]
         , ["period", { id: "period", type: "string", _: true, date: "period" }]
         , ["double", { id: "double", type: "number", _: true }]
+        , ["float", { id: "float", type: "number", _: true }]
         , ["int", { id: "int", type: "number", _: true, decimals: 0 }]
         , ["uint", { id: "uint", type: "number", _: true, ge: 0, decimals: 0 }]
         , ["short", { id: "short", type: "number", _: true, ge: -32768, le: 32767, decimals: 0 }]
@@ -162,7 +163,7 @@ export class DATATYPE {
      */
     static get(type) {
         /** @type {DataType} */
-        let obj = {id: "undefined", type: "string"};
+        let obj = { id: "undefined", type: "string" };
         if (!type || typeof type != "string") { return obj; }
 
         // Typ aufsplitten
@@ -174,17 +175,17 @@ export class DATATYPE {
             switch (parts[i]) {
                 case "obj":
                     Object.assign(obj, this.#datatype.get("obj"));
-                    obj.link = parts[i +1];
+                    obj.link = parts[i + 1];
                     i += 1;
                     break;
                 case "object":
                     Object.assign(obj, this.#datatype.get("object"));
-                    obj.link = parts[i +1];
+                    obj.link = parts[i + 1];
                     i += 1;
                     break;
                 case "list":
                     Object.assign(obj, this.#datatype.get("list"));
-                    obj.link = parts[i +1];
+                    obj.link = parts[i + 1];
                     i += 1;
                     break;
                 case "double":
@@ -192,7 +193,7 @@ export class DATATYPE {
                     isDecimal = true; // Dezimalstellen bei Double
                     break;
                 case "enum":
-                    obj.inlist = parts[i +1];
+                    obj.inlist = parts[i + 1];
                     i += 1;
 
                 default:
@@ -212,7 +213,58 @@ export class DATATYPE {
         return obj;
     } // get
 
-    
+    /**
+     * Liefert einen Typstring zurück für die Angabe bei einem Datenfeld
+     * @param {DataType} typeObj 
+     * @param {boolean} [with_id] - wenn die ID im Typestring stehen soll
+     * // todo: ID statt Typ zurückgeben
+     */
+    static get_typeString(typeObj, with_id) {
+        let typeName = "";
+
+        // enum
+        if (typeObj.inlist) {
+            typeName = "enum_" + typeObj.inlist;
+        }
+
+        // ID und Typ
+        if (with_id) {
+            typeName += typeObj.id;
+        } else {
+
+            // Type string, number oder date
+            if (typeName) { typeName += "_"; }
+            if (typeObj.date) {
+                typeName += typeObj.date;
+            } else {
+                typeName += typeObj.type;
+            }
+        }
+
+        // Link
+        if (typeObj.link) {
+            typeName += "_" + typeObj.link;
+        }
+
+        // max und Decimals
+        if (typeObj.max) {
+            typeName += "_" + typeObj.max;
+        }
+        if (typeObj.decimals) {
+            typeName += "_" + typeObj.decimals;
+        }
+
+        if (typeObj.required) {
+            typeName += "_*";
+            if (typeObj.readonly) {
+                typeName += "*";
+            }
+        }
+
+        return typeName;
+    }
+
+
     /**
      * 
      * @param {string} typeName - Typname
@@ -220,9 +272,9 @@ export class DATATYPE {
      * @returns 
      */
     static set(typeName, typeObj) {
-        if (!typeName || typeof typeName != "string") {return;}
-        if (Array.isArray(typeObj)) {return;}
-        if (typeof typeObj != "object") {return;}
+        if (!typeName || typeof typeName != "string") { return; }
+        if (Array.isArray(typeObj)) { return; }
+        if (typeof typeObj != "object") { return; }
         this.#datatype.set(typeName, typeObj);
     }
 }
