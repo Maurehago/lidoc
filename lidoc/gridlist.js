@@ -23,7 +23,7 @@ import { formatDate } from "./infodate.js";
 // colname = ArributeID - es kann das Selbe Attribute bei mehreren Spalten angewendet werden - Listen Übergreifend
 
 /** 
- * Callback Funktion die für jede Gruppe ausgefügrt wird
+ * Callback Funktion die für jede Gruppe ausgeführt wird
  * @callback CallbackGroupFunction
  * @param {Array<object>} objList - Liste mit gefilterten Datensatz Objekten, pro Gruppe
  * @param {Array<string|number>} [idList] - Liste mit ID's der gefilterten Datenzeilen pro Gruppe
@@ -31,7 +31,7 @@ import { formatDate } from "./infodate.js";
  */
 
 /** 
- * Callback Funktion die für alle Datensätze ausgefügrt wird.  
+ * Callback Funktion die für alle Datensätze ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
  * @callback CallbackFilterFunction
  * @param {object} obj - Datensatz Objekt
@@ -41,12 +41,22 @@ import { formatDate } from "./infodate.js";
  */
 
 /** 
- * Callback Funktion die für alle Datensätze ausgefügrt wird.  
+ * Callback Funktion die für alle Datensätze ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird die ganze For-Schleife abgebochen.
  * @callback CallbackForFunction
  * @param {object} obj - Datensatz Objekt
  * @param {number} [index] - Position in der Liste nach Index
  * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
+ * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
+ */
+
+/** 
+ * Callback Funktion die für alle Spalten ausgeführt wird.  
+ * Wenn die Funktion "true" zurückliefert, wird die ganze For-Schleife abgebochen.
+ * @callback CallbackForColFunction
+ * @param {string} colName - Name der Spalte
+ * @param {DataType} [colType] - Typ der Spalte
+ * @param {Array<string>} [colList] - Liste der Spalten-Namen
  * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
  */
 
@@ -57,8 +67,8 @@ import { formatDate } from "./infodate.js";
  * @property {string} id - Name Des Daten Formates
  * @property {InfoType} type - Typ der Spalte
  * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
- * @property {string} [description] - Informationstext zu der Spalte
- * @property {string} [domain] - Name eines Speziellen abgeleiteten Types 
+ * @property {string} [description] - Informationstext zum Typ
+ * @property {object} [domain] - Namen eines Speziellen abgeleiteten Types 
  * @property {boolean} [required] - Wenn der Wert erforderlich ist
  * @property {boolean} [attr] - Wenn die Spalte ein Attribute ist
  * @property {string} [inlist] - Name einer Aufzählung. Muss Inhalt von angegebener Aufzählung sein
@@ -87,6 +97,7 @@ import { formatDate } from "./infodate.js";
  * @property {number|Array<number>} idColNumber - Index der ID Spalte(n)
  * @property {Array<string>} cols - Spalten Namen
  * @property {Array<string>} types - Namen der Datentypen. Muss mit Anzahl und Position(index) der Spalten übereinstimmen.
+ * @property {Array<string>} [descriptions] - Beschreibungen zu den Spalten. Muss mit Anzahl und Position(index) der Spalten übereinstimmen.
  * @property {Array<any>} [data] - Daten der GridListe. Position der Werte muss Muss mit Anzahl und Position(index) der Spalten übereinstimmen.
  */
 
@@ -163,7 +174,7 @@ export class DATATYPE {
      */
     static get(type) {
         /** @type {DataType} */
-        let obj = { id: "undefined", type: "string" };
+        let obj = { id: "undefined", type: "string", domain: {} };
         if (!type || typeof type != "string") { return obj; }
 
         // Typ aufsplitten
@@ -204,8 +215,10 @@ export class DATATYPE {
                             obj.max = parseInt(parts[i]);
                             isDecimal = true;
                         }
-                    } else {
+                    } else if (this.#datatype.has(parts[i])) {
                         Object.assign(obj, this.#datatype.get(parts[i]));
+                    } else {
+                        obj.domain[parts[i]] = true;
                     }
                     break;
             }
@@ -535,6 +548,9 @@ export class GridList {
     /** Liste mit Typbezeichnung für jede Spalte @type {Array<string>} */
     #types = [];
 
+    /** Liste mit Beschreibungen für jede Spalte @type {Array<string>} */
+    #descriptions = [];
+
     /** Interner Datenspeicher @type {Map<string|number,any[]>} */
     #data = new Map();
 
@@ -812,6 +828,41 @@ export class GridList {
 
 
     /**
+     * Setzt eine beschreibung für eine Spalte
+     * @param {string} colName - Name der Spalte
+     * @param {string} description - Beschreibung für die Spalte
+     * @returns {void}
+     */
+    setColDescription(colName, description) {
+        if (typeof colName != "string") { return; }
+        const colIndex = this.getColNumber(colName);
+        if (colIndex < 0) {
+            // Spalte nicht vorhanden
+            return;
+        }
+
+        this.#descriptions[colIndex] = description;
+    }
+
+
+    /**
+     * Liefert die Beschreibung einer Spalte zurück
+     * @param {string} colName - Name der Spalte
+     * @returns {string} Beschreibung der Spalte
+     */
+    getColDescription(colName) {
+        if (typeof colName != "string") { return ""; }
+        const colIndex = this.getColNumber(colName);
+        if (colIndex < 0) {
+            // Spalte nicht vorhanden
+            return "";
+        }
+
+        return this.#descriptions[colIndex] || "";
+    }
+
+
+    /**
      * Fügt eine neue Spalte der Liste hinzu.
      * @param {string|Array<string>} col - Name (und Type) der Spalte oder eine Liste von Spalten
      * @returns {number|Array<number>} Index oder Liste von Indexes für die hinzugefügten Spalten.
@@ -930,6 +981,7 @@ export class GridList {
 
             // Spalte löschen
             this.#types.splice(colIndex, 1);
+            this.#descriptions.splice(colIndex, 1);
             this.#cols.splice(colIndex, 1);
         } catch (err) {
             // todo: bei Fehler zurücksetzen???
@@ -1000,6 +1052,7 @@ export class GridList {
             this.name = obj.name;
             this.#cols = obj.cols;
             this.#types = obj.types;
+            this.#descriptions = obj.descriptions || [];
 
             // idIndex
             this.#idColNumber = obj.idColNumber;
@@ -1037,6 +1090,7 @@ export class GridList {
         newObj.name = this.name;
         newObj.cols = this.#cols;
         newObj.types = this.#types;
+        newObj.descriptions = this.#descriptions;
 
         newObj.idColNumber = this.#idColNumber;
 
