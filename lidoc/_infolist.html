@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Infolist</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="" />
+    <link rel="icon" href="/img/icon.png">
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex-colors.css" />
+
+    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
+    <!-- <script src="/prism/prism.js"></script> -->
+</head>
+
+<body>
+    <f-row style="height: 100vh;">
+        <f-item w-fit style="overflow: auto;">
+            <div color-p pa-all>InfoList</div>
+            <table id="table" table-stripes table-rowborder ma-auto>
+                <thead pos-sticky pos-t-l color-p2><th>Test</th></thead>
+                <tbody></tbody>
+            </table>
+        </f-item>
+        <f-item color-p2 style="width: 520px; overflow-y: auto;">
+            <form id="form"></form>
+        </f-item>
+    </f-row>
+</body>
+
+<script type="module">
+    //@ts-check
+    import { init } from "./_infolist.js";
+
+    // INIT
+    init();
+</script>
+
+</html>

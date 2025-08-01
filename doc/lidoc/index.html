@@ -7,9 +7,9 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="" />
     <link rel="icon" href="/img/icon.png">
-    <link rel="stylesheet" type="text/css" href="/flex/flex.css" />
-    <link rel="stylesheet" type="text/css" href="/flex/flex-colors.css" />
-    <link rel="stylesheet" type="text/css" href="/prism/prism.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex-colors.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
 
     <style>
         #header {
@@ -36,14 +36,14 @@
         }
     </style>
 
-    <script src="/prism/prism.js"></script>
+    <script src="/lib/prism/prism.js"></script>
 </head>
 
 <body>
     <div id="header" color-p pos-sticky border-b no-print data-lidoc="/_header.md"></div>
-    <nav id="menue" color-p hide-lt-m data-lidoc="./_menue.md"></nav>
+    <nav id="menue" color-p hide-lt-m no-print data-lidoc="./_menue.md"></nav>
     <f-row>
-        <f-item class="menue" hide-lt-m></f-item>
+        <f-item class="menue" hide-lt-m no-print></f-item>
         <f-item w-fit>
             <div id="content" w-max ma-l data-lidoc="./index.md"></div>
             <div id="footer" color-darkgrey no-print data-lidoc="/_footer.md"></div>

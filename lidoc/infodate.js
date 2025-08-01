@@ -83,6 +83,90 @@ function checkDate(date) {
 }
 
 
+
+/**
+ * gibt Das Datum laut Format-String zurück
+ * @param {Date} date - Datum des Monats
+ * @param {string} formatString - Formatierung für Datum. z.B.: "yyyy-mm-dd HH:MM:SS.sss" "d.m.y" todo: Woche formatWeek()
+ * @returns {string} Datum im Formatstring
+ */
+export function formatDate(date, formatString) {
+    if (!isDate(date)) { return ""; }
+    let newDate = checkDate(date);
+    
+    if (typeof formatString != "string" || formatString == "") {
+        return newDate.toISOString();
+    }
+
+    let newString = formatString;
+    // 2025-04-08T13:05:23.094Z
+    // 0123456789 123456789 123
+    const dateString = newDate.toISOString(); 
+    const hours = newDate.getHours(); // Wegen Locale Zeit
+    const minutes = newDate.getMinutes(); // Wegen Locale Zeit
+    const seconds = newDate.getSeconds(); // Wegen Locale Zeit
+    const hourString = hours < 10 ? "0" + hours : "" + hours;
+    const minuteString = minutes < 10 ? "0" + minutes : "" + minutes;
+    const secondString = seconds < 10 ? "0" + seconds : "" + seconds;
+
+    // Jahr ersetzen
+    newString = newString.replaceAll("yyyy", dateString.substring(0,4));
+    newString = newString.replaceAll("yy", dateString.substring(2,4));
+    newString = newString.replaceAll("y", dateString.substring(0,4));
+
+    // Monat ersetzen
+    newString = newString.replaceAll("mm", dateString.substring(5, 7));
+    newString = newString.replaceAll("m", dateString.substring(5, 7));
+
+    // Tag ersetzen
+    newString = newString.replaceAll("dd", dateString.substring(8, 10));
+    newString = newString.replaceAll("d", dateString.substring(8, 10));
+
+    // Stunden ersetzen
+    newString = newString.replaceAll("HH", hourString);
+    newString = newString.replaceAll("H", hourString);
+
+    // Minuten ersetzen
+    newString = newString.replaceAll("MM", minuteString);
+    newString = newString.replaceAll("M", minuteString);
+    
+    // Sekunden ersetzen
+    newString = newString.replaceAll("SS", secondString);
+    newString = newString.replaceAll("S", secondString);
+   
+    // Milli-Sekunden ersetzen
+    newString = newString.replaceAll("sss", "" + newDate.getMilliseconds());
+
+    return newString;
+}
+
+
+/**
+ * Gibt die Woche laut formatString zurück.
+ * @param {Date|string|number} week - Woche als Datum, String oder Zahl
+ * @param {string} formatString - Template String für die Darstellung der Woche. z.B.: "Woche ww" ("ww" wird ersetzt) 
+ * @returns {string} Formatierter String
+ */
+export function formatWeek(week, formatString) {
+    let weekString = "";
+    if (week instanceof Date) {
+        weekString = getWeek(week);
+        weekString = weekString.substring(weekString.length -2);
+    } else if (typeof week == "string") {
+        weekString = week.substring(week.length -2);
+    } else if (typeof week == "number") {
+        weekString = "0" + week;
+        weekString = weekString.substring(weekString.length -2);
+    }
+
+    // Woche ersetzen
+    let newString = formatString.replaceAll("ww", weekString);
+    //newString = newString.replaceAll("w", "" + parseInt(weekString));
+
+    return newString;
+}
+
+
 /**
  * gibt den ersten Tag eines Monats als Datum-ISOString zurück
  * @param {Date} date - Datum des Monats
@@ -322,24 +406,33 @@ function diffMilli(date1, date2) {
  */
 export function getDateDiff(date1, date2, unit) {
     if (!isDate(date1) || !isDate(date2)) { return -1; }
-    const diffInMilli = diffMilli(checkDate(date1), checkDate(date2));
+    let d1 = checkDate(date1);
+    let d2 = checkDate(date2);
+
+    // um ganze Tage zu bekommen
+    if (unit == "week" || unit == "day") {
+        d1.setHours(12, 0, 0, 0);
+        d2.setHours(12, 0, 0, 0);
+    }
+
+    const diffInMilli = diffMilli(d1, d2);
 
     // Je nach Einheit
     switch (unit) {
         case "week":
-            return Math.ceil(diffInMilli / weekMillisec) - 1;
+            return Math.trunc(diffInMilli / weekMillisec);
             break;
         case "day":
-            return Math.ceil(diffInMilli / dayMillisec) - 1;
+            return Math.trunc(diffInMilli / dayMillisec);
             break;
         case "hour":
-            return Math.ceil(diffInMilli / hourMillisec) - 1;
+            return Math.trunc(diffInMilli / hourMillisec);
             break;
         case "minute":
-            return Math.ceil(diffInMilli / minuteMillisec) - 1;
+            return Math.trunc(diffInMilli / minuteMillisec);
             break;
         case "second":
-            return Math.ceil(diffInMilli / secondMillisec) - 1;
+            return Math.trunc(diffInMilli / secondMillisec);
             break;
 
         default:
@@ -380,10 +473,12 @@ export function getWeek(date) {
     }
 
     // 1. Jänner prüfen
-    const firstThursday = checkDate(getThursday(new Date(year, 0, 4, 12)));
+    //const firstThursday = checkDate(getThursday(new Date(year, 0, 4, 12)));
+    const firstThursday = checkDate(getThursday(new Date(year, 0, 4)));
 
     // Differenz in Wochen
     const diffWeek = getDateDiff(firstThursday, currentThursday, "week");
+
     const diffString = "0" + (diffWeek + 1);
     return year + "-W" + diffString.substring(diffString.length - 2);
 }

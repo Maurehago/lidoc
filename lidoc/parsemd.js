@@ -82,10 +82,12 @@ export function parseMd(mdString, options) {
     let lastStep = 0;
     /** @type {number[]} */
     let stepList = [];
+    let stepTagList = [];
     let listTag = "ul";
     let lastKey = "";
     /** @type {string[]} */
     let dataList = [];
+    let contentID = "content";
 
     // Text aufsplitten
     /** @type {string[]} */
@@ -101,11 +103,14 @@ export function parseMd(mdString, options) {
         if (isLi) {
             const stepListLength = stepList.length;
 
-            // Wenn bereits ein List-Item
-            for (let i = 0; i < stepListLength; i++) {
+            if (stepListLength < 1) {
                 htmlString += "</li></" + listTag + ">";
+            } else {
+                // Wenn bereits ein List-Item
+                for (let i = stepListLength -1; i > -1; i--) {
+                    htmlString += "</li></" + stepTagList[i] + ">";
+                }
             }
-            stepList.splice(0);
 
             isLi = false;
             isList = false;
@@ -114,6 +119,8 @@ export function parseMd(mdString, options) {
             htmlString += "</" + listTag + ">";
             isList = false;
         }
+        stepList = [];
+        stepTagList = [];
         if (isTable) {
             htmlString += "</table>";
             tableColAttributes = [];
@@ -233,14 +240,16 @@ export function parseMd(mdString, options) {
         // Text  "- " oder "1. " entfernen
         let text = trimLine.substring(trimLine.indexOf(" ") + 1);
         text = checkText(text);
-
+        const stepIndex = stepList.indexOf(step);
+        
         // Wenn noch keine Liste oder Unterliste beginn
         if (!isList || step > lastStep) {
-            // Letzte Stufe in die Liste wenn noch nicht vorhanden
-            if (stepList.indexOf(lastStep) < 0) {
-                stepList.push(lastStep);
+            // Stufe in die Liste wenn noch nicht vorhanden
+            if (stepIndex < 0) {
+                stepList.push(step);
+                stepTagList.push(listTag);
             }
-
+            
             if (step > 2 && step > lastStep) {
                 htmlString += "<" + listTag + " sub-list" + newAttribute + ">";
             } else {
@@ -249,32 +258,35 @@ export function parseMd(mdString, options) {
             isList = true;
             newAttribute = "";
         }
-
+        
         // wenn Einrückung kleiner voriger Einrückung
         if (step < lastStep) {
             // prüfen auf die Position in der Liste
-            const stepIndex = stepList.indexOf(step);
             const stepListLength = stepList.length;
-
+            
             // Wenn bereits ein List-Item
             if (isLi) {
-                for (let i = stepIndex; i < stepListLength; i++) {
-                    htmlString += "</li></" + listTag + ">";
+                for (let i = stepListLength -1; i > stepIndex; i--) {
+                    htmlString += "</li></" + stepTagList[i] + ">";
                 }
+            } else {
+                htmlString += "</" + stepTagList[stepIndex] + ">";
             }
-
+            
             // Elemente bis zur Stufe entfernen
             stepList.splice(stepIndex + 1);
-
+            stepTagList.splice(stepIndex +1);
+            
         } else if (isLi && step == lastStep) {
             htmlString += "</li>";
             isLi = false;
         }
-
+        
         // neues ListenElement
-        htmlString += "<li>" + text;
+        htmlString += "<li" + tagAttribute + ">" + text;
         isLi = true;
-
+        tagAttribute = "";
+        
         // Stufe merken
         lastStep = step;
     }; // checkListe
@@ -547,7 +559,10 @@ export function parseMd(mdString, options) {
     }; // checkData
 
     // Alle Zeilen durchgehen
-    lines.forEach((line, index) => {
+    //lines.forEach((line, index) => {
+    for (let index = 0; index < lines.length; index ++) {
+        const line = lines[index];
+
         trimLine = line.trim();
         step = line.length - trimLine.length;
 
@@ -555,11 +570,11 @@ export function parseMd(mdString, options) {
         if (index == 0 && trimLine == "---") {
             // Daten prüfen
             isData = true;
-            return;
+            continue;
         } else if (isData) {
             if (trimLine == "---") {
                 isData = false;
-                return;
+                continue;
             }
 
             checkData();
@@ -567,16 +582,31 @@ export function parseMd(mdString, options) {
             // Code prüfen
             checkCode(line);
         } else {
+            // Content Bereich prüfen
+            if (trimLine.startsWith("===")) {
+                closeAllTags();
+                site.html.set(contentID, htmlString);
+                htmlString = "";
+                contentID = "content";
+
+                const pos1 = trimLine.indexOf(" ");
+                if (pos1 > 0) {
+                    contentID = trimLine.substring(pos1 +1);
+                }
+                continue;
+            }
+
             // Zeilen prüfen
             checkLine();
             lastLine = trimLine;
         }
-    });
+    };
 
     // Alles schiessen
     closeAllTags();
 
     // geparsten HTML String zurückgeben
-    site.html.set("content", htmlString);
+    // site.html.set("content", htmlString);
+    site.html.set(contentID, htmlString);
     return site;
 } // parseMd
