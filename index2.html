@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Community</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="" />
+    <link rel="icon" href="/img/icon.png">
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/css/page.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
+
+    <script src="/lib/prism/prism.js"></script>
+    <script>
+        // um Sidebar zu schliessen
+        function closeNav() {
+            document.getElementById("navmenu").checked = false;
+        }
+    </script>
+</head>
+
+<body>
+    <f-row w-l ma-auto>
+        <input id="navmenu" type="checkbox" class="toggler">
+        <div color-p no-print class="sidebar">
+            <f-item color-p2 hide-lt-m data-lidoc="/_logo.md"></f-item>
+            <nav pos-sticky pos-t-l data-lidoc="./_menu.md" onclick="closeNav();"></nav>
+        </div>
+        <div style="min-height: 100vh;">
+            <label for="navmenu" class="togglebar">&#9776;</label>
+            <div no-print w-fit color-p text-c data-lidoc="/_header"></div>
+            <div id="content" w-content data-lidoc="./index.md"></div>
+        </div>
+    </f-row>
+    <f-item color-darkgrey no-print data-lidoc="/_footer.md"></f-item>
+</body>
+
+<script type="module" src="/lib/lidoc/lidoc.js"></script>
+
+</html>

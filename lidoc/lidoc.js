@@ -239,7 +239,11 @@ export async function showContent(elm, url) {
 
     // HTML im Body anzeigen
     siteData.html.forEach((value, key) => {
-        if (key == "content") {return;}
+        if (key == "content") {
+            elm.innerHTML = "";
+            elm.insertAdjacentHTML("afterbegin", value);
+            return;
+        }
         const cElm = document.getElementById(key);
         if (cElm instanceof HTMLElement) {
             cElm.innerHTML = "";
@@ -247,10 +251,6 @@ export async function showContent(elm, url) {
         }
     });
     
-
-    elm.innerHTML = "";
-    elm.insertAdjacentHTML("afterbegin", siteData.html.get("content"));
-
     await loadModule(siteData.data.module);
 } // showSite
 
@@ -301,7 +301,7 @@ for (let i = 0; i < lidocElmList.length; i ++) {
 }
 
 if (contentElm) {
-    await showContent(contentElm, checkSiteUrl(location.hash));
+    //await showContent(contentElm, checkSiteUrl(location.hash));
 }
 
 // Navigation prüfen

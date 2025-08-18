@@ -140,6 +140,7 @@ export function parseMd(mdString, options) {
      * Schließt alle Tags innerhalb einer Spalte
      */
     let closeRowCol = function () {
+        isHTML = false;
         if (isP) {
             htmlString += "</p>";
             isP = false;
@@ -311,30 +312,24 @@ export function parseMd(mdString, options) {
 
         // Ab hier ist keine Leerzeile
 
-        // Wenn HTML Code
-        if (isHTML || (trimLine.startsWith("<") && trimLine.endsWith(">"))) {
-            isHTML = true;
-            htmlString += trimLine + "\n";
-            return;
-        }
-
+        
         // Wenn Tag Attribute
         if (trimLine.endsWith("]")) {
             // Tag Attribute
             const pos1 = trimLine.lastIndexOf(" [");
             if (pos1 >= 0) {
                 tagAttribute = " " +
-                    trimLine.substring(pos1 + 2, trimLine.length - 1);
+                trimLine.substring(pos1 + 2, trimLine.length - 1);
                 trimLine = trimLine.substring(0, pos1);
             }
         }
-
+        
         // Neue Attribute für folgende zeilen
         if (trimLine.startsWith("[") && trimLine.endsWith("]")) {
             newAttribute = " " + trimLine.substring(1, trimLine.length - 1);
             return;
         }
-
+        
         if (trimLine == "---") {
             // Spalten schliessen
             closeRowCol();
@@ -342,7 +337,7 @@ export function parseMd(mdString, options) {
             tagAttribute = "";
             return;
         }
-
+        
         // Wenn zuvor ein Spaltenbeginn
         if (lastLine == "---") {
             // Prüfen auf Zeile
@@ -351,7 +346,7 @@ export function parseMd(mdString, options) {
                 isRow = true;
                 newAttribute = "";
             }
-
+            
             // Spalte anlegen
             if (!isRowCol) {
                 htmlString += "<" + colTag + newColAttribute + ">";
@@ -359,6 +354,14 @@ export function parseMd(mdString, options) {
                 newColAttribute = "";
             }
         } // Spalten Beginn
+
+
+        // Wenn HTML Code
+        if (isHTML || (trimLine.startsWith("<") && trimLine.endsWith(">"))) {
+            isHTML = true;
+            htmlString += trimLine + "\n";
+            return;
+        }
 
         // Liste
         if (trimLine.startsWith("- ")) {
