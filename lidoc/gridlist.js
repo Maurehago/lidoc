@@ -1338,6 +1338,41 @@ export class GridList {
 
 
     /**
+     * Schreibt die Daten eines Angegebenen Arrays, oder Liste von Arrays, in die Gridliste.
+     * Die Anzahl der Spalten muss mit den in der Liste vorhanden Spalten übereinstimmen.
+     * Ist bereits ein Datensatz mit der selben ID vorhanden, so wird dieser überschrieben.  
+     * !!! WICHTIG !!! - Bereits vorhandenen sortierte oder gruppierte Indexes werden nicht angepasst.
+     * @param {Array<any>|Array<Array<any>>} list - Datensatz als Array oder eine Liste mit Datensatz-Arrays
+     * @returns {string|number|undefined|Array<any>} ID des eingefügten Objektes
+     */
+    setArray(list) {
+        if (!Array.isArray(list)) { return; }
+        if (Array.isArray(list[0])) {
+            const newIds = [];
+            for (let i = 0; i < list.length; i++) {
+                newIds.push(this.setArray(list[i]));
+            }
+            return newIds;
+        }
+
+        // Anzahl Spalten
+        if (list.length != this.#cols.length) {
+            return;
+        }
+
+        // neue Datenzeilen
+        // Prüfen / lesen von bestehender Datenzeile
+        const id = this.getID(list);
+
+        // nur Datensätze mit ID kommen in die Liste
+        if (id == undefined) { return id; }
+
+        this.#data.set(id, list);
+        return id;
+    }
+
+
+    /**
      * Setzt Daten aus einem Formular(FormData) in die Liste
      * @param {FormData} formData - Formular Daten Objekt
      * @returns {string|number|undefined} ID des Datensatzes
