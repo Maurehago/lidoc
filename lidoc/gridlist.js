@@ -65,7 +65,7 @@ import { formatDate } from "./infodate.js";
 /**
  * @typedef {object} DataType
  * @property {string} id - Name Des Daten Formates
- * @property {InfoType} type - Typ der Spalte
+ * @property {InfoType} type - Typ der Spalte Einfacher Typ
  * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
  * @property {string} [description] - Informationstext zum Typ
  * @property {object} [domain] - Namen eines Speziellen abgeleiteten Types 
@@ -82,6 +82,7 @@ import { formatDate } from "./infodate.js";
  * @property {number|string} [le] - Kleiner oder gleich als angegeben (inklusive der angegeben zahl)
  * @property {string} [pattern] - Regular Expression zum Testen eines Wertes
  * @property {any} [default] - Standard-Wert der Eigenschafft
+ * @property {any} [fix] - Fixer Wert - kann nicht geändert werden. Wie "default" nur nicht änderbar.
  * @property {boolean} [chartobool] - true wenn der Charakter "J" in "true" umgewandelt werden soll.
  * @property {boolean} [readonly] - true wenn wert nicht bearbeitet werden darf.
  * @property {boolean} [password] - true wenn es ein Passwort Feld ist.
@@ -119,6 +120,7 @@ export const LIST = new Map();
 export const ENUM = {
     colDataType: Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 })
     , colDateType: Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 })
+    , colBoolType: Object.freeze({ "true": 1, "false": 2, ".t.": 3, ".f.": 4, "y": 5, "n": 6, "j": 7})
 };
 
 // Typen vereinfachung
@@ -144,8 +146,11 @@ export class DATATYPE {
     static #datatype = new Map([
         ["string", { id: "string", type: "string", _: true }]
         , ["number", { id: "number", type: "number", _: true }]
+        , ["numstring", { id: "numstring", type: "string", _: true, pattern: "[\-.0-9]"}]
+        , ["intstring", { id: "intstring", type: "string", _: true, pattern: "[\-.0-9]", decimals: 0}]
         , ["bigint", { id: "bigint", type: "bigint", _: true, decimals: 0 }]
         , ["boolean", { id: "boolean", type: "boolean", _: true }]
+        , ["boolstring", { id: "boolstring", type: "string", _: true, inlist: "colBoolType" }]
         , ["password*", { id: "password*", type: "string", _: true, required: true, password: true, min: 8, pattern: "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$" }]
         , ["GSID", { id: "GSID", type: "string", _: true }]
         , ["date", { id: "date", type: "string", _: true, date: "date" }]
@@ -159,8 +164,8 @@ export class DATATYPE {
         , ["short", { id: "short", type: "number", _: true, ge: -32768, le: 32767, decimals: 0 }]
         , ["ushort", { id: "ushort", type: "number", _: true, ge: 0, le: 65535, decimals: 0 }]
         , ["janein", { id: "janein", type: "string", _: true, min: 1, max: 1, chartobool: true }]
-        , ["*", { id: "*", required: true }]
-        , ["**", { id: "**", required: true, readonly: true }]
+        , ["*", { id: "*", _: true, required: true }]
+        , ["**", { id: "**", _: true, required: true, readonly: true }]
 
         , ["object", { id: "object", type: "object", _: true }]
         , ["obj", { id: "obj", type: "object", _: true }]
@@ -206,7 +211,6 @@ export class DATATYPE {
                 case "enum":
                     obj.inlist = parts[i + 1];
                     i += 1;
-
                 default:
                     if (isNumber(parts[i])) {
                         if (isDecimal) {
