@@ -60,12 +60,14 @@ import { formatDate } from "./infodate.js";
  * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
  */
 
-/** @typedef {"string"|"number"|"bigint"|"boolean"|"object"|"list"} InfoType */
+/** @typedef {"string"|"number"|"bigint"|"boolean"|"object"|"list"|"any"} InfoType */
 
 /**
  * @typedef {object} DataType
- * @property {string} id - Name Des Daten Formates
- * @property {InfoType} type - Typ der Spalte Einfacher Typ
+ * @property {string} [id] - Name Des Daten Formates
+ * @property {InfoType} [type] - Typ der Spalte Einfacher Typ
+ * @property {Array<string>} [props] - Liste mit Eigenschaften(Spalten) bei type=="object"
+ * @property {string} [idfield] - Name des ID Feldes (default = "GSID")
  * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
  * @property {string} [description] - Informationstext zum Typ
  * @property {object} [domain] - Namen eines Speziellen abgeleiteten Types 
@@ -90,6 +92,7 @@ import { formatDate } from "./infodate.js";
  * @property {string} [linkindex] - Name des Indexes, das für die Verknüpfung verwendet wird. "link" MUSS angegeben werden
  * todo: ??? Link / foregin Key zu anderer Tabelle oder doch immer das IDFeld verwenden ???
  */
+// ["description", "required", "attr", "inlist", "date", "decimals", "min", "max", "gt", "lt", "ge", "le", "pattern", "default", "fix", "chartobool", "readonly", "password", "link", "linkindex"]
 
 
 /**
@@ -110,18 +113,41 @@ import { formatDate } from "./infodate.js";
 const regexTemplate = /{{(.*?)}}/g;
 const regexFor = /{{(for)}}/g;
 
-/** 
- * Auflistung aller GridListen
- * @type {Map<string,GridList>}
- */
-export const LIST = new Map();
-// todo: Namespaces????
 
-export const ENUM = {
-    colDataType: Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 })
-    , colDateType: Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 })
-    , colBoolType: Object.freeze({ "true": 1, "false": 2, ".t.": 3, ".f.": 4, "y": 5, "n": 6, "j": 7})
-};
+/**
+ * Register für alle Namespaces
+ * @type {Map<string,Namespace>}
+ */ 
+const NAMESPACES = new Map();
+
+export class Namespace {
+    #name = "";
+    Lists = new Map();
+    Enums = new Map();
+    Types = new TypeStore();
+
+    /**
+     * 
+     * @param {string} name - eindeutiger Name des Namensspaces. Wenn schon vorhanden, wird dieser zm Bestehenden hinzugefügt.
+     */
+    constructor(name) {
+        this.#name = name;
+        const ns = NAMESPACES.get(name);
+        if (ns) {
+            this.Enums = ns.Enums;
+            this.Lists = ns.Lists;
+            this.Types = ns.Types;
+        } 
+        NAMESPACES.set(name, this);
+    }
+} // class Namespace
+
+export const GLOBAL = new Namespace("global");
+
+
+GLOBAL.Enums.set("colDataType", Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 }));
+GLOBAL.Enums.set("colDateType", Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 }));
+GLOBAL.Enums.set("colBoolType", Object.freeze({ "true": 1, "false": 2, ".t.": 3, ".f.": 4, "y": 5, "n": 6, "j": 7 }));
 
 // Typen vereinfachung
 // "aaa string_*" - Ein * am Ende heist Erforderlich
@@ -132,6 +158,7 @@ export const ENUM = {
 // "aaa obj_ObjektListe" - "obj_"/"object_" am Beginn für Objekte
 // "aaa list_Objektliste" - "list_" am Beginn für Auflistungen
 // "@aaa string_10" - @ am Beginn vom Variablenname für Attribute
+// "aaa default=kdsfjsd" - Mit "=" kann direkt eine Eigenschaft zugewieden werden
 
 // todo: Mehrere Typen zuweisen????
 // "aaa string|number" - Oder/ mehrere Möglichkeiten zuweisen
@@ -141,13 +168,13 @@ export const ENUM = {
 /**
  * Globaler Speicher für Spalten Datentypen
  */
-export class DATATYPE {
+class TypeStore {
     /** @type {Map<string,Object>} */
-    static #datatype = new Map([
+    #datatype = new Map([
         ["string", { id: "string", type: "string", _: true }]
         , ["number", { id: "number", type: "number", _: true }]
-        , ["numstring", { id: "numstring", type: "string", _: true, pattern: "[\-.0-9]"}]
-        , ["intstring", { id: "intstring", type: "string", _: true, pattern: "[\-.0-9]", decimals: 0}]
+        , ["numstring", { id: "numstring", type: "string", _: true, pattern: "[\-.0-9]" }]
+        , ["intstring", { id: "intstring", type: "string", _: true, pattern: "[\-.0-9]", decimals: 0 }]
         , ["bigint", { id: "bigint", type: "bigint", _: true, decimals: 0 }]
         , ["boolean", { id: "boolean", type: "boolean", _: true }]
         , ["boolstring", { id: "boolstring", type: "string", _: true, inlist: "colBoolType" }]
@@ -172,12 +199,15 @@ export class DATATYPE {
         , ["list", { id: "list", type: "list", _: true }]
     ]);
 
+    /** Felder in denen Werte gesetzt werden können */
+    #fields = ["description", "required", "attr", "inlist", "date", "decimals", "min", "max", "gt", "lt", "ge", "le", "pattern", "default", "fix", "chartobool", "readonly", "password", "link", "linkindex"];
+
     /**
      * 
      * @param {string} type - Die Spalten Type Bezeichnung
      * @returns {DataType}
      */
-    static get(type) {
+    get(type) {
         /** @type {DataType} */
         let obj = { id: "undefined", type: "string", domain: {} };
         if (!type || typeof type != "string") { return obj; }
@@ -186,49 +216,57 @@ export class DATATYPE {
         let parts = type.split("_");
         let isDecimal = false;
 
+        // Bezeichnung zusammenbauen
+        let description = "";
+
         // Alle teile durchgehen
         for (let i = 0; i < parts.length; i++) {
-            switch (parts[i]) {
-                case "obj":
-                    Object.assign(obj, this.#datatype.get("obj"));
-                    obj.link = parts[i + 1];
-                    i += 1;
-                    break;
-                case "object":
-                    Object.assign(obj, this.#datatype.get("object"));
-                    obj.link = parts[i + 1];
-                    i += 1;
-                    break;
-                case "list":
-                    Object.assign(obj, this.#datatype.get("list"));
-                    obj.link = parts[i + 1];
-                    i += 1;
-                    break;
-                case "double":
-                    Object.assign(obj, this.#datatype.get("double"));
+            let nameValue = parts[i].split("=");
+            const name = nameValue[0].trim();
+            const value = nameValue[1]?.trim() || "";
+
+            if (name == "enum") {
+                obj.inlist = parts[i + 1];
+                i += 1;
+            } else if (this.#datatype.has(name)) {
+                // Registrierter Typ
+
+                const typeObj = this.#datatype.get("name");
+                Object.assign(obj, typeObj);
+               
+                if (name == "double") {
                     isDecimal = true; // Dezimalstellen bei Double
-                    break;
-                case "enum":
-                    obj.inlist = parts[i + 1];
+                } else if (name == "obj" || name == "object" || name == "list") {
+                    // Verlinkung
+                    obj.link = parts[i + 1];
                     i += 1;
-                default:
-                    if (isNumber(parts[i])) {
-                        if (isDecimal) {
-                            obj.decimals = parseInt(parts[i]);
-                        } else {
-                            obj.max = parseInt(parts[i]);
-                            isDecimal = true;
-                        }
-                    } else if (this.#datatype.has(parts[i])) {
-                        Object.assign(obj, this.#datatype.get(parts[i]));
-                    } else {
-                        obj.domain[parts[i]] = true;
-                    }
-                    break;
+                }
+
+                // Beschreibung hiinzufügen 
+                if (typeObj.description) {
+                    if (description) {description += "\n";}
+                    description += typeObj.description;
+                }
+            } if (isNumber(name)) {
+                if (isDecimal) {
+                    obj.decimals = parseInt(name);
+                } else {
+                    obj.max = parseInt(name);
+                    isDecimal = true;
+                }
+            } else {
+                // wenn richtiger Typ-Name
+                if (this.#fields.indexOf(name) > -1) {
+                    obj[name] = value;
+                } else {
+                    obj.domain[name] = value;
+                }
             }
-        }
+        } // for
+
         return obj;
     } // get
+
 
     /**
      * Liefert einen Typstring zurück für die Angabe bei einem Datenfeld
@@ -236,7 +274,7 @@ export class DATATYPE {
      * @param {boolean} [with_id] - wenn die ID im Typestring stehen soll
      * // todo: ID statt Typ zurückgeben
      */
-    static get_typeString(typeObj, with_id) {
+    get_typeString(typeObj, with_id) {
         let typeName = "";
 
         // enum
@@ -288,14 +326,32 @@ export class DATATYPE {
      * @param {DataType} typeObj - Typ Objekt im Format von DataType
      * @returns 
      */
-    static set(typeName, typeObj) {
+    set(typeName, typeObj) {
         if (!typeName || typeof typeName != "string") { return; }
         if (Array.isArray(typeObj)) { return; }
         if (typeof typeObj != "object") { return; }
+
+        // id und Type muss immer angegeben sein
+        typeObj.id = typeName;
+        if (typeObj.type == undefined) { typeObj.type = "string"; } // type standard = string
+
         this.#datatype.set(typeName, typeObj);
     }
+
+    // /**
+    //  * 
+    //  * @param {string} [namespace] - Namespace unter dem Dert Typ Registriert wird.
+    //  */
+    // constructor(namespace) {
+    //     if (namespace) {
+    //         const ns = NAMESPACES.get(namespace) || new Namespace(namespace);
+    //         ns.Types.set(namespace, this);
+    //     } 
+    // }
 }
 
+// Globaler DatenTypen Store
+//export const DATATYPE = new TypeStore("global");
 
 /** @type {GridNav} */
 export let activeNav;
@@ -525,16 +581,29 @@ export function newColList() {
  * @class GridList
  */
 export class GridList {
+    /** NameSpace, "" wenn globaler Namensspace @type {Namespace} */
+    #namespace = GLOBAL;
+
     /** Name der Liste @type {string} */
     #name = "";
     set name(newName) {
         if (!newName) {
             newName = GSID();
         }
-        this.#name = newName;
+
+        // wenn namespace
+        const pos1 = newName.indexOf(":");
+        if (pos1 > 0) {
+            this.#name = newName.substring(0, pos1);
+            const ns = newName.substring(pos1 +1);
+            this.#namespace = NAMESPACES.get(ns) || new Namespace(ns);
+        } else {
+            this.#name = newName;
+            this.#namespace = GLOBAL;
+        }
 
         // name registrieren
-        LIST.set(this.name, this);
+        this.#namespace.Lists.set(this.#name, this);
     }
     get name() {
         return this.#name;
@@ -756,12 +825,16 @@ export class GridList {
             let name = ("" + newFields[i]).trim();
 
             // Wenn ein leerzeichen im Namen
-            if (name.indexOf(" ") > -1) {
+            let pos1 = name.indexOf(" ");
+            if (pos1 > -1) {
                 // Type steht nach namen
-                const nameType = name.split(" ");
+                //const nameType = name.split(" ");
 
-                this.#cols[i] = nameType[0];
-                this.#types[i] = nameType[1];
+                //this.#cols[i] = nameType[0];
+                //this.#types[i] = nameType[1];
+
+                this.#cols[i] = name.substring(0, pos1); // vor dem 1. Leerzeichen
+                this.#types[i] = name.substring(pos1 + 1).trim(); // nach dem Leerzeichen
             } else {
                 this.#cols[i] = name;
 
@@ -912,7 +985,7 @@ export class GridList {
 
             // Spalte in Daten einfügen
             let value;
-            let type = DATATYPE.get(colType);
+            let type = this.#namespace.Types.get(colType);
             switch (type?.type) {
                 case "number":
                     value = 0;
@@ -1019,8 +1092,8 @@ export class GridList {
         const oldTypeName = this.#types[colNumber];
 
         // alten Typ lesen
-        const oldType = DATATYPE.get(oldTypeName)?.type || "";
-        const newType = DATATYPE.get(typeName)?.type || "";
+        const oldType = this.#namespace.Types.get(oldTypeName)?.type || "";
+        const newType = this.#namespace.Types.get(typeName)?.type || "";
 
         if (oldType == newType) {
             // neuen Typ setzen
@@ -1038,7 +1111,7 @@ export class GridList {
      * @returns {DataType|undefined} DatenTyp Objekt wenn vorhanden
      */
     getColType(col) {
-        return DATATYPE.get(this.getColTypeName(col));
+        return this.#namespace.Types.get(this.getColTypeName(col));
     }
 
 
@@ -1208,7 +1281,7 @@ export class GridList {
 
         const colNumber = this.getColNumber(col);
         const typeName = this.#types[colNumber];
-        const infoType = DATATYPE.get(typeName);
+        const infoType = this.#namespace.Types.get(typeName);
 
         // link lesen
         //const link = this.#links[i] || "";
@@ -1246,7 +1319,7 @@ export class GridList {
                 } else if (typeof value == "object") {
                     // FremdListe lesen
                     let listName = infoType.link || this.#cols[colNumber];
-                    let foreignList = LIST.get(listName);
+                    let foreignList = this.#namespace.Lists.get(listName);
                     if (foreignList == undefined) {
                         // neue Liste
                         foreignList = new GridList(listName);
@@ -1270,7 +1343,8 @@ export class GridList {
                 if (Array.isArray(value)) {
                     if (typeof value[0] == "object") {
                         let listName = infoType.link || this.#cols[colNumber];
-                        let foreignList = LIST.get(listName);
+                        if (this.#namespace) {listName = this.#namespace + ":" + listName;}
+                        let foreignList = this.#namespace.Lists.get(listName);
                         if (foreignList == undefined) {
                             // neue Liste
                             foreignList = new GridList(listName);
@@ -1664,7 +1738,7 @@ export class GridList {
             }
 
             const dataTypeName = this.#types[index];
-            const dataType = DATATYPE.get(dataTypeName);
+            const dataType = this.#namespace.Types.get(dataTypeName);
 
             colIndex[i] = index;
             orderIndex[i] = direction;
@@ -1989,7 +2063,7 @@ export class GridList {
             // SpaltenIDs lesen
             // Format lesen
             const typeName = this.#types[colNumbers[i]];
-            const colType = DATATYPE.get(typeName) || {};
+            const colType = this.#namespace.Types.get(typeName) || {};
 
             // Funktion ausführen
             // (SpaltenName, SpaltenFormat, Liste mit SpaltenNamen)
@@ -2106,12 +2180,19 @@ export class GridList {
     * Erstellt eine Instanz der GridList
     * @constructor
     * @param {string} name - Javascript Objekt oder JSON-String
-    * @param {Array<string|object>} [colList] - Optionale Liste mit Spaltennamen, oder ein Array mit Objekten, die in die liste geschrieben werden.
+    * @param {string|Array<string|object>} [colList] - Optional Name eines ObjektType oder Liste mit Spaltennamen oder ein Array mit Objekten, die in die liste geschrieben werden.
     * @param {string|Array<string>} [idCol] - Name der ID Spalte oder mehreren Splalten die die ID ergeben. Muss angegeben werden wenn colList angegeben.
     */
     constructor(name, colList, idCol) {
         this.name = name;
-        if (Array.isArray(colList)) {
+        if (typeof colList == "string") {
+            // Typ lesen
+            const objType = this.#namespace.Types.get(colList);
+            if (!objType || !objType.type) { return;}
+            if (!objType.type) {return;}
+            if (objType.type != "object" || !objType.props) {return;}
+            this.setCols(objType.props, objType.idfield || "GSID");
+        } else if (Array.isArray(colList)) {
             if (typeof colList[0] == "string") {
                 // Liste mit Spaltennamen
                 this.setCols(colList, idCol || colList[0]);
@@ -2356,7 +2437,7 @@ export class GridView {
                 if (colType.inlist) {
                     // Wenn noch kein HTML für Optionen vorhanden
                     if (!optionNames.has(colType.inlist)) {
-                        optionListHtml += this.getDatalistHTML(colType.inlist, Object.keys(ENUM[colType.inlist]));
+                        optionListHtml += this.getDatalistHTML(colType.inlist, Object.keys(GLOBAL.Enums.get(colType.inlist)));
                         optionNames.set(colType.inlist, "OK");
                     }
                     attr_list = ` list="${colType.inlist}"`;
