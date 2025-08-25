@@ -67,7 +67,7 @@ import { formatDate } from "./infodate.js";
  * @property {string} [id] - Name Des Daten Formates
  * @property {InfoType} [type] - Typ der Spalte Einfacher Typ
  * @property {Array<string>} [props] - Liste mit Eigenschaften(Spalten) bei type=="object"
- * @property {string} [idfield] - Name des ID Feldes (default = "GSID")
+ * @property {string|Array<string>} [idfield] - Name des ID Feldes (default = "GSID")
  * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
  * @property {string} [description] - Informationstext zum Typ
  * @property {object} [domain] - Namen eines Speziellen abgeleiteten Types 
@@ -122,8 +122,14 @@ const NAMESPACES = new Map();
 
 export class Namespace {
     #name = "";
+
+    /** @type {Map<string,GridList>} */
     Lists = new Map();
+
+    /** @type {Map<string,object>} */
     Enums = new Map();
+
+    /** @type {TypeStore} */
     Types = new TypeStore();
 
     /**
@@ -211,6 +217,19 @@ class TypeStore {
         /** @type {DataType} */
         let obj = { id: "undefined", type: "string", domain: {} };
         if (!type || typeof type != "string") { return obj; }
+
+        // anderer Namespace bei Type
+        const pos1 = type.indexOf(":");
+        if (pos1 > 0) {
+            const ns = type.substring(0, pos1);
+            type = type.substring(pos1 +1);
+
+            // Prüfen ob Namespace vorhanden
+            if (NAMESPACES.has(ns)) {
+                return NAMESPACES.get(ns)?.Types.get(type) || obj;
+            }
+            return obj;
+        }
 
         // Typ aufsplitten
         let parts = type.split("_");
@@ -324,7 +343,7 @@ class TypeStore {
      * 
      * @param {string} typeName - Typname
      * @param {DataType} typeObj - Typ Objekt im Format von DataType
-     * @returns 
+     * @returns {void}
      */
     set(typeName, typeObj) {
         if (!typeName || typeof typeName != "string") { return; }
@@ -335,7 +354,42 @@ class TypeStore {
         typeObj.id = typeName;
         if (typeObj.type == undefined) { typeObj.type = "string"; } // type standard = string
 
+        // IDFeld bei Object
+        if (typeObj.type == "object" && !typeObj.idfield) { typeObj.idfield = "GSID";}
+
         this.#datatype.set(typeName, typeObj);
+    }
+
+
+    /**
+     * Legt einen Objekt Datentyp an.
+     * @param {string} objName - Name des Objekt Datentypes
+     * @param {Array<string>} props - Auflistung der Eigenschaften für das Objekt
+     * @param {string|Array<string>} [idfield] - Name des ID-Feldes
+     * @returns {void}
+     */
+    setObj(objName, props, idfield) {
+        if (!objName || typeof objName != "string") {return;}
+        if (!Array.isArray(props)) {return;}
+
+        let description = "";
+        const pos1 = objName.indexOf(" ");
+        if (pos1 > 0 ) { 
+            description = objName.substring(pos1 +1);
+            objName = objName.substring(0, pos1);
+        }
+
+        /** @type {DataType} */
+        const obj = {
+            id: objName
+            , type: "object"
+            , idfield: idfield || "GSID"
+            , props: props
+        };
+
+        if (description) {obj.description = description;}
+
+        this.#datatype.set(objName, obj);
     }
 
     // /**
@@ -819,6 +873,7 @@ export class GridList {
         // bestehende Spalten löschen
         this.#cols = new Array(newFields.length);
         this.#types = new Array(newFields.length);
+        this.#descriptions = new Array(newFields.length);
 
         // alle neuen Spalten durchgehen
         for (let i = 0; i < newFields.length; i++) {
@@ -834,7 +889,16 @@ export class GridList {
                 //this.#types[i] = nameType[1];
 
                 this.#cols[i] = name.substring(0, pos1); // vor dem 1. Leerzeichen
-                this.#types[i] = name.substring(pos1 + 1).trim(); // nach dem Leerzeichen
+                let typeString = name.substring(pos1 + 1).trim();
+                const pos2 = typeString.indexOf(" ");
+                if (pos2 > -1) {
+                    this.#types[i] = typeString.substring(0, pos2);
+                    this.#descriptions[i] = typeString.substring(pos2 +1);
+                } else {
+                    this.#types[i] = name.substring(pos1 + 1).trim(); // nach dem Leerzeichen
+                }
+
+                // todo: ??? Wenn type "object" oder "list" -> UnterListen prüfen ob vorhanden, oder neu anlegen.  
             } else {
                 this.#cols[i] = name;
 
