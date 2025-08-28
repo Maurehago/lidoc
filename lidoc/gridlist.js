@@ -489,7 +489,7 @@ export function maskString(text, mask, pattern, base) {
 }
 
 
-function isNumber(string) {
+export function isNumber(string) {
     return !isNaN(Number(string));
 }
 
@@ -550,6 +550,31 @@ export function formatNumber(num, decimals, base, seperate) {
 
     return numString;
 }
+
+
+/**
+ * Trennt einen Text mit angegebenen Trennzeichen, und lässt dabei Trennzeichen innerhalb von Anführungszeichen aus
+ * @param {string} text - Text der getrennt wird
+ * @param {string} separator - Trennzeichen
+ * @param {string} [stringSeperator] - Text Begrezungszeichen. Default ("")
+ * @returns {Array<string>} Liste nach Trennzeichen getrennt
+ */
+export function splitNoText(text, separator, stringSeperator) {
+    if (typeof text != "string") {return [];}
+    if (typeof separator != "string") {return [text];}
+    if (text.indexOf(stringSeperator || '"') < 0) {
+        return text.split(separator);
+    }
+
+    let pattern = `(?=([^"]*"[^"]*")*[^"]*$)`;
+    if (stringSeperator) {
+        pattern = `(?=([^${stringSeperator}]*${stringSeperator}[^${stringSeperator}]*${stringSeperator})*[^${stringSeperator}]*$)`;
+    }
+
+    const regex = new RegExp(separator + pattern);
+    return text.split(regex);
+}
+
 
 
 /**

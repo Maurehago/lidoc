@@ -85,7 +85,7 @@ function checkDate(date) {
 
 
 /**
- * gibt Das Datum laut Format-String zurück
+ * gibt einen Datums-String laut Format-String zurück
  * @param {Date} date - Datum des Monats
  * @param {string} formatString - Formatierung für Datum. z.B.: "yyyy-mm-dd HH:MM:SS.sss" "d.m.y" todo: Woche formatWeek()
  * @returns {string} Datum im Formatstring
@@ -138,6 +138,50 @@ export function formatDate(date, formatString) {
     newString = newString.replaceAll("sss", "" + newDate.getMilliseconds());
 
     return newString;
+}
+
+/**
+ * Extrahiert ein Datum aus einem Datums-String laut Format-String
+ * Der FormatString gibt an, an welcher Stelle welche Informationen zum Datum stehen. z.B.: dateString:"20.06.2025 07:30", formatString:"dd.mm.yyy HH:MM"
+ * @param {string} dateString - Datum des Monats
+ * @param {string} formatString - Formatierung für Datum. z.B.: "yyyy-mm-dd HH:MM:SS.sss" "d.m.y" todo: Woche formatWeek()
+ * @returns {Date|undefined} Datum aus dem String
+ */
+export function getDateFromFormat(dateString, formatString) {
+    if (typeof dateString != "string") { return; }
+    //let newDate = checkDate(date);
+    
+    if (typeof formatString != "string" || formatString == "") {
+        return;
+    }
+
+    function getSubString(sub) {
+        const pos1 = dateString.indexOf(sub);
+        if (pos1 > -1) {
+            return dateString.substring(pos1, sub.length);
+        } else {
+            return "";
+        }
+    }
+
+
+    // 0123456789 123456789 123
+    //const dateString = newDate.toISOString(); 
+    
+    let newDate = new Date();
+    
+    let year = getSubString("yyyy") || getSubString("yy") || getSubString("y") || newDate.getFullYear + "";
+    let month = getSubString("mm") || getSubString("m") || (newDate.getMonth() +1) + "";
+    let day = getSubString("dd") || getSubString("d") || newDate.getDate() + "";
+    let hour = getSubString("HH") || getSubString("H") || "0";
+    let minute = getSubString("MM") || getSubString("M") || "0";
+    let second = getSubString("SS") || getSubString("S") || "0";
+    let millisecond = getSubString("sss") || getSubString("ss") || getSubString("s") || "0";
+    
+    // 2025-04-08T13:05:23.094Z
+    newDate = new Date(parseInt(year), parseInt(month) -1, parseInt(day), parseInt(hour), parseInt(minute), parseInt(second), parseInt(millisecond));
+
+    return newDate;
 }
 
 
