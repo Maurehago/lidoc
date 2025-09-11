@@ -66,6 +66,7 @@ import { formatDate } from "./infodate.js";
  * @typedef {object} DataType
  * @property {string} [id] - Name Des Daten Formates
  * @property {InfoType} [type] - Typ der Spalte Einfacher Typ
+ * @property {string} [basetype] - Basistyp von dem abgeleitet wird. Props die den selben Namen haben werden überschrieben.
  * @property {Array<string>} [props] - Liste mit Eigenschaften(Spalten) bei type=="object"
  * @property {string|Array<string>} [idfield] - Name des ID Feldes (default = "GSID")
  * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
@@ -117,43 +118,12 @@ const regexFor = /{{(for)}}/g;
 /**
  * Register für alle Namespaces
  * @type {Map<string,Namespace>}
- */ 
-const NAMESPACES = new Map();
-
-export class Namespace {
-    #name = "";
-
-    /** @type {Map<string,GridList>} */
-    Lists = new Map();
-
-    /** @type {Map<string,object>} */
-    Enums = new Map();
-
-    /** @type {TypeStore} */
-    Types = new TypeStore();
-
-    /**
-     * 
-     * @param {string} name - eindeutiger Name des Namensspaces. Wenn schon vorhanden, wird dieser zm Bestehenden hinzugefügt.
-     */
-    constructor(name) {
-        this.#name = name;
-        const ns = NAMESPACES.get(name);
-        if (ns) {
-            this.Enums = ns.Enums;
-            this.Lists = ns.Lists;
-            this.Types = ns.Types;
-        } 
-        NAMESPACES.set(name, this);
-    }
-} // class Namespace
-
-export const GLOBAL = new Namespace("global");
+ */
+export const NAMESPACES = new Map();
 
 
-GLOBAL.Enums.set("colDataType", Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 }));
-GLOBAL.Enums.set("colDateType", Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 }));
-GLOBAL.Enums.set("colBoolType", Object.freeze({ "true": 1, "false": 2, ".t.": 3, ".f.": 4, "y": 5, "n": 6, "j": 7 }));
+
+
 
 // Typen vereinfachung
 // "aaa string_*" - Ein * am Ende heist Erforderlich
@@ -208,6 +178,20 @@ class TypeStore {
     /** Felder in denen Werte gesetzt werden können */
     #fields = ["description", "required", "attr", "inlist", "date", "decimals", "min", "max", "gt", "lt", "ge", "le", "pattern", "default", "fix", "chartobool", "readonly", "password", "link", "linkindex"];
 
+    #get(type, name) {
+        if (type == name) { return {}; }
+        return this.get(type);
+    }
+
+    #getFields(colArray) {
+        const newArray = [];
+        for (let i = 0; i < colArray.length; i++) {
+            const col = colArray[i].split(" ")[0];
+            newArray.push(col);
+        }
+        return newArray;
+    }
+
     /**
      * 
      * @param {string} type - Die Spalten Type Bezeichnung
@@ -222,7 +206,7 @@ class TypeStore {
         const pos1 = type.indexOf(":");
         if (pos1 > 0) {
             const ns = type.substring(0, pos1);
-            type = type.substring(pos1 +1);
+            type = type.substring(pos1 + 1);
 
             // Prüfen ob Namespace vorhanden
             if (NAMESPACES.has(ns)) {
@@ -250,9 +234,54 @@ class TypeStore {
             } else if (this.#datatype.has(name)) {
                 // Registrierter Typ
 
-                const typeObj = this.#datatype.get("name");
-                Object.assign(obj, typeObj);
-               
+                const typeObj = this.#datatype.get(name);
+
+                // Basis Typ prüfen
+                if (typeObj.basetype) {
+                    // Basistype lesen
+                    const baseType = this.#get(typeObj.basetype, name);
+
+                    // wenn alle Typen Objekte sind
+                    if (baseType.type == "object" && typeObj.type == "object") {
+                        // Properties der Objekte zusammenführen
+                        const newProps = [...baseType.props || []];
+
+                        // Spaltennamen ermitteln
+                        const baseCols = this.#getFields(baseType.props);
+                        const typeCols = this.#getFields(typeObj.props);
+
+                        // Typ Spaltennamen zu Base Spaltennamen Überprüfen
+                        for (let j = 0; j < typeCols.length; j++) {
+                            const index = baseCols.indexOf(typeCols[i]);
+                            if (index >= 0) {
+                                // Spalte ersetzen
+                                newProps[index] = typeObj.props[index];
+                            } else {
+                                // neue Spalte anlegen
+                                newProps.push(typeObj.props[index]);
+                            }
+                        }
+
+                        // Typobjekt zu BaseObjektz zusammenführen
+                        Object.assign(baseType, typeObj);
+
+                        // neue Spalten setzen
+                        baseType.props = newProps;
+
+                        // Objekt zusammenführen
+                        Object.assign(obj, baseType);
+                    } else {
+                        // Typ zu Base zusammenführen
+                        Object.assign(baseType, typeObj);
+
+                        // Base zu Objekt zusammenführen
+                        Object.assign(obj, baseType);
+                    }
+                } else {
+                    // Typobjekt zu Objekt zusammenführen
+                    Object.assign(obj, typeObj);
+                }
+
                 if (name == "double") {
                     isDecimal = true; // Dezimalstellen bei Double
                 } else if (name == "obj" || name == "object" || name == "list") {
@@ -263,7 +292,7 @@ class TypeStore {
 
                 // Beschreibung hiinzufügen 
                 if (typeObj.description) {
-                    if (description) {description += "\n";}
+                    if (description) { description += "\n"; }
                     description += typeObj.description;
                 }
             } if (isNumber(name)) {
@@ -355,7 +384,7 @@ class TypeStore {
         if (typeObj.type == undefined) { typeObj.type = "string"; } // type standard = string
 
         // IDFeld bei Object
-        if (typeObj.type == "object" && !typeObj.idfield) { typeObj.idfield = "GSID";}
+        if (typeObj.type == "object" && !typeObj.idfield) { typeObj.idfield = "GSID"; }
 
         this.#datatype.set(typeName, typeObj);
     }
@@ -369,13 +398,13 @@ class TypeStore {
      * @returns {void}
      */
     setObj(objName, props, idfield) {
-        if (!objName || typeof objName != "string") {return;}
-        if (!Array.isArray(props)) {return;}
+        if (!objName || typeof objName != "string") { return; }
+        if (!Array.isArray(props)) { return; }
 
         let description = "";
         const pos1 = objName.indexOf(" ");
-        if (pos1 > 0 ) { 
-            description = objName.substring(pos1 +1);
+        if (pos1 > 0) {
+            description = objName.substring(pos1 + 1);
             objName = objName.substring(0, pos1);
         }
 
@@ -387,9 +416,60 @@ class TypeStore {
             , props: props
         };
 
-        if (description) {obj.description = description;}
+        if (description) { obj.description = description; }
 
         this.#datatype.set(objName, obj);
+    }
+
+
+    /**
+     * Liefert aus einen Objekt Typ (type= "object") ein Array mit allen Properties(props) als DatenTypen zurück. 
+     * @param {string} typeName - Typ Name
+     * @returns {Array<DataType>} Liste mit Datentypen der Properties
+     */
+    getPropsArray(typeName) {
+        if (!typeName || !this.#datatype.has(typeName)) { return []; }
+
+        const typeObj = this.#datatype.get(typeName);
+        if (!typeObj.props) { return [];}
+
+        const newProps = [];
+
+        // alle neuen Spalten durchgehen
+        for (let i = 0; i < typeObj.props.length; i++) {
+            /** @type {DataType} */
+            let newObj = {};
+            let name = ("" + typeObj.props[i]).trim();
+
+            // Wenn ein leerzeichen im Namen
+            let pos1 = name.indexOf(" ");
+            if (pos1 > -1) {
+
+                let typeString = name.substring(pos1 + 1).trim();
+                const pos2 = typeString.indexOf(" ");
+                if (pos2 > -1) {
+                    Object.assign(newObj, this.get(typeString.substring(0, pos2)));
+                    if (newObj.description) {
+                        newObj.description = typeString.substring(pos2 + 1) + "\n" + newObj.description;
+                    } else {
+                        newObj.description = typeString.substring(pos2 + 1);
+                    }
+                } else {
+                    Object.assign(newObj, name.substring(pos1 + 1).trim()); // nach dem Leerzeichen
+                }
+                newObj.id = name.substring(0, pos1); // vor dem 1. Leerzeichen
+
+                // todo: ??? Wenn type "object" oder "list" -> UnterListen prüfen ob vorhanden, oder neu anlegen.  
+            } else {
+                newObj.id = name;
+                newObj.type = "string";
+            } // if else indexof(" ")
+
+            // Spalte hinzufügen
+            newProps.push(newObj);
+        } // for newFields
+
+        return newProps;
     }
 
     // /**
@@ -404,8 +484,44 @@ class TypeStore {
     // }
 }
 
+
+export class Namespace {
+    #name = "";
+
+    /** @type {Map<string,GridList>} */
+    Lists = new Map();
+
+    /** @type {Map<string,object>} */
+    Enums = new Map();
+
+    /** @type {TypeStore} */
+    Types = new TypeStore();
+
+    /**
+     * 
+     * @param {string} name - eindeutiger Name des Namensspaces. Wenn schon vorhanden, wird dieser zm Bestehenden hinzugefügt.
+     */
+    constructor(name) {
+        this.#name = name;
+        const ns = NAMESPACES.get(name);
+        if (ns) {
+            return ns;
+            //this.Enums = ns.Enums;
+            //this.Lists = ns.Lists;
+            //this.Types = ns.Types;
+        }
+        NAMESPACES.set(name, this);
+    }
+} // class Namespace
+
 // Globaler DatenTypen Store
-//export const DATATYPE = new TypeStore("global");
+export const GLOBAL = new Namespace("global");
+
+
+GLOBAL.Enums.set("colDataType", Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 }));
+GLOBAL.Enums.set("colDateType", Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 }));
+GLOBAL.Enums.set("colBoolType", Object.freeze({ "true": 1, "false": 2, ".t.": 3, ".f.": 4, "y": 5, "n": 6, "j": 7 }));
+
 
 /** @type {GridNav} */
 export let activeNav;
@@ -560,8 +676,8 @@ export function formatNumber(num, decimals, base, seperate) {
  * @returns {Array<string>} Liste nach Trennzeichen getrennt
  */
 export function splitNoText(text, separator, stringSeperator) {
-    if (typeof text != "string") {return [];}
-    if (typeof separator != "string") {return [text];}
+    if (typeof text != "string") { return []; }
+    if (typeof separator != "string") { return [text]; }
     if (text.indexOf(stringSeperator || '"') < 0) {
         return text.split(separator);
     }
@@ -618,40 +734,6 @@ export function setNavEvents() {
 
 
 
-export function newColList() {
-    // todo: Überarbeiten ????
-    const cols = [
-        "GSID"
-        , "name"
-        , "type"
-        , "required boolean"
-        , "link"
-        , "date"
-        , "inlist list"
-        , "domain"
-        , "decimals number"
-        , "min number"
-        , "max number"
-        , "greater number"
-        , "lower number"
-        , "pattern"
-        , "default"
-        , "chartobool boolean"
-        , "readonly boolean"
-        , "password boolean"
-        , "link"
-        , "linkindex"
-    ];
-
-    const newList = new GridList("_cols", cols, "GSID");
-    //newList.setColDataFormat("GSID", { id: "GSID", type: "string", readonly: true, required: true });
-    //newList.setColDataFormat("name", { id: "string*", type: "string", required: true });
-    //newList.setColDataFormat("type", { id: "type*", type: "string", required: true, inlist: "colDataType" });
-    //newList.setColDataFormat("date", { id: "datelist", type: "string", inlist: "colDateType" });
-    return newList;
-}
-
-
 // ===============================
 //   Klasse
 // --------------
@@ -660,7 +742,7 @@ export function newColList() {
  * @class GridList
  */
 export class GridList {
-    /** NameSpace, "" wenn globaler Namensspace @type {Namespace} */
+    /** NameSpace, "global" wenn globaler Namensspace @type {Namespace} */
     #namespace = GLOBAL;
 
     /** Name der Liste @type {string} */
@@ -673,8 +755,8 @@ export class GridList {
         // wenn namespace
         const pos1 = newName.indexOf(":");
         if (pos1 > 0) {
-            this.#name = newName.substring(0, pos1);
-            const ns = newName.substring(pos1 +1);
+            const ns = newName.substring(0, pos1);
+            this.#name = newName.substring(pos1 + 1);
             this.#namespace = NAMESPACES.get(ns) || new Namespace(ns);
         } else {
             this.#name = newName;
@@ -703,7 +785,7 @@ export class GridList {
     /** Liste mit Beschreibungen für jede Spalte @type {Array<string>} */
     #descriptions = [];
 
-    /** Interner Datenspeicher @type {Map<string|number,any[]>} */
+    /** Interner Datenspeicher @type {Map<string|number,Array<any>>} */
     #data = new Map();
 
     /** 
@@ -918,7 +1000,7 @@ export class GridList {
                 const pos2 = typeString.indexOf(" ");
                 if (pos2 > -1) {
                     this.#types[i] = typeString.substring(0, pos2);
-                    this.#descriptions[i] = typeString.substring(pos2 +1);
+                    this.#descriptions[i] = typeString.substring(pos2 + 1);
                 } else {
                     this.#types[i] = name.substring(pos1 + 1).trim(); // nach dem Leerzeichen
                 }
@@ -1432,7 +1514,7 @@ export class GridList {
                 if (Array.isArray(value)) {
                     if (typeof value[0] == "object") {
                         let listName = infoType.link || this.#cols[colNumber];
-                        if (this.#namespace) {listName = this.#namespace + ":" + listName;}
+                        if (this.#namespace) { listName = this.#namespace + ":" + listName; }
                         let foreignList = this.#namespace.Lists.get(listName);
                         if (foreignList == undefined) {
                             // neue Liste
@@ -2268,7 +2350,7 @@ export class GridList {
     /**
     * Erstellt eine Instanz der GridList
     * @constructor
-    * @param {string} name - Javascript Objekt oder JSON-String
+    * @param {string} name - Name der Liste. Kann mit einem Präfix für Namespace versehen werden. z.B.: "ns:listName"
     * @param {string|Array<string|object>} [colList] - Optional Name eines ObjektType oder Liste mit Spaltennamen oder ein Array mit Objekten, die in die liste geschrieben werden.
     * @param {string|Array<string>} [idCol] - Name der ID Spalte oder mehreren Splalten die die ID ergeben. Muss angegeben werden wenn colList angegeben.
     */
@@ -2277,9 +2359,9 @@ export class GridList {
         if (typeof colList == "string") {
             // Typ lesen
             const objType = this.#namespace.Types.get(colList);
-            if (!objType || !objType.type) { return;}
-            if (!objType.type) {return;}
-            if (objType.type != "object" || !objType.props) {return;}
+            if (!objType || !objType.type) { return; }
+            if (!objType.type) { return; }
+            if (objType.type != "object" || !objType.props) { return; }
             this.setCols(objType.props, objType.idfield || "GSID");
         } else if (Array.isArray(colList)) {
             if (typeof colList[0] == "string") {
