@@ -71,7 +71,7 @@ import { formatDate } from "./infodate.js";
  * @property {string|Array<string>} [idfield] - Name des ID Feldes (default = "GSID")
  * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
  * @property {string} [description] - Informationstext zum Typ
- * @property {object} [domain] - Namen eines Speziellen abgeleiteten Types 
+ * @property {Object<string,any>} [domain] - Namen eines Speziellen abgeleiteten Types 
  * @property {boolean} [required] - Wenn der Wert erforderlich ist
  * @property {boolean} [attr] - Wenn die Spalte ein Attribute ist
  * @property {string} [inlist] - Name einer Aufzählung. Muss Inhalt von angegebener Aufzählung sein
@@ -145,7 +145,7 @@ export const NAMESPACES = new Map();
  * Globaler Speicher für Spalten Datentypen
  */
 class TypeStore {
-    /** @type {Map<string,Object>} */
+    /** @type {Map<string,DataType>} */
     #datatype = new Map([
         ["string", { id: "string", type: "string", _: true }]
         , ["number", { id: "number", type: "number", _: true }]
@@ -178,11 +178,22 @@ class TypeStore {
     /** Felder in denen Werte gesetzt werden können */
     #fields = ["description", "required", "attr", "inlist", "date", "decimals", "min", "max", "gt", "lt", "ge", "le", "pattern", "default", "fix", "chartobool", "readonly", "password", "link", "linkindex"];
 
+    /**
+     * Gibt den angefragten Typ zurück.
+     * @param {string} type - neuer Typ
+     * @param {string} name - alter Typ
+     * @returns {DataType}
+     */
     #get(type, name) {
         if (type == name) { return {}; }
         return this.get(type);
     }
 
+    /**
+     * Liefert nur die Spaltennamen zurück.
+     * @param {Array<string>} colArray - Liste mit Feldnamen und Typen
+     * @returns {Array<string>} Liste mit Spaltennamen
+     */
     #getFields(colArray) {
         const newArray = [];
         for (let i = 0; i < colArray.length; i++) {
@@ -234,7 +245,7 @@ class TypeStore {
             } else if (this.#datatype.has(name)) {
                 // Registrierter Typ
 
-                const typeObj = this.#datatype.get(name);
+                const typeObj = this.#datatype.get(name) || {};
 
                 // Basis Typ prüfen
                 if (typeObj.basetype) {
@@ -247,18 +258,18 @@ class TypeStore {
                         const newProps = [...baseType.props || []];
 
                         // Spaltennamen ermitteln
-                        const baseCols = this.#getFields(baseType.props);
-                        const typeCols = this.#getFields(typeObj.props);
+                        const baseCols = this.#getFields(baseType.props || []);
+                        const typeCols = this.#getFields(typeObj.props || []);
 
                         // Typ Spaltennamen zu Base Spaltennamen Überprüfen
                         for (let j = 0; j < typeCols.length; j++) {
                             const index = baseCols.indexOf(typeCols[i]);
                             if (index >= 0) {
                                 // Spalte ersetzen
-                                newProps[index] = typeObj.props[index];
+                                newProps[index] = typeObj.props ? typeObj.props[index] : "";
                             } else {
                                 // neue Spalte anlegen
-                                newProps.push(typeObj.props[index]);
+                                newProps.push( typeObj.props ? typeObj.props[index] : "");
                             }
                         }
 
@@ -290,7 +301,7 @@ class TypeStore {
                     i += 1;
                 }
 
-                // Beschreibung hiinzufügen 
+                // Beschreibung hinzufügen 
                 if (typeObj.description) {
                     if (description) { description += "\n"; }
                     description += typeObj.description;
@@ -305,8 +316,11 @@ class TypeStore {
             } else {
                 // wenn richtiger Typ-Name
                 if (this.#fields.indexOf(name) > -1) {
+                    //@ts-ignore
                     obj[name] = value;
                 } else {
+                    if (!obj.domain) {obj.domain = {};}
+                    //@ts-ignore
                     obj.domain[name] = value;
                 }
             }
@@ -430,7 +444,7 @@ class TypeStore {
     getPropsArray(typeName) {
         if (!typeName || !this.#datatype.has(typeName)) { return []; }
 
-        const typeObj = this.#datatype.get(typeName);
+        const typeObj = this.#datatype.get(typeName) || {};
         if (!typeObj.props) { return [];}
 
         const newProps = [];
@@ -455,7 +469,7 @@ class TypeStore {
                         newObj.description = typeString.substring(pos2 + 1);
                     }
                 } else {
-                    Object.assign(newObj, name.substring(pos1 + 1).trim()); // nach dem Leerzeichen
+                    Object.assign(newObj, this.get(typeString)); // nach dem Leerzeichen
                 }
                 newObj.id = name.substring(0, pos1); // vor dem 1. Leerzeichen
 
@@ -472,6 +486,20 @@ class TypeStore {
         return newProps;
     }
 
+
+    /**
+     * Gibt eine Liste von Eigenschaftsnamen von einem Objekt-Type zurück
+     * @param {string} typeName - Name des Types
+     * @returns {Array<string>} Liste mit Eigenschaften Namen ohne Typ
+     */
+    getPropsNameArray(typeName) {
+        if (!typeName || !this.#datatype.has(typeName)) { return []; }
+
+        const typeObj = this.#datatype.get(typeName) || {};
+        if (!typeObj.props) { return [];}
+
+        return this.#getFields(typeObj.props);
+    }
     // /**
     //  * 
     //  * @param {string} [namespace] - Namespace unter dem Dert Typ Registriert wird.
@@ -605,6 +633,11 @@ export function maskString(text, mask, pattern, base) {
 }
 
 
+/**
+ * 
+ * @param {string} string - Text zum Prüfen
+ * @returns 
+ */
 export function isNumber(string) {
     return !isNaN(Number(string));
 }
@@ -1397,7 +1430,7 @@ export class GridList {
      * Diese Funktion liefert den Datensatz als neues Objekt zurück.
      * Wenn kein Datensatz gefunden, wird ein neues leeres Objekt zurück geliefert.
      * @param {string|number} rowID 
-     * @returns {object}
+     * @returns {Object<string,any>}
      */
     get(rowID) {
         return this.#getObjFromRow(this.#data.get(rowID) || []);
@@ -1856,7 +1889,7 @@ export class GridList {
      * Wenn der "index" noch nicht existiert, werden alle Daten sortiert.
      * Wenn "index" angegeben und "newIndex" nicht angegeben, werden die Daten unter diesem Index sortiert, und unter dem selben Index abgelegt.
      * Wenn "index" und "newIndex" angegeben, werden alle Daten sortiert und unter "newIndex" abgelegt.
-     * @param {Array<string|number>} sortCols - Liste mit Spalten nach denen Sortiert wird
+     * @param {Array<string>} sortCols - Liste mit Spalten nach denen Sortiert wird
      * @param {string|Array<string|number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird, oder wenn nicht vorhanden, nach dem Sortieren gesetzt wird.
      * @param {string} [newIndexName] - Index Name der nach dem Sortieren gesetzt wird.
      * @returns {Array<string|number>} sortierte Liste mit ID's
@@ -1903,7 +1936,7 @@ export class GridList {
             } else {
                 // Wenn Spalte eine Nummer
                 // Name der Spalte setzen
-                sCols[i] = this.#cols[col];
+                sCols[i] = col;
                 sDirection[i] = "ASC";
                 index = this.getColNumber(col);
             }
@@ -2018,6 +2051,7 @@ export class GridList {
         }
 
         const idList = this.getIndex(index);
+        /** @type {Array<string>} */
         let aggrCols = [];
         const objList = [];
         const keyMap = new Map();
@@ -2025,7 +2059,8 @@ export class GridList {
         // Aggregate lesen
         if (Array.isArray(aggr)) {
             for (let i = 0; i < aggr.length; i++) {
-                aggrCols.push(aggr[i].split(" "));
+                const colAggr = aggr[i].split(" ");
+                aggrCols.push(colAggr[0]);
             }
         } else if (typeof aggr == "string") {
             aggrCols = aggr.split(" ");
@@ -2034,6 +2069,7 @@ export class GridList {
         // Alle Datenzeilen durchgehen
         for (let i = 0; i < idList.length; i++) {
             // Objekt lesen
+            /** @type {Object<string,any>} */
             const obj = this.get(idList[i]);
             let key = "";
             for (let j = 0; j < colList.length; j++) {
@@ -2154,6 +2190,7 @@ export class GridList {
         // Wenn keine Funktion dann ganze IndexListe zurückgeben
         if (typeof fu != "function") { return this.getIndex(index); }
 
+        /** @type {Array<string|number>} */
         const newList = [];
         const newObjList = [];
 
@@ -2260,7 +2297,7 @@ export class GridList {
 
         /** @type {Array<Array<string|number>>} */
         const groupList = [];
-        /** @type {Array<Array<string|number>>} */
+        /** @type {Array<Array<object>>} */
         const groupObjList = [];
 
         // alle durchgehen
@@ -2366,13 +2403,15 @@ export class GridList {
         } else if (Array.isArray(colList)) {
             if (typeof colList[0] == "string") {
                 // Liste mit Spaltennamen
-                this.setCols(colList, idCol || colList[0]);
+                //@ts-ignore
+                this.setCols(colList, idCol || "GSID");
             } else if (typeof colList[0] == "object") {
                 // Liste mit Objeken für die neue Gridlist
                 this.setColsFromObject(colList[0], idCol || "GSID");
 
                 // alle Objekte in die Liste schreiben
                 for (let i = 0; i < colList.length; i++) {
+                    //@ts-ignore
                     this.setObject(colList[i]);
                 }
             }
@@ -2470,7 +2509,7 @@ export class GridView {
     /**
      * Lieftert einen HTML-String der Datenzeile zurück.
      * @param {GridList} gridList - Liste mit den Daten
-     * @param {object} obj - Datensatz Objekt
+     * @param {Object<string,any>} obj - Datensatz Objekt
      * @returns {string} HTML Sting der Datenzeile
      */
     getTr(gridList, obj) {
@@ -2542,6 +2581,12 @@ export class GridView {
     }
 
 
+    /**
+     * Liefert einen HTML-String für eine Datenliste zurück
+     * @param {string} id - ID der Datenliste
+     * @param {Array<any>|Object<string,any>} list - Liste mit Werten oder ein Objekt
+     * @returns {string} HTML-String
+     */
     getDatalistHTML(id, list) {
         let html = `<datalist id="${id}">`;
 
@@ -2571,6 +2616,7 @@ export class GridView {
         let optionNames = new Map();
         let html = "";
 
+        /** @type {Object<string,any>} */
         let obj = {};
         if (id != undefined) {
             obj = gridList.get(id);
@@ -2608,7 +2654,7 @@ export class GridView {
                 if (colType.inlist) {
                     // Wenn noch kein HTML für Optionen vorhanden
                     if (!optionNames.has(colType.inlist)) {
-                        optionListHtml += this.getDatalistHTML(colType.inlist, Object.keys(GLOBAL.Enums.get(colType.inlist)));
+                        optionListHtml += this.getDatalistHTML(colType.inlist, GLOBAL.Enums.get(colType.inlist) || []);
                         optionNames.set(colType.inlist, "OK");
                     }
                     attr_list = ` list="${colType.inlist}"`;
@@ -2773,28 +2819,28 @@ export class GridNav {
     #isForm = false;
     #isTable = false;
 
-    /** Wenn "Enter" gedrückt wird @type {function} */
+    /** Wenn "Enter" gedrückt wird @type {function|undefined} */
     okFunction;
 
-    /** Wenn "CTRL"+"Enter" gedrückt wird @type {function} */
+    /** Wenn "CTRL"+"Enter" gedrückt wird @type {function|undefined} */
     ctrlOkFunction;
 
-    /** Wenn " " (Leerzeichen) gedrückt wird @type {function} */
+    /** Wenn " " (Leerzeichen) gedrückt wird @type {function|undefined} */
     spaceFunction;
 
-    /** Wenn "Insert" gedrückt wird @type {function} */
+    /** Wenn "Insert" gedrückt wird @type {function|undefined} */
     addFunction;
 
-    /** Wenn "Delete" gedrückt wird @type {function} */
+    /** Wenn "Delete" gedrückt wird @type {function|undefined} */
     removeFunction;
 
-    /** Wenn "ESC" gedrückt wird @type {function} */
+    /** Wenn "ESC" gedrückt wird @type {function|undefined} */
     cancelFunction;
 
-    /** Wenn diese Navigation AKTIV gesetzt wird @type {function} */
+    /** Wenn diese Navigation AKTIV gesetzt wird @type {function|undefined} */
     onActiveFunction;
 
-    /** @type {GridNav} */
+    /** @type {GridNav|undefined} */
     #lastNav
     get lastNav() {
         return this.#lastNav;
@@ -2805,11 +2851,11 @@ export class GridNav {
         }
     }
 
-    /** @type {string|number} */
+    /** @type {string|number|undefined} */
     #activeID
     get id() { return this.#activeID; }
 
-    /** @type {HTMLElement|null} */
+    /** @type {HTMLElement|null|undefined} */
     #activeElm
 
     /** @type {HTMLElement|null|undefined} */
