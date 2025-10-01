@@ -166,6 +166,7 @@ p {
   margin-bottom: 0.5rem;
   padding: 0 8px 0 8px;
   width: 100%;
+  white-space: normal;
 }
 
 /* 1rem */
@@ -327,10 +328,11 @@ nav ol,nav ul {
   padding-left: 8px;
 }
 
-nav input[type="checkbox"] {
-  left: -9999px;
+.toggler {
+  display: none;
+  /*left: -9999px;
   opacity: 0;
-  position: absolute;
+  position: absolute;*/
 }
 
 nav input[type="checkbox"]:not(:checked)+label+ul {
@@ -1051,10 +1053,10 @@ der Inhalt größer ist als angegebende breite*/
 [w-fix],.w-fix {flex: 0 0 auto;}
 [w-max],.w-max {max-width: 1080px;}
 [w-xxl],.w-xxl {min-width: 1400px;}
-[w-xl],.w-xl {min-width: 1200px;max-width: 1399px;}
-[w-l],.w-l {width: 992px;max-width: 1199px;}
-[w-m],.w-m {width: 720px;max-width: 991px;}
-[w-s],.w-s {width: 576px;max-width: 767px;}
+[w-xl],.w-xl {max-width: 1399px;}
+[w-l],.w-l {max-width: 1199px;}
+[w-m],.w-m {max-width: 991px;}
+[w-s],.w-s {max-width: 767px;}
 [w-xs],.w-xs {max-width: 575px;}
 
 
@@ -1207,6 +1209,9 @@ modal-co,[modal-co],.modal-co {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
+
+  .sidebar {display: none;}
+  .toggler:checked + .sidebar {display: block;}
 }
 
 /* Small >= 576 < 720 */
@@ -1217,9 +1222,12 @@ modal-co,[modal-co],.modal-co {
   }
 
   f-row,  [f-row],  .f-row {
-    flex-wrap: wrap;
-    width: 100% !important;
+    /*flex-wrap: wrap;
+    width: 100% !important;*/
   }
+
+  .sidebar {display: none;}
+  .toggler:checked + .sidebar {display: block;}
 
   /* f-item,[f-item],.f-item {
     flex: 1 1 auto; /* flex: 1 1 60%; ??? */

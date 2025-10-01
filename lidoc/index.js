@@ -84,7 +84,11 @@ function showForm() {
 }
 
 
-
+/**
+ * 
+ * @param {string} path - Pfad
+ * @returns 
+ */
 async function getList(path) {
     console.log("getList Path:", path);
     const res = await fetch("/data/" + path);

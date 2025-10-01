@@ -16,13 +16,13 @@
 
 <body>
     <f-row w-l ma-auto color-p border-b gap-s>
-        <f-item color-p2 hide-lt-m data-lidoc="/_logo.md" style="width: 300px;"></f-item>
-        <f-item no-print w-fit text-c data-lidoc="/_header"></f-item>
+        <f-item id="logo" color-p2 hide-lt-m data-lidoc="/_logo.md" style="width: 300px;"></f-item>
+        <f-item id="header" no-print w-fit data-lidoc="/_header.md"></f-item>
     </f-row>
-    <f-col id="content" w-l ma-auto data-lidoc="./index.md" style="min-height: 100vh;"></f-col>
-    <f-item color-darkgrey no-print data-lidoc="/_footer.md"></f-item>
+    <f-col id="content" w-l ma-auto style="min-height: 100vh;"></f-col>
+    <f-item id="footer" color-darkgrey no-print data-lidoc="/_footer.md"></f-item>
 </body>
 
-<script type="module" src="/lib/lidoc/lidoc.js"></script>
+<script type="module" src="/lidoc/lidoc.js"></script>
 
 </html>

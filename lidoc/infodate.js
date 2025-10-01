@@ -155,6 +155,11 @@ export function getDateFromFormat(dateString, formatString) {
         return;
     }
 
+    /**
+     * 
+     * @param {string} sub - Zuersetzender Teil
+     * @returns 
+     */
     function getSubString(sub) {
         const pos1 = dateString.indexOf(sub);
         if (pos1 > -1) {

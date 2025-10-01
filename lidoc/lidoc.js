@@ -38,7 +38,7 @@ import { parseMd } from "./parsemd.js";
 // ------------
 
 /** @type {HTMLElement} */
-let contentElm = document.body;
+let contentElm = document.getElementById("content") || document.body;
 
 
 
@@ -214,11 +214,10 @@ async function loadModule(module) {
 /**
  * Läd und Parsed Content aus einer Markdown Datei
  * Und Zeigt den Inhalt im Element an.
- * @param {any} elm - HTMLElement
  * @param {string} url - Pfad zur MD Datei die geladen wird
  * @returns {Promise<void>}
  */
-export async function showContent(elm, url) {
+export async function showContent(url) {
     if (!url) { return; }
     if (!url.endsWith(".md")) { return; }
 
@@ -238,31 +237,47 @@ export async function showContent(elm, url) {
     // todo: Template mit Inhalt zusammenführen
 
     // HTML im Body anzeigen
-    siteData.html.forEach((value, key) => {
-        if (key == "content") {
-            elm.innerHTML = "";
-            elm.insertAdjacentHTML("afterbegin", value);
-            return;
-        }
+    const keys = [...siteData.html.keys()];
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        const value = siteData.html.get(key) || "";
         const cElm = document.getElementById(key);
-        if (cElm instanceof HTMLElement) {
+        if (cElm instanceof HTMLElement && value) {
             cElm.innerHTML = "";
             cElm.insertAdjacentHTML("afterbegin", value);
+        } else if (key == "content" && !cElm) {
+            if (contentElm instanceof HTMLElement) {
+                contentElm.innerHTML = "";
+                contentElm.insertAdjacentHTML("afterbegin", value);
+            }
         }
-    });
+    }
+
+    // siteData.html.forEach((value, key) => {
+    //     if (key == "content") {
+    //         elm.innerHTML = "";
+    //         elm.insertAdjacentHTML("afterbegin", value);
+    //         return;
+    //     }
+    //     const cElm = document.getElementById(key);
+    //     if (cElm instanceof HTMLElement) {
+    //         cElm.innerHTML = "";
+    //         cElm.insertAdjacentHTML("afterbegin", value);
+    //     }
+    // });
     
     await loadModule(siteData.data.module);
-} // showSite
+} // showContent
 
 
 
 /**
  * Seite Parsen und anzeigen
- * @param {any} elm - URL zu der Seite die angezeigt wird
+ * @returns {Promise<void>}
  */
-export async function showSite(elm) {
+export async function showSite() {
     const siteUrl = getHashUrl();
-    await showContent(elm, siteUrl);
+    await showContent(siteUrl);
     checkNav();
 
     // Syntax Highlighter
@@ -282,26 +297,32 @@ export async function showSite(elm) {
 /** @type {NodeListOf<HTMLElement>} */
 const lidocElmList = document.querySelectorAll("[data-lidoc]");
 
+let isContent = false;
 for (let i = 0; i < lidocElmList.length; i ++) {
     const elm = lidocElmList[i];
     let url = elm.dataset.lidoc || "";
     url = checkSiteUrl(url);
 
-    if (elm.tagName == "NAV") {
-        await showContent(elm, url);
-        setSublist();
-    } else {
-        await showContent(elm, url);
-    }
-
     // ID auf "content" prüfen
     if (elm.id == "content") {
         contentElm = elm;
+        isContent = true;
+        // prüfen auf hash. Hash überschreibt die angegebene Url bei Content
+        if (window.location.hash) {
+            url = checkSiteUrl(window.location.hash);
+        }
+        await showContent(url);
+    } else if (elm.tagName == "NAV") {
+        await showContent(url);
+        setSublist();
+    } else {
+        showContent(url); // kein await notwengig, kann gleichzeitig geladen werden
     }
 }
 
-if (contentElm) {
-    //await showContent(contentElm, checkSiteUrl(location.hash));
+if (!isContent) {
+    // wenn noch kein Content geladen
+    await showSite();
 }
 
 // Navigation prüfen
@@ -321,6 +342,6 @@ if (window?.Prism) {
 
 // Wenn sich der Hash ändert
 addEventListener("hashchange", (e) => {
-    showSite(contentElm);
+    showSite();
 });
 

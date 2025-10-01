@@ -1,3 +1,4 @@
+=== menu
 - [**Blog**](/blog/)
     - [News 1](#news1)
     - [News 2](#news2)

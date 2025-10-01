@@ -24,18 +24,18 @@
     <f-row w-l ma-auto>
         <input id="navmenu" type="checkbox" class="toggler">
         <div color-p no-print class="sidebar">
-            <f-item color-p2 hide-lt-m data-lidoc="/_logo.md"></f-item>
-            <nav pos-sticky pos-t-l data-lidoc="./_menu.md" onclick="closeNav();"></nav>
+            <f-item id="logo" color-p2 hide-lt-m data-lidoc="/_logo.md"></f-item>
+            <nav id="menu" pos-sticky pos-t-l data-lidoc="./_menu.md" onclick="closeNav();"></nav>
         </div>
         <div style="min-height: 100vh;">
             <label for="navmenu" class="togglebar">&#9776;</label>
-            <div no-print w-fit color-p text-c data-lidoc="/_header"></div>
-            <div id="content" w-content data-lidoc="./index.md"></div>
+            <div id="header" no-print w-fit color-p text-c data-lidoc="/_header.md"></div>
+            <div id="content" w-content></div>
         </div>
     </f-row>
-    <f-item color-darkgrey no-print data-lidoc="/_footer.md"></f-item>
+    <f-item id="footer" color-darkgrey no-print data-lidoc="/_footer.md"></f-item>
 </body>
 
-<script type="module" src="/lib/lidoc/lidoc.js"></script>
+<script type="module" src="/lidoc/lidoc.js"></script>
 
 </html>

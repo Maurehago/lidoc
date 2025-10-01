@@ -126,20 +126,25 @@ export const NAMESPACES = new Map();
 
 
 // Typen vereinfachung
-// "aaa string_*" - Ein * am Ende heist Erforderlich
-// "aaa string_**" - Zwei ** am Ende heist Erforderlich und schreibgeschützt
-// "aaa string_123" - Eine _Zahl nach dem Typ ist die max einstellung
-// "aaa number_12_6" - "_ + Zahl" sind Decimalstellen (max: 12, decimal: 6)  
-// "aaa enum_Code" - "enum_" am Begin ist inlist: "Code" / ENUM umsetzen
-// "aaa obj_ObjektListe" - "obj_"/"object_" am Beginn für Objekte
-// "aaa list_Objektliste" - "list_" am Beginn für Auflistungen
-// "@aaa string_10" - @ am Beginn vom Variablenname für Attribute
+// "aaa string-*" - Ein * am Ende heist Erforderlich
+// "aaa string-**" - Zwei ** am Ende heist Erforderlich und schreibgeschützt
+// "aaa string-123" - Eine Zahl nach ist die max einstellung
+// "aaa number-12,6" - Eine Zahl mit Komma sind Max und Dezimalstellen (max: 12, decimal: 6)
+// "aaa double-,6" - Eine Zahl nach einem Komma sind nur die Dezimalstellen
+// "aaa enum=Code" - "enum=" am Begin ist inlist: "Code" / ENUM umsetzen
+// "aaa obj=ObjektListe" - "obj="/"object=" am Beginn für Objekte
+// "aaa list=Objektliste" - "list=" am Beginn für Auflistungen
+// "@aaa string-10" - @ am Beginn vom Variablenname für Attribute
 // "aaa default=kdsfjsd" - Mit "=" kann direkt eine Eigenschaft zugewieden werden
+// typ "string-base64" - wird als domain eigenschaft angelegt
 
 // todo: Mehrere Typen zuweisen????
 // "aaa string|number" - Oder/ mehrere Möglichkeiten zuweisen
-// typ "string_base64" - Typ festlegen?
+// choice (entweder/oder eigenschaften) ??? -> so wie 
 
+// sequence - in richtiger Reihenfolge -> Typen sind immer in angegebener Reihenfolge
+// oneof -> enum
+// all -> bei allen * (Erforderlich)
 
 /**
  * Globaler Speicher für Spalten Datentypen
@@ -178,16 +183,6 @@ class TypeStore {
     /** Felder in denen Werte gesetzt werden können */
     #fields = ["description", "required", "attr", "inlist", "date", "decimals", "min", "max", "gt", "lt", "ge", "le", "pattern", "default", "fix", "chartobool", "readonly", "password", "link", "linkindex"];
 
-    /**
-     * Gibt den angefragten Typ zurück.
-     * @param {string} type - neuer Typ
-     * @param {string} name - alter Typ
-     * @returns {DataType}
-     */
-    #get(type, name) {
-        if (type == name) { return {}; }
-        return this.get(type);
-    }
 
     /**
      * Liefert nur die Spaltennamen zurück.
@@ -197,11 +192,74 @@ class TypeStore {
     #getFields(colArray) {
         const newArray = [];
         for (let i = 0; i < colArray.length; i++) {
-            const col = colArray[i].split(" ")[0];
+            const col = colArray[i].split(" ")[0].trim();
             newArray.push(col);
         }
         return newArray;
     }
+    
+    
+    /**
+     * Gibt den angefragten Typ zurück, undslöst dabei die Basistypen auf
+     * @param {string} typeName - neuer TypName ohne Trennzeichen ",- "
+     * @param {string} firstName - Ausgangstyp
+     * @returns {DataType}
+     */
+    #getType(typeName, firstName) {
+        if (typeName == firstName) { return {}; }
+        const newType = this.get(typeName);
+
+        // Wenn basistyp
+        if (newType.basetype) {
+            // Basistyp lesen
+            const baseType = this.#getType(newType.basetype, firstName);
+
+            // Wenn Properties
+            if (baseType.props) {
+                if (newType.props) {
+                    //newType.props = [...new Set([...baseType.props, ...newType.props])];
+                    const newFields = this.#getFields(newType.props);
+                    const baseFields = this.#getFields(baseType.props);
+                    const newProps = [...baseType.props];
+                
+                    // alle neuen Felder durchgehen
+                    for (let i = 0; i < newFields.length; i++) {
+                        // prüfen ob neues Feld im alten vorhanden ist
+                        const index = baseFields.indexOf(newFields[i]);
+                        if (index > -1) {
+                            // wenn neues Feld in der Basis vorhanden -> ersetzen durch neues
+                            newProps[index] = newType.props[i];
+                        } else {
+                            // neues Feld hinzufügen
+                            newProps.push(newType.props[i]);
+                        }
+                    }
+
+                    // zusammengeführte Properties merken
+                    newType.props = newProps;
+                }
+            } // wenn props
+
+            // Wenn Domain
+            if (baseType.domain && newType.domain) {
+                // Domain zusammenführen
+                const newDomain = {};
+                Object.assign(newDomain, baseType.domain, newType.domain);
+                newType.domain = newDomain;
+            }
+
+            // Wenn Beschreibung
+            if (baseType.description && newType.description) {
+                newType.description = baseType.description + "\n" + newType.description;
+            }
+
+            // Zusammenführen
+            return Object.assign(baseType, newType);
+        } else {
+            return newType;
+        } // Wenn basistyp
+    }
+
 
     /**
      * 
@@ -226,160 +284,99 @@ class TypeStore {
             return obj;
         }
 
-        // Typ aufsplitten
-        let parts = type.split("_");
-        let isDecimal = false;
+        // Typ aufsplitten (durch Komma getrennt)
+        let parts = type.split("-");
 
         // Bezeichnung zusammenbauen
         let description = "";
 
         // Alle teile durchgehen
         for (let i = 0; i < parts.length; i++) {
-            let nameValue = parts[i].split("=");
-            const name = nameValue[0].trim();
-            const value = nameValue[1]?.trim() || "";
+            const part = parts[i];
+            const posValue = parts[i].indexOf("=");
+            const posDecimal = parts[i].indexOf(",");
 
-            if (name == "enum") {
-                obj.inlist = parts[i + 1];
-                i += 1;
-            } else if (this.#datatype.has(name)) {
-                // Registrierter Typ
+            // Wenn Name Value
+            if (posValue > 0) {
+                const name = part.substring(0, posValue).trim();
+                const value = part.substring(posValue + 1);
+                const typeObj = this.#getType(name, name) || {};
+                
+                // Je nach Name
+                switch (name) {
+                    case "enum":
+                        typeObj.inlist = value
+                        break;
+                    case "obj":
+                        typeObj.link = value
+                        break;
+                    case "object":
+                        typeObj.link = value
+                        break;
+                    case "list":
+                        typeObj.link = value
+                        break;
 
-                const typeObj = this.#datatype.get(name) || {};
-
-                // Basis Typ prüfen
-                if (typeObj.basetype) {
-                    // Basistype lesen
-                    const baseType = this.#get(typeObj.basetype, name);
-
-                    // wenn alle Typen Objekte sind
-                    if (baseType.type == "object" && typeObj.type == "object") {
-                        // Properties der Objekte zusammenführen
-                        const newProps = [...baseType.props || []];
-
-                        // Spaltennamen ermitteln
-                        const baseCols = this.#getFields(baseType.props || []);
-                        const typeCols = this.#getFields(typeObj.props || []);
-
-                        // Typ Spaltennamen zu Base Spaltennamen Überprüfen
-                        for (let j = 0; j < typeCols.length; j++) {
-                            const index = baseCols.indexOf(typeCols[i]);
-                            if (index >= 0) {
-                                // Spalte ersetzen
-                                newProps[index] = typeObj.props ? typeObj.props[index] : "";
-                            } else {
-                                // neue Spalte anlegen
-                                newProps.push( typeObj.props ? typeObj.props[index] : "");
-                            }
+                    default:
+                        // wenn richtiger Typ-Name
+                        if (this.#fields.indexOf(name) > -1) {
+                            //@ts-ignore
+                            typeObj[name] = value;
+                        } else {
+                            if (!typeObj.domain) { typeObj.domain = {}; }
+                            //@ts-ignore
+                            typeObj.domain[name] = value;
                         }
 
-                        // Typobjekt zu BaseObjektz zusammenführen
-                        Object.assign(baseType, typeObj);
-
-                        // neue Spalten setzen
-                        baseType.props = newProps;
-
-                        // Objekt zusammenführen
-                        Object.assign(obj, baseType);
-                    } else {
-                        // Typ zu Base zusammenführen
-                        Object.assign(baseType, typeObj);
-
-                        // Base zu Objekt zusammenführen
-                        Object.assign(obj, baseType);
-                    }
-                } else {
-                    // Typobjekt zu Objekt zusammenführen
-                    Object.assign(obj, typeObj);
-                }
-
-                if (name == "double") {
-                    isDecimal = true; // Dezimalstellen bei Double
-                } else if (name == "obj" || name == "object" || name == "list") {
-                    // Verlinkung
-                    obj.link = parts[i + 1];
-                    i += 1;
-                }
-
-                // Beschreibung hinzufügen 
+                        break;
+                } // switch name
+                
+                // Beschreibung
                 if (typeObj.description) {
-                    if (description) { description += "\n"; }
+                    if (description) { description += "\n";}
                     description += typeObj.description;
                 }
-            } if (isNumber(name)) {
-                if (isDecimal) {
-                    obj.decimals = parseInt(name);
-                } else {
-                    obj.max = parseInt(name);
-                    isDecimal = true;
-                }
-            } else {
-                // wenn richtiger Typ-Name
-                if (this.#fields.indexOf(name) > -1) {
-                    //@ts-ignore
-                    obj[name] = value;
-                } else {
-                    if (!obj.domain) {obj.domain = {};}
-                    //@ts-ignore
-                    obj.domain[name] = value;
-                }
+
+                // Zusammenführen
+                Object.assign(obj, typeObj);
             }
-        } // for
+
+            // Wenn Kommazeichen
+            if (posDecimal > -1) {
+                const numbers = part.split(",");
+
+                // 1. Teil ist max
+                if (numbers[0] != "" && isNumber(numbers[0])) {
+                    obj.max = parseInt(numbers[0]);
+                }
+
+                // 2. Teil ist Decimals
+                if (numbers[1] != "" && isNumber(numbers[1])) {
+                    obj.decimals = parseInt(numbers[1]);
+                }
+            } else if (isNumber(part)) {
+                // Ist Zahl -> max
+                obj.max = parseInt(part);
+            } else {
+                const typeObj = this.#getType(part, part) || {};
+
+                // Beschreibung
+                if (typeObj.description) {
+                    if (description) { description += "\n";}
+                    description += typeObj.description;
+                }
+
+                Object.assign(obj, typeObj);
+            }
+        } // For alle Teile
+
+        // Beschreibung hinzufügen
+        if (description) {
+            obj.description = description;
+        }
 
         return obj;
     } // get
-
-
-    /**
-     * Liefert einen Typstring zurück für die Angabe bei einem Datenfeld
-     * @param {DataType} typeObj 
-     * @param {boolean} [with_id] - wenn die ID im Typestring stehen soll
-     * // todo: ID statt Typ zurückgeben
-     */
-    get_typeString(typeObj, with_id) {
-        let typeName = "";
-
-        // enum
-        if (typeObj.inlist) {
-            typeName = "enum_" + typeObj.inlist;
-        }
-
-        // ID und Typ
-        if (with_id) {
-            typeName += typeObj.id;
-        } else {
-
-            // Type string, number oder date
-            if (typeName) { typeName += "_"; }
-            if (typeObj.date) {
-                typeName += typeObj.date;
-            } else {
-                typeName += typeObj.type;
-            }
-        }
-
-        // Link
-        if (typeObj.link) {
-            typeName += "_" + typeObj.link;
-        }
-
-        // max und Decimals
-        if (typeObj.max) {
-            typeName += "_" + typeObj.max;
-        }
-        if (typeObj.decimals) {
-            typeName += "_" + typeObj.decimals;
-        }
-
-        if (typeObj.required) {
-            typeName += "_*";
-            if (typeObj.readonly) {
-                typeName += "*";
-            }
-        }
-
-        return typeName;
-    }
 
 
     /**
@@ -437,15 +434,15 @@ class TypeStore {
 
 
     /**
-     * Liefert aus einen Objekt Typ (type= "object") ein Array mit allen Properties(props) als DatenTypen zurück. 
+     * Liefert aus einen Typ ein Array mit allen Properties(props) als DatenTypen zurück. 
      * @param {string} typeName - Typ Name
      * @returns {Array<DataType>} Liste mit Datentypen der Properties
      */
     getPropsArray(typeName) {
         if (!typeName || !this.#datatype.has(typeName)) { return []; }
 
-        const typeObj = this.#datatype.get(typeName) || {};
-        if (!typeObj.props) { return [];}
+        const typeObj = this.#getType(typeName, typeName) || {};
+        if (!typeObj.props) { return []; }
 
         const newProps = [];
 
@@ -458,22 +455,19 @@ class TypeStore {
             // Wenn ein leerzeichen im Namen
             let pos1 = name.indexOf(" ");
             if (pos1 > -1) {
-
                 let typeString = name.substring(pos1 + 1).trim();
                 const pos2 = typeString.indexOf(" ");
                 if (pos2 > -1) {
-                    Object.assign(newObj, this.get(typeString.substring(0, pos2)));
+                    newObj = this.get(typeString.substring(0, pos2));
                     if (newObj.description) {
                         newObj.description = typeString.substring(pos2 + 1) + "\n" + newObj.description;
                     } else {
                         newObj.description = typeString.substring(pos2 + 1);
                     }
                 } else {
-                    Object.assign(newObj, this.get(typeString)); // nach dem Leerzeichen
+                    newObj = this.get(typeString); // nach dem Leerzeichen
                 }
                 newObj.id = name.substring(0, pos1); // vor dem 1. Leerzeichen
-
-                // todo: ??? Wenn type "object" oder "list" -> UnterListen prüfen ob vorhanden, oder neu anlegen.  
             } else {
                 newObj.id = name;
                 newObj.type = "string";
@@ -495,8 +489,8 @@ class TypeStore {
     getPropsNameArray(typeName) {
         if (!typeName || !this.#datatype.has(typeName)) { return []; }
 
-        const typeObj = this.#datatype.get(typeName) || {};
-        if (!typeObj.props) { return [];}
+        const typeObj = this.#getType(typeName, typeName) || {};
+        if (!typeObj.props) { return []; }
 
         return this.#getFields(typeObj.props);
     }
@@ -806,7 +800,7 @@ export class GridList {
     /** Nummer der ID-Spalte @type {number|Array<number>} */
     #idColNumber = -1;
 
-    /** Liste Mit SpaltenNamen @type {string[]} */
+    /** Liste Mit SpaltenNamen @type {Array<string>} */
     #cols = [];
     get cols() {
         return this.#cols;
@@ -891,7 +885,7 @@ export class GridList {
     }
     /**
      * Gibt den Namen der ID-Spalte zurück. Wenn mehrere Spalten die ID bilden, werden die Namen der Spalten in einer Liste zurück gegeben.
-     * @returns {string|string[]}
+     * @returns {string|Array<string>}
      */
     get idCol() {
         if (Array.isArray(this.#idColNumber)) {
@@ -993,14 +987,14 @@ export class GridList {
      * Die TypNamen müssen einem Eintrag in DATATYPE(Map) entsprechen 
      * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
      * @function setCols
-     * @param {string|string[]} cols - Liste Mit Spaltennamen, oder String mit Trennzeichen getrennt
-     * @param {string|string[]} idCol - Spaltenname des ID Feldes, oder Liste von Spaltennamen, die eine eindeutige Kennung ergeben. Zum generieren einer eindeutigen ID kann auch "GSID" angegeben werden.
+     * @param {string|Array<string>} cols - Liste Mit Spaltennamen, oder String mit Trennzeichen getrennt
+     * @param {string|Array<string>} idCol - Spaltenname des ID Feldes, oder Liste von Spaltennamen, die eine eindeutige Kennung ergeben. Zum generieren einer eindeutigen ID kann auch "GSID" angegeben werden.
      * @param {string} [seperator] - Trennzeichen muss angegeben werden wenn fieldList ein String mit Trennzeichen ist
      */
     setCols(cols, idCol, seperator) {
         if (!cols) { return; }
         /**
-         * @type {string | any[]}
+         * @type {string | Array<any>}
          */
         let newFields = [];
 
@@ -1476,7 +1470,7 @@ export class GridList {
 
     /**
      * Interne Funktion zum setzen eines wertes in eine Datenzeile
-     * @param {any[]} dataRow - Datenzeile
+     * @param {Array<any>} dataRow - Datenzeile
      * @param {string|number} col - Name oder index der Spalte
      * @param {any} value - Wert der gesetzt wird
      */
