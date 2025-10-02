@@ -202,12 +202,16 @@ class TypeStore {
     /**
      * Gibt den angefragten Typ zurück, undslöst dabei die Basistypen auf
      * @param {string} typeName - neuer TypName ohne Trennzeichen ",- "
-     * @param {string} firstName - Ausgangstyp
+     * @param {string} [firstName] - Ausgangstyp
      * @returns {DataType}
      */
     #getType(typeName, firstName) {
-        if (typeName == firstName) { return {}; }
-        const newType = this.get(typeName);
+        if (!firstName) {
+            firstName = typeName;
+        } else if (typeName == firstName) { return {}; }
+        
+        // Typ Objekt lesen
+        const newType = this.#datatype.get(typeName) || {};
 
         // Wenn basistyp
         if (newType.basetype) {
@@ -300,7 +304,7 @@ class TypeStore {
             if (posValue > 0) {
                 const name = part.substring(0, posValue).trim();
                 const value = part.substring(posValue + 1);
-                const typeObj = this.#getType(name, name) || {};
+                const typeObj = this.#getType(name) || {};
                 
                 // Je nach Name
                 switch (name) {
@@ -357,8 +361,9 @@ class TypeStore {
             } else if (isNumber(part)) {
                 // Ist Zahl -> max
                 obj.max = parseInt(part);
-            } else {
-                const typeObj = this.#getType(part, part) || {};
+            } else if (this.#datatype.has(part)) {
+                // ist Typ
+                const typeObj = this.#getType(part) || {};
 
                 // Beschreibung
                 if (typeObj.description) {
@@ -367,6 +372,10 @@ class TypeStore {
                 }
 
                 Object.assign(obj, typeObj);
+            } else {
+                // ist Domain
+                if (!obj.domain) { obj.domain = {}; }
+                obj.domain[part] = true;
             }
         } // For alle Teile
 
@@ -435,13 +444,13 @@ class TypeStore {
 
     /**
      * Liefert aus einen Typ ein Array mit allen Properties(props) als DatenTypen zurück. 
-     * @param {string} typeName - Typ Name
+     * @param {string} typeName - Typ Name ohne Trennzeichen "=-,"
      * @returns {Array<DataType>} Liste mit Datentypen der Properties
      */
     getPropsArray(typeName) {
         if (!typeName || !this.#datatype.has(typeName)) { return []; }
 
-        const typeObj = this.#getType(typeName, typeName) || {};
+        const typeObj = this.#getType(typeName) || {};
         if (!typeObj.props) { return []; }
 
         const newProps = [];
