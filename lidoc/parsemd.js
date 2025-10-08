@@ -514,10 +514,23 @@ export function parseMd(mdString, options) {
             let codeParam = trimLine.substring(3);
 
             if (codeParam != "") {
+                // Wenn Tag Attribute
+                if (codeParam.endsWith("]")) {
+                    // Tag Attribute
+                    const pos1 = codeParam.lastIndexOf(" [");
+                    if (pos1 >= 0) {
+                        tagAttribute = " " +
+                        codeParam.substring(pos1 + 2, codeParam.length - 1);
+                        codeParam = codeParam.substring(0, pos1);
+                    }
+                }                
+
                 // code Parameter setzen
-                htmlString += "<pre><code class='language-" + codeParam + "' >";
+                htmlString += "<pre><code" + tagAttribute + " class='language-" + codeParam + "' >";
+                tagAttribute = "";
             } else {
-                htmlString += "<pre><code>";
+                htmlString += "<pre><code" + tagAttribute + ">";
+                tagAttribute = "";
             }
             isCode = true;
             return;
