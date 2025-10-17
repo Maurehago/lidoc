@@ -62,12 +62,18 @@ import { formatDate } from "./infodate.js";
 
 /** @typedef {"string"|"number"|"bigint"|"boolean"|"object"|"list"|"any"} InfoType */
 
+// ObjectTyp|Type
+// restriction
+
+
 /**
  * @typedef {object} DataType
- * @property {string} [id] - Name Des Daten Formates
+ * @property {string} [id] - Registrierter Name Des Daten Formates
+ * @property {string} [name] - Name der Spalte, zum Beispiel wenn als Properties angegeben
  * @property {InfoType} [type] - Typ der Spalte Einfacher Typ
  * @property {string} [basetype] - Basistyp von dem abgeleitet wird. Props die den selben Namen haben werden überschrieben.
- * @property {Array<string>} [props] - Liste mit Eigenschaften(Spalten) bei type=="object"
+ * @property {Map<string,DataType>} [props] - Liste mit Eigenschaften(Spalten) bei type=="object"
+ * @property {Map<string,string>} [propDescriptions] - Listen mit beschreibungen für die jewiligen Spalten
  * @property {string|Array<string>} [idfield] - Name des ID Feldes (default = "GSID")
  * @property {boolean} [_] - Nie Ändern!!!! - Zeigt an ob der Type per Default vorhanden ist
  * @property {string} [description] - Informationstext zum Typ
@@ -101,7 +107,7 @@ import { formatDate } from "./infodate.js";
  * @property {string} name - Name der GridList
  * @property {number|Array<number>} idColNumber - Index der ID Spalte(n)
  * @property {Array<string>} cols - Spalten Namen
- * @property {Array<string>} types - Namen der Datentypen. Muss mit Anzahl und Position(index) der Spalten übereinstimmen.
+ * @property {Array<string|DataType>} types - Namen der Datentypen. Muss mit Anzahl und Position(index) der Spalten übereinstimmen.
  * @property {Array<string>} [descriptions] - Beschreibungen zu den Spalten. Muss mit Anzahl und Position(index) der Spalten übereinstimmen.
  * @property {Array<any>} [data] - Daten der GridListe. Position der Werte muss Muss mit Anzahl und Position(index) der Spalten übereinstimmen.
  */
@@ -200,7 +206,7 @@ class TypeStore {
     
     
     /**
-     * Gibt den angefragten Typ zurück, undslöst dabei die Basistypen auf
+     * Gibt den angefragten Typ zurück, und löst dabei die Basistypen auf
      * @param {string} typeName - neuer TypName ohne Trennzeichen ",- "
      * @param {string} [firstName] - Ausgangstyp
      * @returns {DataType}
@@ -222,25 +228,39 @@ class TypeStore {
             if (baseType.props) {
                 if (newType.props) {
                     //newType.props = [...new Set([...baseType.props, ...newType.props])];
-                    const newFields = this.#getFields(newType.props);
-                    const baseFields = this.#getFields(baseType.props);
-                    const newProps = [...baseType.props];
+                    //const newFields = this.#getFields(newType.props);
+                    const newFields = [...newType.props.keys()];
+                    //const baseFields = this.#getFields(baseType.props);
+                    //const baseFields = [...baseType.props.keys()];
+                    const newProps = new Map(baseType.props);
+                    const newDecription = new Map(baseType.propDescriptions);
                 
                     // alle neuen Felder durchgehen
                     for (let i = 0; i < newFields.length; i++) {
-                        // prüfen ob neues Feld im alten vorhanden ist
-                        const index = baseFields.indexOf(newFields[i]);
-                        if (index > -1) {
-                            // wenn neues Feld in der Basis vorhanden -> ersetzen durch neues
-                            newProps[index] = newType.props[i];
-                        } else {
-                            // neues Feld hinzufügen
-                            newProps.push(newType.props[i]);
+                        const key = newFields[i];
+                        newProps.set(newFields[i], newType.props.get(newFields[i]) || {type: "string"});
+                        
+                        // Beschreibung
+                        const fieldDescription = newType.propDescriptions?.get(newFields[i]);
+                        if (fieldDescription) {
+                            newDecription.set(newFields[i], fieldDescription);
                         }
+                        // prüfen ob neues Feld im alten vorhanden ist
+                        //const index = baseFields.indexOf(newFields[i]);
+                        //if (index > -1) {
+                        //if (baseType.props.has(key))
+                            // wenn neues Feld in der Basis vorhanden -> ersetzen durch neues
+                            //newProps[index] = newType.props[i];
+                        //    newProps.set(key, newType.props.get(key) || "");
+                        //} else {
+                            // neues Feld hinzufügen
+                        //    newProps.push(newType.props[i]);
+                        //}
                     }
 
                     // zusammengeführte Properties merken
                     newType.props = newProps;
+                    newType.propDescriptions = newDecription;
                 }
             } // wenn props
 
@@ -266,7 +286,7 @@ class TypeStore {
 
 
     /**
-     * 
+     * Liefert ein Datentyp Objekt zurück
      * @param {string} type - Die Spalten Type Bezeichnung
      * @returns {DataType}
      */
@@ -413,13 +433,13 @@ class TypeStore {
     /**
      * Legt einen Objekt Datentyp an.
      * @param {string} objName - Name des Objekt Datentypes
-     * @param {Array<string>} props - Auflistung der Eigenschaften für das Objekt
+     * @param {Array<string>} properties - Auflistung der Eigenschaften für das Objekt
      * @param {string|Array<string>} [idfield] - Name des ID-Feldes
      * @returns {void}
      */
-    setObj(objName, props, idfield) {
+    setObj(objName, properties, idfield) {
         if (!objName || typeof objName != "string") { return; }
-        if (!Array.isArray(props)) { return; }
+        if (!Array.isArray(properties)) { return; }
 
         let description = "";
         const pos1 = objName.indexOf(" ");
@@ -428,12 +448,52 @@ class TypeStore {
             objName = objName.substring(0, pos1);
         }
 
+        // Properties erstellen
+        const props = new Map();
+        const propDescriptions = new Map();
+        for (let i = 0;i < properties.length; i++) {
+            let key = "";
+            let propString = "";
+            let description = "";
+            /** @type {DataType} */
+            let dataType = {type: "string"};
+            
+            const pos1 = properties[i].indexOf(" ");
+            
+            if (pos1 > 0) {
+                key = properties[i].substring(0, pos1)
+                const pos2 = properties[i].indexOf(" ", pos1 +1);
+                if (pos2 > pos1) {
+                   propString = properties[i].substring(pos1 +1, pos2);
+                   description = properties[i].substring(pos2 +1);
+                } else {
+                    propString = properties[i].substring(pos1 +1);
+                }
+                dataType = this.get(propString);
+            } else {
+                key = properties[i];
+            }
+
+            // Name
+            dataType.name = key;
+            
+            // Beschreibung
+            if (description) {
+                propDescriptions.set(key, description);
+            }
+
+            // Setzen
+            props.set(key, dataType);
+        } // for alle Properties
+
+
         /** @type {DataType} */
         const obj = {
             id: objName
             , type: "object"
             , idfield: idfield || "GSID"
-            , props: props
+            , props
+            , propDescriptions
         };
 
         if (description) { obj.description = description; }
@@ -453,40 +513,40 @@ class TypeStore {
         const typeObj = this.#getType(typeName) || {};
         if (!typeObj.props) { return []; }
 
-        const newProps = [];
+        return [...typeObj.props.values()];
 
-        // alle neuen Spalten durchgehen
-        for (let i = 0; i < typeObj.props.length; i++) {
-            /** @type {DataType} */
-            let newObj = {};
-            let name = ("" + typeObj.props[i]).trim();
+        // // alle neuen Spalten durchgehen
+        // for (let i = 0; i < newProps.length; i++) {
+        //     /** @type {DataType} */
+        //     let newObj = {};
+        //     let name = ("" + typeObj.props[i]).trim();
 
-            // Wenn ein leerzeichen im Namen
-            let pos1 = name.indexOf(" ");
-            if (pos1 > -1) {
-                let typeString = name.substring(pos1 + 1).trim();
-                const pos2 = typeString.indexOf(" ");
-                if (pos2 > -1) {
-                    newObj = this.get(typeString.substring(0, pos2));
-                    if (newObj.description) {
-                        newObj.description = typeString.substring(pos2 + 1) + "\n" + newObj.description;
-                    } else {
-                        newObj.description = typeString.substring(pos2 + 1);
-                    }
-                } else {
-                    newObj = this.get(typeString); // nach dem Leerzeichen
-                }
-                newObj.id = name.substring(0, pos1); // vor dem 1. Leerzeichen
-            } else {
-                newObj.id = name;
-                newObj.type = "string";
-            } // if else indexof(" ")
+        //     // Wenn ein leerzeichen im Namen
+        //     let pos1 = name.indexOf(" ");
+        //     if (pos1 > -1) {
+        //         let typeString = name.substring(pos1 + 1).trim();
+        //         const pos2 = typeString.indexOf(" ");
+        //         if (pos2 > -1) {
+        //             newObj = this.get(typeString.substring(0, pos2));
+        //             if (newObj.description) {
+        //                 newObj.description = typeString.substring(pos2 + 1) + "\n" + newObj.description;
+        //             } else {
+        //                 newObj.description = typeString.substring(pos2 + 1);
+        //             }
+        //         } else {
+        //             newObj = this.get(typeString); // nach dem Leerzeichen
+        //         }
+        //         newObj.id = name.substring(0, pos1); // vor dem 1. Leerzeichen
+        //     } else {
+        //         newObj.id = name;
+        //         newObj.type = "string";
+        //     } // if else indexof(" ")
 
-            // Spalte hinzufügen
-            newProps.push(newObj);
-        } // for newFields
+        //     // Spalte hinzufügen
+        //     newProps.push(newObj);
+        // } // for newFields
 
-        return newProps;
+        // return newProps;
     }
 
 
@@ -501,7 +561,7 @@ class TypeStore {
         const typeObj = this.#getType(typeName, typeName) || {};
         if (!typeObj.props) { return []; }
 
-        return this.#getFields(typeObj.props);
+        return [...typeObj.props.keys()];
     }
     // /**
     //  * 
@@ -518,6 +578,9 @@ class TypeStore {
 
 export class Namespace {
     #name = "";
+    getName() {
+        return this.#name;
+    }
 
     /** @type {Map<string,GridList>} */
     Lists = new Map();
@@ -546,12 +609,12 @@ export class Namespace {
 } // class Namespace
 
 // Globaler DatenTypen Store
-export const GLOBAL = new Namespace("global");
+const NS = new Namespace(" ");
 
 
-GLOBAL.Enums.set("colDataType", Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 }));
-GLOBAL.Enums.set("colDateType", Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 }));
-GLOBAL.Enums.set("colBoolType", Object.freeze({ "true": 1, "false": 2, ".t.": 3, ".f.": 4, "y": 5, "n": 6, "j": 7 }));
+NS.Enums.set("colDataType", Object.freeze({ "string": 1, "number": 2, "boolean": 3, "object": 4, "list": 5 }));
+NS.Enums.set("colDateType", Object.freeze({ "date": 1, "datetime": 2, "time": 3, "period": 4 }));
+NS.Enums.set("colBoolType", Object.freeze({ "true": 1, "false": 2, ".t.": 3, ".f.": 4, "y": 5, "n": 6, "j": 7 }));
 
 
 /** @type {GridNav} */
@@ -779,7 +842,7 @@ export function setNavEvents() {
  */
 export class GridList {
     /** NameSpace, "global" wenn globaler Namensspace @type {Namespace} */
-    #namespace = GLOBAL;
+    #namespace = NS;
 
     /** Name der Liste @type {string} */
     #name = "";
@@ -796,7 +859,7 @@ export class GridList {
             this.#namespace = NAMESPACES.get(ns) || new Namespace(ns);
         } else {
             this.#name = newName;
-            this.#namespace = GLOBAL;
+            this.#namespace = NS;
         }
 
         // name registrieren
@@ -815,7 +878,7 @@ export class GridList {
         return this.#cols;
     }
 
-    /** Liste mit Typbezeichnung für jede Spalte @type {Array<string>} */
+    /** Liste mit Typbezeichnung für jede Spalte @type {Array<string|DataType>} */
     #types = [];
 
     /** Liste mit Beschreibungen für jede Spalte @type {Array<string>} */
@@ -996,7 +1059,7 @@ export class GridList {
      * Die TypNamen müssen einem Eintrag in DATATYPE(Map) entsprechen 
      * !!!ACHTUNG!!! es werden dabei alle bestehenden Daten gelöscht.
      * @function setCols
-     * @param {string|Array<string>} cols - Liste Mit Spaltennamen, oder String mit Trennzeichen getrennt
+     * @param {string|Array<string>|Map<string,DataType>} cols - Liste Mit Spaltennamen, Map mit DataTypes, oder String mit Trennzeichen getrennt
      * @param {string|Array<string>} idCol - Spaltenname des ID Feldes, oder Liste von Spaltennamen, die eine eindeutige Kennung ergeben. Zum generieren einer eindeutigen ID kann auch "GSID" angegeben werden.
      * @param {string} [seperator] - Trennzeichen muss angegeben werden wenn fieldList ein String mit Trennzeichen ist
      */
@@ -1006,11 +1069,16 @@ export class GridList {
          * @type {string | Array<any>}
          */
         let newFields = [];
-
-        if (Array.isArray(cols)) {
+ 
+        // Wenn die Spalten von einer Map kommen
+        if (cols instanceof Map) {
+            newFields = [...cols.keys()];
+        } else if (Array.isArray(cols)) {
             newFields = cols;
         } else if (typeof cols == "string" && seperator) {
             newFields = cols.split(seperator);
+        } else {
+            return;
         }
 
         // bestehende Spalten löschen
@@ -1045,8 +1113,13 @@ export class GridList {
             } else {
                 this.#cols[i] = name;
 
-                // Standard Typ
-                this.#types[i] = "string";
+                // wenn Map
+                if (cols instanceof Map) {
+                    this.#types[i] = cols.get(name) || "string";
+                } else {
+                    // Standard Typ
+                    this.#types[i] = "string";
+                }
             } // if else indexof(" ")
         } // for newFields
 
@@ -1276,7 +1349,7 @@ export class GridList {
     /**
      * Git den Typ der Spalte als String zurück
      * @param {string|number} col - Spaltenname oder Nummer
-     * @returns {string} InfoTyp Name
+     * @returns {string|DataType} InfoTyp Name
      */
     getColTypeName(col) {
         return this.#types[this.getColNumber(col)];
@@ -1299,7 +1372,7 @@ export class GridList {
         const oldTypeName = this.#types[colNumber];
 
         // alten Typ lesen
-        const oldType = this.#namespace.Types.get(oldTypeName)?.type || "";
+        const oldType = typeof oldTypeName == "string" ? this.#namespace.Types.get(oldTypeName)?.type || "" : oldTypeName.type || "";
         const newType = this.#namespace.Types.get(typeName)?.type || "";
 
         if (oldType == newType) {
@@ -1318,7 +1391,13 @@ export class GridList {
      * @returns {DataType|undefined} DatenTyp Objekt wenn vorhanden
      */
     getColType(col) {
-        return this.#namespace.Types.get(this.getColTypeName(col));
+        const colNumber = this.getColNumber(col);
+        const colTyp = this.#types[colNumber];
+        if (typeof colTyp == "object") {
+            return colTyp;
+        }  else if (typeof colTyp == "string") {
+            return this.#namespace.Types.get(colTyp);
+        }
     }
 
 
@@ -1488,7 +1567,7 @@ export class GridList {
 
         const colNumber = this.getColNumber(col);
         const typeName = this.#types[colNumber];
-        const infoType = this.#namespace.Types.get(typeName);
+        const infoType = typeof typeName == "string" ? this.#namespace.Types.get(typeName) : typeName;
 
         // link lesen
         //const link = this.#links[i] || "";
@@ -1945,7 +2024,7 @@ export class GridList {
             }
 
             const dataTypeName = this.#types[index];
-            const dataType = this.#namespace.Types.get(dataTypeName);
+            const dataType = typeof dataTypeName == "string" ? this.#namespace.Types.get(dataTypeName) : dataTypeName;
 
             colIndex[i] = index;
             orderIndex[i] = direction;
@@ -2274,7 +2353,7 @@ export class GridList {
             // SpaltenIDs lesen
             // Format lesen
             const typeName = this.#types[colNumbers[i]];
-            const colType = this.#namespace.Types.get(typeName) || {};
+            const colType = typeof typeName == "string" ? this.#namespace.Types.get(typeName) || {} : typeName;
 
             // Funktion ausführen
             // (SpaltenName, SpaltenFormat, Liste mit SpaltenNamen)
@@ -2657,7 +2736,7 @@ export class GridView {
                 if (colType.inlist) {
                     // Wenn noch kein HTML für Optionen vorhanden
                     if (!optionNames.has(colType.inlist)) {
-                        optionListHtml += this.getDatalistHTML(colType.inlist, GLOBAL.Enums.get(colType.inlist) || []);
+                        optionListHtml += this.getDatalistHTML(colType.inlist, NS.Enums.get(colType.inlist) || []);
                         optionNames.set(colType.inlist, "OK");
                     }
                     attr_list = ` list="${colType.inlist}"`;
