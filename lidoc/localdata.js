@@ -77,13 +77,21 @@ export async function OPFS_read(fileName) {
 
     // nur wenn Speichern von Dateien möglich
     if (dir instanceof FileSystemDirectoryHandle) {
+        try {
+            // Datei Handle erstellen
+            const fileHandle = await dir.getFileHandle(fileName);
 
-        // Datei Handle erstellen
-        const fileHandle = await dir.getFileHandle(fileName);
-
-        // Datei Lesen
-        const file = await fileHandle.getFile();
-        return await file.text();
+            // Datei Lesen
+            const file = await fileHandle.getFile();
+            if (file instanceof File) {
+                return await file.text();
+            } else {
+                return "no File";
+            }
+        } catch (err) {
+            console.log("OPFS_read: ", err);
+            return "ERROR: OPFS_read";
+        }
     } else {
         return "no File Storage!";
     }
@@ -117,9 +125,9 @@ export async function OPFS_remove(fileName) {
 // verfügbar seit 2015
 // ------------------------------------
 
-const IDBName = "db1";
-const IDBStoreName = "data";
+const IDBName = "localdata";
 const IDBStoreId = "id";
+let IDBStoreName = "data";
 
 // Datenbank öffnen
 /**
@@ -149,7 +157,14 @@ async function IDB_open(dbName) {
 
         // Wenn alles OK
         request.onsuccess = (event) => {
-            resolve(request.result);
+            /** @type {IDBDatabase} */
+            const db = request.result;
+            let objStore;
+            // Wenn der ObjektStor noch nicht existiert
+            if (!db.objectStoreNames.contains(IDBStoreName)) {
+                objStore = db.createObjectStore(IDBStoreName, { keyPath: IDBStoreId });
+            }
+            resolve(db);
         };
     });
 }
@@ -216,18 +231,23 @@ export async function IDB_read(fileName) {
     if (!db) { return "no Database!"; }
 
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction(IDBStoreName, "readwrite");
-        const objectStore = transaction.objectStore(IDBStoreName);
-        const request = objectStore.get(fileName);
+        try {
+            const transaction = db.transaction(IDBStoreName, "readwrite");
+            const objectStore = transaction.objectStore(IDBStoreName);
+            const request = objectStore.get(fileName);
 
-        request.onerror = (event) => {
-            // Don't forget to handle errors!
-            resolve("Error on read from database");
-        };
+            request.onerror = (event) => {
+                // Don't forget to handle errors!
+                resolve("Error on read from database");
+            };
 
-        request.onsuccess = (event) => {
-            resolve(request.result.data); // Data ist die Eigenschaft der Datenobjektes {id: "", data: ""}
-        };
+            request.onsuccess = (event) => {
+                resolve(request.result.data); // Data ist die Eigenschaft der Datenobjektes {id: "", data: ""}
+            };
+        } catch (err) {
+            console.error("IDB_read: ", err);
+            resolve("IDB_read: Error");
+        }
     });
 }
 
@@ -321,4 +341,110 @@ export async function LS_remove(fileName) {
     return "OK";
 }
 
-// todo: LocalFile Classe anlegen, die je nach verfügbarkeit des Datenspeichers Daten speichert, liest oder löscht.
+// LocalData
+export class LocalData {
+    /** @type {string} */
+    #fileSystemType = "";
+
+    /**
+     * Schreibt Daten Local 
+     * @param {string} fileName - Dateiname
+     * @param {string|object|Array<any>} data - Daten
+     * @returns {Promise<string>}
+     */
+    async write(fileName, data) {
+        switch (this.#fileSystemType) {
+            case "opfs":
+                return await OPFS_write(fileName, data);
+                break;
+            case "idb":
+                return await IDB_write(fileName, data);
+                break;
+            case "ls":
+                return await LS_write(fileName, data);
+                break;
+            default:
+                return "";
+                break;
+        }
+    }
+
+
+    /**
+     * Liest Lokale Daten 
+     * @param {string} fileName - Dateiname
+     * @returns {Promise<string>}
+     */
+    async read(fileName) {
+        switch (this.#fileSystemType) {
+            case "opfs":
+                return await OPFS_read(fileName);
+                break;
+            case "idb":
+                return await IDB_read(fileName);
+                break;
+            case "ls":
+                return await LS_read(fileName);
+                break;
+            default:
+                return "";
+                break;
+        }
+    }
+
+    /**
+     * Löscht lokale Daten
+     * @param {string} fileName - Dateiname
+     * @returns {Promise<string|undefined>}
+     */
+    async remove(fileName) {
+        switch (this.#fileSystemType) {
+            case "opfs":
+                return await OPFS_remove(fileName);
+                break;
+            case "idb":
+                return await IDB_remove(fileName);
+                break;
+            case "ls":
+                return await LS_remove(fileName);
+                break;
+            default:
+                return "";
+                break;
+        }
+    }
+
+    constructor(storeName = "data", type = "auto") {
+        IDBStoreName = storeName;
+
+        if (type == "opfs") {
+            if (!dir) {
+                // todo: Fehler Geht net
+                console.log("LocalData: no OPFS!");
+            }
+        } else if (type == "idb") {
+            if (!indexedDB) {
+                // todo: Fehler
+                console.log("LocalData: no IndexedDB!");
+            }
+        } else if (type == "ls") {
+            if (!localStorage) {
+                // todo: Fehler
+                console.log("LocalData: no LocalStorage!");
+            }
+        } else if (type == "auto") {
+            if (dir) {
+                type = "opfs";
+            } else if (indexedDB) {
+                type = "idb";
+            } else if (localStorage) {
+                type = "ls";
+            } else {
+                // todo: Fehler
+                console.log("LocalData: no local Storage Technologie!");
+            }
+        }
+
+        this.#fileSystemType = type;
+    }
+}
