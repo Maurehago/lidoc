@@ -84,7 +84,12 @@ export async function OPFS_read(fileName) {
             // Datei Lesen
             const file = await fileHandle.getFile();
             if (file instanceof File) {
-                return await file.text();
+                let text = await file.text();
+                if (text.startsWith("{") || text.startsWith("[")) {
+                    return JSON.parse(text) || text;
+                } else {
+                    return text;
+                }
             } else {
                 return "no File";
             }
@@ -123,19 +128,18 @@ export async function OPFS_remove(fileName) {
 // ===================================
 // Indexed DB
 // verfügbar seit 2015
+// Safari seit 2016
+// edge seit 2020 (funktion getAll)
 // ------------------------------------
-
-const IDBName = "localdata";
-const IDBStoreId = "id";
-let IDBStoreName = "data";
 
 // Datenbank öffnen
 /**
  * Gibt ein IDBDatabase Objekt zurück
  * @param {string} dbName - Name der Datenbank
+ * @param {string} [storeName] - Optional Name des Datenstors
  * @returns {Promise<IDBDatabase>}
  */
-async function IDB_open(dbName) {
+async function IDB_open(dbName, storeName) {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(dbName);
         request.onerror = (event) => {
@@ -148,9 +152,9 @@ async function IDB_open(dbName) {
             /** @type {IDBDatabase} */
             const db = request.result;
             let objStore;
-            // Wenn der ObjektStor noch nicht existiert
-            if (!db.objectStoreNames.contains(IDBStoreName)) {
-                objStore = db.createObjectStore(IDBStoreName, { keyPath: IDBStoreId });
+            // Wenn der ObjektStore noch nicht existiert
+            if (storeName && !db.objectStoreNames.contains(storeName)) {
+                    objStore = db.createObjectStore(storeName);
             }
             resolve(db);
         }
@@ -160,9 +164,9 @@ async function IDB_open(dbName) {
             /** @type {IDBDatabase} */
             const db = request.result;
             let objStore;
-            // Wenn der ObjektStor noch nicht existiert
-            if (!db.objectStoreNames.contains(IDBStoreName)) {
-                objStore = db.createObjectStore(IDBStoreName, { keyPath: IDBStoreId });
+            // Wenn der ObjektStore noch nicht existiert
+            if (storeName && !db.objectStoreNames.contains(storeName)) {
+                objStore = db.createObjectStore(storeName);
             }
             resolve(db);
         };
@@ -171,33 +175,22 @@ async function IDB_open(dbName) {
 
 // Schreiben
 /**
- * 
- * @param {string} fileName - Name des Indexes für das Speichern in die Datenbank.
- * @param {string|object|Array<any>} data - Daten als String, Javascript Objekt, oder Array mit daten in der Reihenfolge der Datenbankfelder
+ * Schreibt Daten in eine IndexedDB
+ * @param {string} dbName - Name der Datenbank
+ * @param {string} storeName - Name des Datenspeichers(Tabelle) in der Datenabnk
+ * @param {string|object|Array<any>} data - Daten String oder Daten Objekt
+ * @param {string|number} id - ID des Datensatzes
  * @returns {Promise<string>} liefert "OK" zurück wenn Speichern erfolgreich
  */
-export async function IDB_write(fileName, data) {
-    if (!fileName || typeof fileName != "string") { return "no FileName!"; }
+export async function IDB_write(dbName, storeName, data, id) {
+    if (!storeName || typeof storeName != "string") { return "No StoreName!"; }
 
     // Datenbank Objekt
-    const db = await IDB_open(IDBName);
-    if (!db) { return "no Database!"; }
-
-    // zu speichernde Daten als String
-    let dataString = "";
-
-    // Daten prüfen
-    if (typeof data == "object") {
-        dataString = JSON.stringify(data);
-    } else if (typeof data == "string") {
-        dataString = data;
-    }
-
-    // Datenbank Item Objekt - Datenzeile
-    const dataObj = { id: fileName, data: dataString };
+    const db = await IDB_open(dbName, storeName);
+    if (!db) { return "No Database!"; }
 
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction(IDBStoreName, "readwrite");
+        const transaction = db.transaction(storeName, "readwrite");
 
         // Do something when all the data is added to the database.
         transaction.oncomplete = (event) => {
@@ -209,8 +202,8 @@ export async function IDB_write(fileName, data) {
             resolve("Error on write in database");
         };
 
-        const objectStore = transaction.objectStore(IDBStoreName);
-        const request = objectStore.put(dataObj);
+        const objectStore = transaction.objectStore(storeName);
+        const request = objectStore.put(data);
         request.onsuccess = (event) => {
             resolve("OK");
         };
@@ -219,22 +212,25 @@ export async function IDB_write(fileName, data) {
 
 
 /**
- * Läd Daten/String vom Local Storrage
- * @param {string} fileName - Datei die gelesen wird
- * @returns {Promise<string>} Inhalt der Datei als Text, oder FehlerText.
+ * Läd Daten von einer IndexedDB
+ * @param {string} dbName - Name der Datenbank
+ * @param {string} storeName - Name der Datentabelle
+ * @param {string|number} id - ID des Datensatzes
+ * @returns {Promise<string|object|Array<any>>} Datensatz oder FehlerText.
  */
-export async function IDB_read(fileName) {
-    if (!fileName || typeof fileName != "string") { return "no FileName!"; }
+export async function IDB_read(dbName, storeName, id) {
+    if (!dbName || typeof dbName != "string") { return "No DBName!"; }
+    if (!storeName || typeof storeName != "string") { return "No StoreName!"; }
 
     // Datenbank Objekt
-    const db = await IDB_open(IDBName);
+    const db = await IDB_open(dbName, storeName);
     if (!db) { return "no Database!"; }
 
     return new Promise((resolve, reject) => {
         try {
-            const transaction = db.transaction(IDBStoreName, "readwrite");
-            const objectStore = transaction.objectStore(IDBStoreName);
-            const request = objectStore.get(fileName);
+            const transaction = db.transaction(storeName, "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.get(id);
 
             request.onerror = (event) => {
                 // Don't forget to handle errors!
@@ -242,7 +238,42 @@ export async function IDB_read(fileName) {
             };
 
             request.onsuccess = (event) => {
-                resolve(request.result.data); // Data ist die Eigenschaft der Datenobjektes {id: "", data: ""}
+                resolve(request.result); // Datensatz
+            };
+        } catch (err) {
+            console.error("IDB_read: ", err);
+            resolve("IDB_read: Error");
+        }
+    });
+}
+
+/**
+ * Läd alle Datensätze eines Datenstores von einer IndexedDB
+ * @param {string} dbName - Name der Datenbank
+ * @param {string} storeName - Name der Datentabelle
+ * @returns {Promise<string|Array<any>>} Inhalt der Datei als Text, oder FehlerText.
+ */
+export async function IDB_getAll(dbName, storeName) {
+    if (!dbName || typeof dbName != "string") { return "No DBName!"; }
+    if (!storeName || typeof storeName != "string") { return "No StoreName!"; }
+
+    // Datenbank Objekt
+    const db = await IDB_open(dbName, storeName);
+    if (!db) { return "no Database!"; }
+
+    return new Promise((resolve, reject) => {
+        try {
+            const transaction = db.transaction(storeName, "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.getAll();
+
+            request.onerror = (event) => {
+                // Don't forget to handle errors!
+                resolve("Error on read from database");
+            };
+
+            request.onsuccess = (event) => {
+                resolve(request.result); // Liste von Datensätzen
             };
         } catch (err) {
             console.error("IDB_read: ", err);
@@ -252,23 +283,27 @@ export async function IDB_read(fileName) {
 }
 
 
+
 // Löschen
 /**
  * Löscht eine Datei aus dem Local Storrage
- * @param {string} fileName - Dateiname der zu löschenden Datei
+ * @param {string} dbName - Name der Datenbank
+ * @param {string} storeName - Name der Datentabelle
+ * @param {string|number} id - ID des Datensatzes
  * @returns {Promise<string|undefined>} - "OK" wenn datei gelöscht werden konnte.
  */
-export async function IDB_remove(fileName) {
-    if (!fileName || typeof fileName != "string") { return "no FileName!"; }
+export async function IDB_remove(dbName, storeName, id) {
+    if (!dbName || typeof dbName != "string") { return "No DBName!"; }
+    if (!storeName || typeof storeName != "string") { return "No StoreName!"; }
 
     // Datenbank Objekt
-    const db = await IDB_open(IDBName);
+    const db = await IDB_open(dbName, storeName);
     if (!db) { return "no Database!"; }
 
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction(IDBStoreName, "readwrite");
-        const objectStore = transaction.objectStore(IDBStoreName);
-        const request = objectStore.delete(fileName);
+        const transaction = db.transaction(storeName, "readwrite");
+        const objectStore = transaction.objectStore(storeName);
+        const request = objectStore.delete(id);
 
         request.onerror = (event) => {
             // Don't forget to handle errors!
@@ -290,12 +325,12 @@ export async function IDB_remove(fileName) {
 // Schreiben
 /**
  * 
- * @param {string} fileName - Dateiname der verwendet wird
+ * @param {string} storeName - Speichername der verwendet wird
  * @param {string|object|Array<any>} data - Daten als String, Javascript Objekt, oder Array mit daten in der Reihenfolge der Datenbankfelder
  * @returns {Promise<string>} liefert "OK" zurück wenn Speichern erfolgreich
  */
-export async function LS_write(fileName, data) {
-    if (!fileName || typeof fileName != "string") { return "no Filename!"; }
+export async function LS_write(storeName, data) {
+    if (!storeName || typeof storeName != "string") { return "no storeName!"; }
 
     // zu speichernde Daten als String
     var dataString = "";
@@ -308,7 +343,7 @@ export async function LS_write(fileName, data) {
     }
 
     try {
-        localStorage.setItem(fileName, dataString);
+        localStorage.setItem(storeName, dataString);
         return "OK";
     } catch (err) {
         return "Error on LocalStorrage";
@@ -318,50 +353,71 @@ export async function LS_write(fileName, data) {
 
 /**
  * Läd Daten/String vom Local Storrage
- * @param {string} fileName - Datei die gelesen wird
+ * @param {string} storeName - Datei die gelesen wird
  * @returns {Promise<string>} Inhalt der Datei als Text, oder FehlerText.
  */
-export async function LS_read(fileName) {
-    if (!fileName || typeof fileName != "string") { return "no Filename!"; }
+export async function LS_read(storeName) {
+    if (!storeName || typeof storeName != "string") { return "no storeName!"; }
 
-    return localStorage.getItem(fileName) || "not found in LocalStorrage!";
+    let text = localStorage.getItem(storeName) || "not found in LocalStorrage!";
+    if (text.startsWith("{") || text.startsWith("[")) {
+        return JSON.parse(text) || text;
+    } else {
+        return text;
+    }
 }
 
 
 // Löschen
 /**
  * Löscht eine Datei aus dem Local Storrage
- * @param {string} fileName - Dateiname der zu löschenden Datei
+ * @param {string} storeName - Dateiname der zu löschenden Datei
  * @returns {Promise<string|undefined>} - "OK" wenn datei gelöscht werden konnte.
  */
-export async function LS_remove(fileName) {
-    if (!fileName || typeof fileName != "string") { return "no Filename!"; }
+export async function LS_remove(storeName) {
+    if (!storeName || typeof storeName != "string") { return "no storeName!"; }
 
-    localStorage.removeItem(fileName);
+    localStorage.removeItem(storeName);
     return "OK";
 }
 
+
+
 // LocalData
 export class LocalData {
-    /** @type {string} */
-    #fileSystemType = "";
+    /** @type {"auto"|"opfs"|"idb"|"ls"} */
+    #storeType = "idb";
+    #dbName = "";
+
+    /**
+     * DatenStor Typ
+     * @type {"auto"|"opfs"|"idb"|"ls"}
+     */
+    get type() {
+        return this.#storeType;
+    }
 
     /**
      * Schreibt Daten Local 
-     * @param {string} fileName - Dateiname
+     * @param {string} storeName - Name des Datenspeichers
      * @param {string|object|Array<any>} data - Daten
+     * @param {string|number} [id] - Optional ID des Datensatzes bei IndexedDB
      * @returns {Promise<string>}
      */
-    async write(fileName, data) {
-        switch (this.#fileSystemType) {
+    async write(storeName, data, id) {
+        switch (this.#storeType) {
             case "opfs":
-                return await OPFS_write(fileName, data);
+                return await OPFS_write(storeName, data);
                 break;
             case "idb":
-                return await IDB_write(fileName, data);
+                if (id != undefined) {
+                    return await IDB_write(this.#dbName, storeName, data, id);
+                } else {
+                    return "No Datarow ID!";
+                }
                 break;
             case "ls":
-                return await LS_write(fileName, data);
+                return await LS_write(storeName, data);
                 break;
             default:
                 return "";
@@ -372,19 +428,24 @@ export class LocalData {
 
     /**
      * Liest Lokale Daten 
-     * @param {string} fileName - Dateiname
-     * @returns {Promise<string>}
+     * @param {string} storeName - Name des Datenspeichers
+     * @param {string|number} [id] - Optional ID des Datensatzes bei IndexedDB
+     * @returns {Promise<string|object|Array<any>>}
      */
-    async read(fileName) {
-        switch (this.#fileSystemType) {
+    async read(storeName, id) {
+        switch (this.#storeType) {
             case "opfs":
-                return await OPFS_read(fileName);
+                return await OPFS_read(storeName);
                 break;
             case "idb":
-                return await IDB_read(fileName);
+                if (id != undefined) {
+                    return await IDB_read(this.#dbName, storeName, id);
+                } else {
+                    return "No Datarow ID!";
+                }
                 break;
             case "ls":
-                return await LS_read(fileName);
+                return await LS_read(storeName);
                 break;
             default:
                 return "";
@@ -393,20 +454,36 @@ export class LocalData {
     }
 
     /**
+     * Liefert eine Liste aller Datensatzobjekte in einer IndexedDB zurück.
+     * Ist der Typ nicht "idb" wird ein leeres Array zurückgegeben.
+     * @param {string} storeName - DatenStore Name
+     * @returns {Promise<string|Array<any>>}
+     */
+    async getAll(storeName) {
+        if (this.#storeType != "idb") { return "Type is not 'idb'!";}
+        return await IDB_getAll(this.#dbName, storeName);
+    }
+
+    /**
      * Löscht lokale Daten
-     * @param {string} fileName - Dateiname
+     * @param {string} storeName - Datenspeicher
+     * @param {string|number} [id] - ID des Datensatzes bei IndexedDB
      * @returns {Promise<string|undefined>}
      */
-    async remove(fileName) {
-        switch (this.#fileSystemType) {
+    async remove(storeName, id) {
+        switch (this.#storeType) {
             case "opfs":
-                return await OPFS_remove(fileName);
+                return await OPFS_remove(storeName);
                 break;
             case "idb":
-                return await IDB_remove(fileName);
+                if (id != undefined) {
+                    return await IDB_remove(this.#dbName, storeName, id);
+                } else {
+                    return "No Data ID!";
+                }
                 break;
             case "ls":
-                return await LS_remove(fileName);
+                return await LS_remove(storeName);
                 break;
             default:
                 return "";
@@ -414,9 +491,12 @@ export class LocalData {
         }
     }
 
-    constructor(storeName = "data", type = "auto") {
-        IDBStoreName = storeName;
-
+    /**
+     * 
+     * @param {"auto"|"opfs"|"idb"|"ls"} [type] - Optional Typ des Datenspeichers 
+     * @param {string} [dbName] - Optional Datenbank Name. Muss beim typ "idb" angegeben werden.
+     */
+    constructor(type = "auto", dbName) {
         if (type == "opfs") {
             if (!dir) {
                 // todo: Fehler Geht net
@@ -442,9 +522,11 @@ export class LocalData {
             } else {
                 // todo: Fehler
                 console.log("LocalData: no local Storage Technologie!");
+                return;
             }
         }
-
-        this.#fileSystemType = type;
+        
+        this.#storeType = type;
+        this.#dbName = dbName || "localdata";
     }
 }
