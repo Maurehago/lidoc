@@ -136,12 +136,13 @@ export async function OPFS_remove(fileName) {
 /**
  * Gibt ein IDBDatabase Objekt zurück
  * @param {string} dbName - Name der Datenbank
- * @param {string} [storeName] - Optional Name des Datenstors
+ * @param {string|Array<string>} [storeName] - Optional Name oder Liste von Namen für neue Datenstores. "dbVersion" muss bei neuen Tabellen/Stores erhöht werden.
+ * @param {number} [dbVersion] - Optional Version der Datenbank
  * @returns {Promise<IDBDatabase>}
  */
-async function IDB_open(dbName, storeName) {
+export async function IDB_open(dbName, storeName, dbVersion) {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName);
+        const request = indexedDB.open(dbName, dbVersion);
         request.onerror = (event) => {
             console.error("Why didn't you allow my web app to use IndexedDB?!");
             reject("ERR: Open Database");
@@ -152,9 +153,18 @@ async function IDB_open(dbName, storeName) {
             /** @type {IDBDatabase} */
             const db = request.result;
             let objStore;
-            // Wenn der ObjektStore noch nicht existiert
-            if (storeName && !db.objectStoreNames.contains(storeName)) {
-                    objStore = db.createObjectStore(storeName);
+            if (Array.isArray(storeName)) {
+                for (let i = 0; i < storeName.length; i++) {
+                    // Wenn der ObjektStore noch nicht existiert
+                    if (storeName[i] && !db.objectStoreNames.contains(storeName[i])) {
+                            objStore = db.createObjectStore(storeName[i]);
+                    }
+                }
+            } else {
+                // Wenn der ObjektStore noch nicht existiert
+                if (storeName && !db.objectStoreNames.contains(storeName)) {
+                        objStore = db.createObjectStore(storeName);
+                }
             }
             resolve(db);
         }
@@ -163,11 +173,6 @@ async function IDB_open(dbName, storeName) {
         request.onsuccess = (event) => {
             /** @type {IDBDatabase} */
             const db = request.result;
-            let objStore;
-            // Wenn der ObjektStore noch nicht existiert
-            if (storeName && !db.objectStoreNames.contains(storeName)) {
-                objStore = db.createObjectStore(storeName);
-            }
             resolve(db);
         };
     });
@@ -189,6 +194,8 @@ export async function IDB_write(dbName, storeName, data, id) {
     const db = await IDB_open(dbName, storeName);
     if (!db) { return "No Database!"; }
 
+    let objStore;
+    
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(storeName, "readwrite");
 
@@ -203,7 +210,7 @@ export async function IDB_write(dbName, storeName, data, id) {
         };
 
         const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.put(data);
+        const request = objectStore.put(data, id);
         request.onsuccess = (event) => {
             resolve("OK");
         };
