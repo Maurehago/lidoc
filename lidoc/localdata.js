@@ -183,7 +183,7 @@ export async function IDB_open(dbName, storeName, dbVersion) {
  * Schreibt Daten in eine IndexedDB
  * @param {string} dbName - Name der Datenbank
  * @param {string} storeName - Name des Datenspeichers(Tabelle) in der Datenabnk
- * @param {string|object|Array<any>} data - Daten String oder Daten Objekt
+ * @param {string|object|Array<any>|Map<string|number,any>} data - Daten String, Daten Objekt oder Map von Daten
  * @param {string|number} id - ID des Datensatzes
  * @returns {Promise<string>} liefert "OK" zurück wenn Speichern erfolgreich
  */
@@ -194,10 +194,19 @@ export async function IDB_write(dbName, storeName, data, id) {
     const db = await IDB_open(dbName, storeName);
     if (!db) { return "No Database!"; }
 
-    let objStore;
-    
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(storeName, "readwrite");
+        const objectStore = transaction.objectStore(storeName);
+
+        // Wenn eine Map von Daten
+        if (data instanceof Map) {
+            const keys = [...data.keys()];
+            for (let i = 0; i < keys.length; i++) {
+                objectStore.put(data.get(keys[i]), keys[i]);
+            }
+        } else {
+            objectStore.put(data, id);
+        }
 
         // Do something when all the data is added to the database.
         transaction.oncomplete = (event) => {
@@ -207,12 +216,6 @@ export async function IDB_write(dbName, storeName, data, id) {
         transaction.onerror = (event) => {
             // Don't forget to handle errors!
             resolve("Error on write in database");
-        };
-
-        const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.put(data, id);
-        request.onsuccess = (event) => {
-            resolve("OK");
         };
     });
 }
@@ -407,7 +410,7 @@ export class LocalData {
     /**
      * Schreibt Daten Local 
      * @param {string} storeName - Name des Datenspeichers
-     * @param {string|object|Array<any>} data - Daten
+     * @param {string|object|Array<any>|Map<string|number,any>} data - Daten oder Liste(Map) von Daten
      * @param {string|number} [id] - Optional ID des Datensatzes bei IndexedDB
      * @returns {Promise<string>}
      */
