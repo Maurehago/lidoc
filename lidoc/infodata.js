@@ -19,7 +19,7 @@
 /** 
  * Callback Funktion die für jede Gruppe ausgeführt wird
  * @callback CallbackGroupFunction
- * @param {Array<object>} objList - Liste mit gefilterten Datensatz Objekten, pro Gruppe
+ * @param {Array<any>} objList - Liste mit gefilterten Datensatz Objekten, pro Gruppe
  * @param {Array<string|number>} [idList] - Liste mit ID's der gefilterten Datenzeilen pro Gruppe
  * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
  */
@@ -28,7 +28,7 @@
  * Callback Funktion die für alle Datensätze ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
  * @callback CallbackFilterFunction
- * @param {object} obj - Datensatz Objekt
+ * @param {any} obj - Datensatz Objekt
  * @param {number} [index] - Position in der Liste nach Index
  * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
  * @returns {boolean|undefined} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste.
@@ -38,7 +38,7 @@
  * Callback Funktion die für alle Datensätze ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird die ganze For-Schleife abgebochen.
  * @callback CallbackForFunction
- * @param {object} obj - Datensatz Objekt
+ * @param {any} obj - Datensatz Objekt
  * @param {number} [index] - Position in der Liste nach Index
  * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
  * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
@@ -85,6 +85,31 @@ export function isClass(obj) {
     return typeof obj === 'function' && obj.prototype && obj.prototype.constructor === obj;
 }
 
+/**
+ * Liefert einen Wert von einem Objekt Pfad(z.B.: von kunde, "adresse.hausnummer") zurück
+ * @param {Object<string,any>} obj - Objekt mit der Eigenschaft
+ * @param {string} prop - Eigenschaft Pfad mit "." getrennt
+ * @returns {any|undefined} Wert der Eigenschaft oder "undefined" wenn nicht vorhanden
+ */
+function getPropValue(obj, prop) {
+    if (typeof obj !== 'object') {return undefined;}
+    if (typeof prop !== 'string') {return undefined;}
+
+    // Replace [] notation with dot notation
+    //prop = prop.replace(/\[["'`](.*)["'`]\]/g,".$1")
+
+    const parts = prop.split(".");
+    let value = obj;
+    for (let i = 0; i < parts.length; i++) {
+        if (value[parts[i]] == undefined) {return undefined;}
+        value = value[parts[i]];
+    }
+    return value;
+
+    // return prop.split('.').reduce(function(prev, curr) {
+    //     return prev ? prev[curr] : undefined
+    // }, obj || self)
+}
 
 // ===================================
 // Indexed DB
@@ -319,11 +344,12 @@ export class List {
         if (Array.isArray(this.#idname)) {
             let id = "";
             for (let i = 0; i < this.#idname.length; i++) {
-                id += obj[this.#idname[i]] + "_";
+                id += getPropValue(obj, this.#idname[i]) + "_";
+                //id += obj[this.#idname[i]] + "_";
             }
             return id;
         } else {
-            return obj[this.#idname];
+            return getPropValue(obj, this.#idname);
         }
     }
 
@@ -340,6 +366,16 @@ export class List {
             if (Array.isArray(index)) { return index; }
             return this.#indexList.get(index) || [];
         }
+    }
+
+
+    /**
+     * Prüft ob ein bestimmter index in der Liste vorhanden ist
+     * @param {string} index - Index Name
+     * @returns {boolean} "true" wenn Index mit dem Namen vorhanden
+     */
+    hasIndex(index) {
+        return this.#indexList.has(index);
     }
 
 
@@ -548,7 +584,7 @@ export class List {
     /**
      * Gibt ein Array an Werten für die Spalten(fieldList) eines Datensatzes(id) zurück.
      * @param {string|number} rowID - ID des Datensatzes
-     * @param {Array<string|number>} colList - Liste mit Spaltennamen oder Spaltennummern
+     * @param {Array<string>} colList - Liste mit Spaltennamen oder Spaltennummern
      * @returns {Array<any>} Liste mit Werten der angegebenen Spalten
      */
     getColValues(rowID, colList) {
@@ -563,7 +599,7 @@ export class List {
         const valueList = [];
 
         for (let i = 0; i < colList.length; i++) {
-            valueList.push(dataRow[colList[i]]);
+            valueList.push(getPropValue(dataRow, colList[i]));
         };
 
         return valueList;
@@ -571,7 +607,7 @@ export class List {
 
 
     /**
-     * Sortiert die Daten nach angegebenen Spalten(nur 1. Ebene, Unterobjekte können hier nicht sortiert werden). Groß-Kleinschreibung bei Texten wird ignoriert.  
+     * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.  
      * Aufsteigend: A > B = 1  
      * Wenn der "index" noch nicht existiert, werden alle Daten sortiert.
      * Wenn "index" angegeben und "newIndex" nicht angegeben, werden die Daten unter diesem Index sortiert, und unter dem selben Index abgelegt.
@@ -600,8 +636,6 @@ export class List {
                 return rowList;
             }
 
-            // todo: Sortieren von UnterObjekten - momentan über eigene Funktion
-
             // Feld Indexes lesen und Sortier Reihenfolge
             const colLength = sortCols.length;
             const orderIndex = new Array(colLength);
@@ -618,7 +652,7 @@ export class List {
                 const fieldData = col.split(" ");
                 sCols[i] = fieldData[0]; // Spaltennamen für spätere Verwendung merken
                 sDirection[i] = "ASC";
-                if (fieldData[1].trim().toUpperCase() == "DESC") {
+                if (fieldData[1]?.trim().toUpperCase() == "DESC") {
                     direction = -1;
                     sDirection[i] = "DESC"; // Sortierrichtung für spätere Verwendung merken
                 }
@@ -638,9 +672,11 @@ export class List {
 
                 // Prüfen
                 for (let i = 0; i < colLength; i++) {
-                    if (aRow[sCols[i]] == undefined && bRow[sCols[i]] == undefined) {
+                    const aValue = getPropValue(aRow, sCols[i]);
+                    const bValue = getPropValue(bRow, sCols[i]);
+                    if (aValue == undefined && bValue == undefined) {
                         continue;
-                    } else if (aRow[sCols[i]] != undefined && bRow[sCols[i]] == undefined) {
+                    } else if (aValue != undefined && bValue == undefined) {
                         if (orderIndex[i] < 0) {
                             // Absteigend
                             return -1;
@@ -648,7 +684,7 @@ export class List {
                             // Aufsteigend
                             return 1;
                         }
-                    } else if (aRow[sCols[i]] == undefined && bRow[sCols[i]] != undefined) {
+                    } else if (aValue == undefined && bValue != undefined) {
                         if (orderIndex[i] < 0) {
                             // Absteigend
                             return 1;
@@ -663,27 +699,27 @@ export class List {
                         //if (typeof aRow[colIndex[i]] == "string" && typeof bRow[colIndex[i]] == "string") {
                         if (isString[i]) {
                             // @ts-ignore
-                            if (aRow[sCols[i]].toLowerCase() > bRow[sCols[i]].toLowerCase()) { return -1; }
+                            if (aValue.toLowerCase() > bValue.toLowerCase()) { return -1; }
                             // @ts-ignore
-                            if (aRow[sCols[i]].toLowerCase() < bRow[sCols[i]].toLowerCase()) { return 1; }
+                            if (aValue.toLowerCase() < bValue.toLowerCase()) { return 1; }
                         } else {
                             // @ts-ignore
-                            if (aRow[sCols[i]] > bRow[sCols[i]]) { return -1; }
+                            if (aValue > bValue) { return -1; }
                             // @ts-ignore
-                            if (aRow[sCols[i]] < bRow[sCols[i]]) { return 1; }
+                            if (aValue < bValue) { return 1; }
                         }
                     } else {
                         // Aufsteigend
                         if (isString[i]) {
                             // @ts-ignore
-                            if (aRow[sCols[i]].toLowerCase() > bRow[sCols[i]].toLowerCase()) { return 1; }
+                            if (aValue.toLowerCase() > bValue.toLowerCase()) { return 1; }
                             // @ts-ignore
-                            if (aRow[sCols[i]].toLowerCase() < bRow[sCols[i]].toLowerCase()) { return -1; }
+                            if (aValue.toLowerCase() < bValue.toLowerCase()) { return -1; }
                         } else {
                             // @ts-ignore
-                            if (aRow[sCols[i]] > bRow[sCols[i]]) { return 1; }
+                            if (aValue > bValue) { return 1; }
                             // @ts-ignore
-                            if (aRow[sCols[i]] < bRow[sCols[i]]) { return -1; }
+                            if (aValue < bValue) { return -1; }
                         }
                     }
                 } // alle Felder vergleichen
@@ -791,7 +827,7 @@ export class List {
     /**
      * Führt die Angegebene Funktion, pro Gruppierung nach den Angegebenen Spalten, aus.
      * @param {CallbackGroupFunction} fu - Funktion die für jede Gruppierung aufgerufen wird.
-     * @param {Array<string|number>} colList - Liste der Spalten nach denen Gruppiert wird.
+     * @param {Array<string>} colList - Liste der Spalten nach denen Gruppiert wird.
      * @param {string|Array<string|number>} [index] - Optionaler Index der für die Gruppierung verwendet wird.
      * @returns {void}
      */
@@ -800,7 +836,7 @@ export class List {
         const rowList = this.getIndex(index);
         if (typeof fu != "function") { return; }
 
-        const groupIndex = new Map();
+        const groupIndex = new Map(); // merkt sich den Index der Gruppe
 
         /** @type {Array<Array<string|number>>} */
         const groupList = [];
