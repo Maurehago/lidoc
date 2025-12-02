@@ -91,7 +91,7 @@ body {
 }
 
 hr {
-  margin: 1rem 0;
+  margin: 8px 0;
   color: inherit;
   border: 0;
   border-top: 1px solid;
@@ -103,8 +103,8 @@ hr {
 
 /* Überschriften */
 h6,.h6,h5,.h5,h4,.h4,h3,.h3,h2,.h2,h1,.h1 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
+  margin-top: 21px;
+  margin-bottom: 2px;
   padding-left: 8px;
   padding-right: 8px;
   font-weight: 500;
@@ -162,9 +162,9 @@ h6,.h6 {
 
 /* Absätze */
 p {
-  margin-top: 0.3rem;
+  margin-top: 0.1rem;
   margin-bottom: 0.5rem;
-  padding: 0 8px 0 8px;
+  padding: 2px 8px 0 8px;
   width: 100%;
   white-space: normal;
 }
@@ -491,7 +491,7 @@ button {
   vertical-align: middle;
   text-decoration: none;
   text-align: center;
-  white-space: nowrap;
+  /* white-space: nowrap; */
 }
 
 button:focus:not(:focus-visible) {
@@ -823,7 +823,7 @@ f-row,[f-row],.f-row {
   flex-direction: row;
 }
 
-/* Spalten - Container und Formular */
+/* Zeilen untereinander - Container und Formular */
 f-col,[f-col],.f-col,form {
   display: flex;
   flex-direction: column;
@@ -835,86 +835,107 @@ form::before,form::after {
   clear: both
 }
 
-
-/* Zelle */
-/* wird verewndet wenn mehrere HTML TAG-Elemente in einem Block zusammengefasst werden 
-   sonnst gilt jedes TAG-Element als Item */
-f-row>*,f-item,[f-item],.f-item {
-  display: block;
-  /* flex: 0 1 auto; */
+/* Wenn Zellen umgebrochen werden sollen */
+[f-wrap],.f-wrap {
+  flex-wrap: wrap;
 }
 
+/* kann nicht mit fixen breiten verwendet werden, wenn
+der Inhalt größer ist als angegebende breite*/
+[no-wrap],.no-wrap {
+  white-space: nowrap;
+}
+
+
 /* Ausrichtung des Flex Containers */
+/* Breite(max) muss angegeben werden */
 [f-center],.f-center {
   margin-right: auto;
   margin-left: auto;
 }
 
 /* Ausrichtung der Spalten in einer Flex Zeile */
+/* |<-- links */
 [i-l],.i-l,[i-left],.i-left {
   justify-content: flex-start;
 }
 
-/* |<-- */
+/* -->|  rechts */
 [i-r],.i-r,[i-right],.i-right {
   justify-content: flex-end;
 }
 
-/* -->| */
+/* horizontal --> <--  zentriert */
 [i-c],.i-c,[i-center],.i-center {
   justify-content: center;
 }
 
-/* horizontal --> <-- */
+/* horizontal mit Leerraum zwichen Spalten */
+[i-space],.i-space {
+  justify-content: space-between;
+}
+
+/* horizontal mit Leerraum links und Rechts von allen Spalten */
+[i-space-a],.i-space-a {
+  justify-content: space-around;
+}
+
+
+/* vertical ganze Höhe */
 [i-stretch],.i-stretch {
   align-items: stretch;
 }
 
-/* vertical ganze Höhe */
+/* oben */
 [i-t],.i-t,[i-top],.i-top {
   align-items: flex-start;
 }
 
-/* oben */
+/* unten */
 [i-b],.i-b,[i-bottom],.i-bottom {
   align-items: flex-end;
 }
 
-/* unten */
-[i-m],.i-m,[i-v-center],.i-v-center {
+/* vertical centriert */
+[i-m],.i-m,.i-v,[i-v],[i-v-center],.i-v-center,[i-v-c],.i-v-c {
   align-items: center;
 }
 
-/* vertical */
+/* auf 1. Textlinie ausgerichtet */
 [i-base],.i-base {
   align-items: baseline;
 }
 
-/* auf 1. Textlinie ausgerichtet */
 
-/* Anordnung von Inhalten, wenn Spalten umgebrochen werden */
-[a-t].a-t {
+/* Anordnung von mehrzeiligen ROW Inhalten, wenn Spalten umgebrochen werden */
+/* Zeilen oben ausrichten */
+[r-t],.r-t {
   align-content: flex-start;
 }
 
-[a-m].a-m {
+/* Zeilen mittig/vertical-center ausrichten */
+[r-m],.r-m,[r-v],.r-v,[r-c],.r-c {
   align-content: center;
 }
 
-[a-b].a-b {
+/* Zeilen unten ausrichten */
+[r-b],.r-b {
   align-content: flex-end;
 }
 
-[a-v-stretch].a-v-stretch {
+/* Zeilen verfügbaren Platz einnehmen */
+[r-stretch],.r-stretch {
   align-content: stretch;
 }
 
-[a-v].a-v {
+/* Leerraum zwischen Zeilen */
+[r-space],.r-space {
   align-content: space-between;
 }
 
-[a-v-all].a-v-all {
-  align-content: space-between;
+/* Leerraum ober und unter den Zeilen */
+[r-space-a],.r-space-a {
+  align-content: space-around;
 }
 
 
@@ -991,47 +1012,46 @@ f-row>*,f-item,[f-item],.f-item {
   row-gap: 128px;
 }
 
+/* Spalte */
+/* wird verewndet wenn mehrere HTML TAG-Elemente in einem Block zusammengefasst werden 
+   sonnst gilt jedes TAG-Element als Item */
+f-row>*,f-item,[f-item],.f-item {
+  display: block;
+  /* flex: 0 1 auto; */
+}
+
+
 /* Position vom Element selbst */
+/* sich selbst nach oben Ausrichten */
 [v-t],.v-t {
   align-self: flex-start;
 }
 
-/* sich selbst nach oben Ausrichten */
+/* sich selbst in der Mitte der Höhe Ausrichten */
 [v-c],.v-c {
   align-self: center;
 }
 
-/* sich selbst in der Mitte der Höhe Ausrichten */
+/* sich selbst nach unten Ausrichten */
 [v-b],.v-b {
   align-self: flex-end;
 }
 
-/* sich selbst nach unten Ausrichten */
+/* sich selbst nach der Basis Linie Ausrichten */
 [v-base],.v-base {
   align-self: baseline;
 }
 
-/* sich selbst nach der Basis Linie Ausrichten */
 
 
-/* Wenn Zellen umgebrochen werden sollen */
-[f-wrap],.f-wrap {
-  flex-wrap: wrap;
-}
-
-/* kann nicht mit fixen breiten verwendet werden, wenn
-der Inhalt größer ist als angegebende breite*/
-[no-wrap],.no-wrap {
-  white-space: nowrap;
-}
 
 /* BREITEN */
-/*  xs < 576
-    s >= 576
-    m >= 720
-    l >= 992
-    xl >= 1200
-    xxl >= 1400
+/*  xs <=480
+    s >480 <=720
+    m >720 <=991
+    l >991 <=1199
+    xl >1199 <=1399
+    xxl >1399 
 */
 
 /* Flexible Breiten 
@@ -1047,17 +1067,17 @@ der Inhalt größer ist als angegebende breite*/
 [w-flex-8],.w-flex-8 {flex-grow: 8;}
 [w-flex-9],.w-flex-9 {flex-grow: 9;}
 
-
-/* Breiten fix */
 [w-fit],.w-fit {flex: 1 1 auto;min-width: 5%;}
 [w-fix],.w-fix {flex: 0 0 auto;}
-[w-max],.w-max {max-width: 1080px;}
+
+/* Breiten fix */
 [w-xxl],.w-xxl {min-width: 1400px;}
+[w-max],.w-max {max-width: 1199px;}
 [w-xl],.w-xl {max-width: 1399px;}
 [w-l],.w-l {max-width: 1199px;}
 [w-m],.w-m {max-width: 991px;}
-[w-s],.w-s {max-width: 767px;}
-[w-xs],.w-xs {max-width: 575px;}
+[w-s],.w-s {max-width: 720px;}
+[w-xs],.w-xs {max-width: 480px;}
 
 
 /* Breiten % */
@@ -1192,20 +1212,18 @@ modal-co,[modal-co],.modal-co {
 /* ========================== */
 /*   Media Size */
 
-/* X-Small < 576 */
-@media (max-width: 575px) {
-
-  [hide-xs],  .hide-xs,  [hide-lt-s],  .hide-lt-s,  [hide-lt-m],  .hide-lt-m,  [hide-lt-l],  .hide-lt-l,  [hide-lt-xl],  .hide-lt-xl,  [hide-lt-xxl],  .hide-lt-xxl {
+/* X-Small < 481 */
+@media (max-width: 480px) {
+  [hide-xs],.hide-xs,[hide-lt-s],.hide-lt-s,[hide-lt-m],.hide-lt-m,[hide-lt-l],.hide-lt-l,[hide-lt-xl],.hide-lt-xl,[hide-lt-xxl],.hide-lt-xxl {
     display: none !important
   }
 
-  f-row:not([no-wrap]),  [f-row]:not([no-wrap]),  .f-row:not([no-wrap]) {
+  f-row:not([no-wrap]),[f-row]:not([no-wrap]),.f-row:not([no-wrap]) {
     flex-direction: column;
     flex-wrap: unset;
   }
 
-  f-row,  [f-row],  .f-row,  f-row,  f-item,  [f-item],  .f-item {
-    /*width: 100% !important; */
+  f-row,[f-row],.f-row,f-row,f-row>*,f-item,[f-item],.f-item {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
@@ -1215,57 +1233,44 @@ modal-co,[modal-co],.modal-co {
 }
 
 /* Small >= 576 < 720 */
-@media (min-width: 576px) and (max-width: 719px) {
-
-  [hide-s],  .hide-s,  [hide-gt-xs],  .hide-gt-xs,  [hide-lt-m],  .hide-lt-m,  [hide-lt-l],  .hide-lt-l,  [hide-lt-xl],  .hide-lt-xl,  [hide-lt-xxl],  .hide-lt-xxl {
+@media (min-width: 481px) and (max-width: 719px) {
+  [hide-s],.hide-s,[hide-gt-xs],.hide-gt-xs,[hide-lt-m],.hide-lt-m,[hide-lt-l],.hide-lt-l,[hide-lt-xl],.hide-lt-xl,[hide-lt-xxl],.hide-lt-xxl {
     display: none !important
   }
 
-  f-row,  [f-row],  .f-row {
-    /*flex-wrap: wrap;
-    width: 100% !important;*/
+  f-row,[f-row],.f-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 
   .sidebar {display: none;}
   .toggler:checked + .sidebar {display: block;}
-
-  /* f-item,[f-item],.f-item {
-    flex: 1 1 auto; /* flex: 1 1 60%; ??? */
-  /*} */
 }
 
 /* Medium >= 720 < 992 */
 @media (min-width: 720px) and (max-width: 991px) {
-
-  [hide-m],  .hide-m,  [hide-gt-xs],  .hide-gt-xs,  [hide-gt-s],  .hide-gt-s,  [hide-lt-l],  .hide-lt-l,  [hide-lt-xl],  .hide-lt-xl,  [hide-lt-xxl],  .hide-lt-xxl {
+  [hide-m],.hide-m,[hide-gt-xs],.hide-gt-xs,[hide-gt-s],.hide-gt-s,[hide-lt-l],.hide-lt-l,[hide-lt-xl],.hide-lt-xl,[hide-lt-xxl],.hide-lt-xxl {
     display: none !important
   }
-
-  /* f-item,[f-item],.f-item {
-    flex: 1 1 auto;
-  } */
 }
 
 /* Large >= 992 < 1200px */
 @media (min-width: 992px) and (max-width: 1199px) {
-
-  [hide-l],  .hide-l,  [hide-gt-xs],  .hide-gt-xs,  [hide-gt-s],  .hide-gt-s,  [hide-gt-m],  .hide-gt-m,  [hide-lt-xl],  .hide-lt-xl,  [hide-lt-xxl],  .hide-lt-xxl {
+  [hide-l],.hide-l,[hide-gt-xs],.hide-gt-xs,[hide-gt-s],.hide-gt-s,[hide-gt-m],.hide-gt-m,[hide-lt-xl],.hide-lt-xl,[hide-lt-xxl],.hide-lt-xxl {
     display: none !important
   }
 }
 
 /* X-Large >=1200 < 1400px */
 @media (min-width: 1200px) and (max-width: 1399px) {
-
-  [hide-xl],  .hide-xl,  [hide-gt-xs],  .hide-gt-xs,  [hide-gt-s],  .hide-gt-s,  [hide-gt-m],  .hide-gt-m,  [hide-gt-l],  .hide-gt-l,  [hide-lt-xxl],  .hide-lt-xxl {
+  [hide-xl],.hide-xl,[hide-gt-xs],.hide-gt-xs,[hide-gt-s],.hide-gt-s,[hide-gt-m],.hide-gt-m,[hide-gt-l],.hide-gt-l,[hide-lt-xxl],.hide-lt-xxl {
     display: none !important
   }
 }
 
 /* XX-Large >= 1400px */
 @media (min-width: 1400px) {
-
-  [hide-xxl],  .hide-xxl,  [hide-gt-xs],  .hide-gt-xs,  [hide-gt-s],  .hide-gt-s,  [hide-gt-m],  .hide-gt-m,  [hide-gt-l],  .hide-gt-l,  [hide-gt-xl],  .hide-gt-xl {
+  [hide-xxl],.hide-xxl,[hide-gt-xs],.hide-gt-xs,[hide-gt-s],.hide-gt-s,[hide-gt-m],.hide-gt-m,[hide-gt-l],.hide-gt-l,[hide-gt-xl],.hide-gt-xl {
     display: none !important
   }
 }

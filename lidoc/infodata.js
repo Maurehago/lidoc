@@ -379,29 +379,47 @@ export class List {
     }
 
 
-    /** @returns {Array<any>} */
-    toArrays() {
+    /**
+     * Liefert ein Array mit Arrays von Eigenschaften eines Objektes zurück
+     * @param {string} [index] - Optionale Name des zu verendenden Indexes
+     * @returns {Array<any>} Array mit Eigenschaften. Der erste Eintrag enthält sie Spalten/Feld/Property Namen.
+     */
+    toArrays(index) {
         const list = [];
-        const ids = this.getIndex();
+        const ids = this.getIndex(index);
+        
+        // Erste Zeile mit Feldnamen
         list.push(this.#properties);
 
         for (let i = 0; i < ids.length; i++) {
-            let a = Object.values(this.#data.get(ids[i]));
+            const obj = this.#data.get(ids[i]);
+            
+            // Neue Eigenschaftsliste
+            const a = [];
+            for (let j = 0; j < this.#properties.length; j++) {
+                // Wert der Property in die Eigenschaftsliste
+                // todo: was tun wein Eigenschaft-Wert ein Objekt ist? 
+                a.push(obj[this.#properties[j]]);
+            }
+            // Datensatz als Array in die Liste
             list.push(a);
         }
         return list;
     }
 
     /**
-     * 
+     * Fügt eine Array Liste als Objekte in die List ein
      * @param {Array<any>} list 
+     * @param {boolean} [clear] - Optional wenn bestehende Liste zuvor gelöscht wird
      * @returns 
      */
-    fromArrays(list) {
+    fromArrays(list, clear) {
         if (!Array.isArray(list)) { return; }
 
-        // Daten zurücksetzen
-        this.#data = new Map();
+        if (clear) {
+            // Daten zurücksetzen
+            this.#data = new Map();
+        }
 
         // erste Zeile sind Feldnamen
         if (list.length < 1) { return; }
@@ -418,7 +436,7 @@ export class List {
             }
 
             // in Daten setzen
-            this.#data.set(obj.id, obj);
+            this.#data.set(this.getID(obj), obj);
         }
     }
 
@@ -426,11 +444,20 @@ export class List {
     /**
      * Setz eine Instanz in eine Liste
      * @param {Object<string,any>} obj - Instanz
+     * @returns {Object<string,any>} Class-Instanz vom Objekt
      */
     set(obj) {
         if (obj instanceof this.#class) {
             this.#data.set(this.getID(obj), obj);
+            return obj;
+        } else if (typeof obj == "object") {
+            // @ts-ignore
+            const newObj = new this.#class();
+            Object.assign(newObj, obj);
+            this.#data.set(this.getID(newObj), newObj);
+            return newObj;
         }
+        return obj;
     }
 
 
@@ -441,9 +468,11 @@ export class List {
      * @returns {Promise<string>} "OK" wenn gespeichert, sonnst eine Fehlermeldung
      */
     async write(obj) {
+        // objekt in Liste
+        obj = this.set(obj);
         const id = this.getID(obj);
-        this.#data.set(id, obj);
         if (this.#dbName) {
+            // Objekt in Datenbank
             return await IDB_write(this.#dbName, this.#storeName, obj, id);
         } else {
             return "No Database!";
@@ -514,7 +543,7 @@ export class List {
 
 
     /**
-     * Ließt alle Datensätze iner INdexedDB in diese Liste
+     * Ließt alle Datensätze von der IndexedDB in diese Liste
      * @returns {Promise<string>} "OK" wenn geladen, sonnst eine Fehlermeldung
      */
     async readAll() {
