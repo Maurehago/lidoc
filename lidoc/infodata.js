@@ -672,6 +672,10 @@ export class List {
             const sCols = new Array(colLength);
             const sDirection = new Array(colLength);
 
+            // 1. Datensatz lesen
+            let obj = this.get(rowList[0]);
+            if (!obj) {return rowList;}
+
             // Alle sortierspalten durchgehen
             for (let i = 0; i < colLength; i++) {
                 let col = sortCols[i];
@@ -684,10 +688,7 @@ export class List {
                 if (fieldData[1]?.trim().toUpperCase() == "DESC") {
                     direction = -1;
                     sDirection[i] = "DESC"; // Sortierrichtung für spätere Verwendung merken
-                }
-
-                // 1. Datensatz lesen
-                let obj = this.get(rowList[0]);
+                }    
 
                 orderIndex[i] = direction;
                 isString[i] = typeof obj[sCols[i]] == "string" ? true : false; // dataType?.type == "string" ? true : false;
