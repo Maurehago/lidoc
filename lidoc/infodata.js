@@ -45,6 +45,17 @@
  */
 
 /** 
+ * Callback Funktion die ein Datensatz Objekt in ein anderes Objekt konvertiert.  
+ * Lieftert das neue Objekt zurück.
+ * @callback CallbackConvertFunction
+ * @param {any} obj - Datensatz Objekt
+ * @param {number} [index] - Position in der Liste nach Index
+ * @param {Array<Object<string,any>>} [list] - Gesammte ID-Liste nach optionalen Index
+ * @returns {Object<string,any>} Konvertiertes Objekt
+ */
+
+
+/** 
  * Callback Funktion die für alle Spalten ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird die ganze For-Schleife abgebochen.
  * @callback CallbackForColFunction
@@ -408,12 +419,13 @@ export class List {
     }
 
     /**
-     * Fügt eine Array Liste als Objekte in die List ein
+     * Fügt eine Array Wert-Liste als Objekte in die List ein.
+     * Die erste Zeile muss die Namen der Spalten(Eigenschaften) enthalten.
      * @param {Array<any>} list 
      * @param {boolean} [clear] - Optional wenn bestehende Liste zuvor gelöscht wird
-     * @returns 
+     * @returns {void}
      */
-    fromArrays(list, clear) {
+    fromValueArrays(list, clear) {
         if (!Array.isArray(list)) { return; }
 
         if (clear) {
@@ -458,6 +470,36 @@ export class List {
             return newObj;
         }
         return obj;
+    }
+
+    
+    /**
+     * Fügt eine Array Objekt-Liste als Objekte in die List ein.
+     * @param {Array<Object<string,any>>} list 
+     * @param {boolean} [clear] - Optional wenn bestehende Liste zuvor gelöscht wird
+     * @param {CallbackConvertFunction} [convertFu] - Optionale Funktion die das Objekt vor dem Speichern convertiert
+     * @returns {void}
+     */
+    fromObjArray(list, clear, convertFu) {
+        if (!Array.isArray(list)) { return; }
+
+        if (clear) {
+            // Daten zurücksetzen
+            this.#data = new Map();
+        }
+
+        const isConvert = typeof(convertFu) == "function";
+
+        // alle Objekte durchgehen
+        for(let i = 0; i < list.length; i++) {
+            // Wenn Konvertierung
+            if (isConvert) {
+                this.set(convertFu(list[i], i, list));
+            } else {
+                // Objekt in Liste speichern
+                this.set(list[i]);
+            }
+        }
     }
 
 
