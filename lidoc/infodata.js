@@ -474,10 +474,11 @@ export class List {
 
     
     /**
-     * Fügt eine Array Objekt-Liste als Objekte in die List ein.
+     * Fügt eine Array Objekt-Liste als Objekte in die List ein.  
+     * Mit der optionalen Konvertierungs Funktion kann das Objekt in ein anderes Objekt, oder Objekt Eigenschaften ausgebessert werden vor dem Speichern in die Liste.  
      * @param {Array<Object<string,any>>} list 
      * @param {boolean} [clear] - Optional wenn bestehende Liste zuvor gelöscht wird
-     * @param {CallbackConvertFunction} [convertFu] - Optionale Funktion die das Objekt vor dem Speichern convertiert
+     * @param {CallbackConvertFunction} [convertFu] - Optionale Funktion die das Objekt vor dem Speichern konvertiert
      * @returns {void}
      */
     fromObjArray(list, clear, convertFu) {
