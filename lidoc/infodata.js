@@ -48,10 +48,21 @@
  * Callback Funktion die ein Datensatz Objekt in ein anderes Objekt konvertiert.  
  * Lieftert das neue Objekt zurück.
  * @callback CallbackConvertFunction
- * @param {any} obj - Datensatz Objekt
+ * @param {Object<string,any>} obj - Datensatz Objekt
  * @param {number} [index] - Position in der Liste nach Index
- * @param {Array<Object<string,any>>} [list] - Gesammte ID-Liste nach optionalen Index
+ * @param {Array<Object<string,any>>} [list] - Übergebene Liste mit Objekten
  * @returns {Object<string,any>} Konvertiertes Objekt
+ */
+
+
+/** 
+ * Callback Funktion die für alle Datensätze ausgeführt wird.  
+ * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
+ * @callback CallbackFormatFunction
+ * @param {Array<any>} values - Datensatz Werte
+ * @param {number} [index] - Position in der Liste nach Index
+ * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
+ * @returns {Array<any>|undefined|false} Wenn Array dann kommt der Datensatz in die neue Liste.
  */
 
 
@@ -346,6 +357,11 @@ export class List {
 
     #indexList = new Map();
 
+    /** @returns {number} Anzahl der Objekte in der Liste */
+    get length() {
+        return this.#data.size;
+    }
+
     /**
      * Liefert die ID eines Objektes zurück
      * @param {Object<string,any>} obj - Datenobjekt mit dem idFeld
@@ -366,7 +382,8 @@ export class List {
 
 
     /**
-     * Liefert eine Liste aller IDs vom angegeben Index oder allen Datensätzen zurück
+     * Liefert eine Liste aller IDs vom angegeben Index oder allen Datensätzen zurück.  
+     * Existiert der Index nicht, wird eine leere Liste zurück gegeben.
      * @param {string|Array<string|number>} [index] - Indexname
      * @returns {Array<string|number>} IDs der Datzensätze
      */
@@ -393,31 +410,54 @@ export class List {
     /**
      * Liefert ein Array mit Arrays von Eigenschaften eines Objektes zurück
      * @param {string} [index] - Optionale Name des zu verendenden Indexes
+     * @param {Array<string>} [colNames] - Optional Namen der Spalten die gelesen werden
+     * @param {CallbackFilterFunction} [formatFu] - Optional Funktion welche die Daten formatiert.
      * @returns {Array<any>} Array mit Eigenschaften. Der erste Eintrag enthält sie Spalten/Feld/Property Namen.
      */
-    toArrays(index) {
+    toArrays(index, colNames, formatFu) {
         const list = [];
         const ids = this.getIndex(index);
         
+        // Spalten die gelesen werden
+        let cols = [];
+        if (Array.isArray(colNames)) {
+            cols = colNames;
+        } else {
+            cols = this.#properties;
+        }
+
+        // Prüfen auf Formatierungs Funktion
+        const isFormatFu = typeof formatFu == "function";
+
         // Erste Zeile mit Feldnamen
-        list.push(this.#properties);
+        list.push(cols);
 
         for (let i = 0; i < ids.length; i++) {
             const obj = this.#data.get(ids[i]);
             
             // Neue Eigenschaftsliste
             const a = [];
-            for (let j = 0; j < this.#properties.length; j++) {
+            for (let j = 0; j < cols.length; j++) {
                 // Wert der Property in die Eigenschaftsliste
                 // todo: was tun wein Eigenschaft-Wert ein Objekt ist? 
-                a.push(obj[this.#properties[j]]);
+                a.push(obj[cols[j]]);
             }
-            // Datensatz als Array in die Liste
-            list.push(a);
+
+            // Wenn Formatierungs Funktion
+            if (isFormatFu) {
+                let newA = formatFu(a, i, ids);
+                if (Array.isArray(newA)) {
+                    list.push(newA);
+                }
+            } else {
+                // Datensatz als Array in die Liste
+                list.push(a);
+            }
         }
         return list;
     }
 
+    
     /**
      * Fügt eine Array Wert-Liste als Objekte in die List ein.
      * Die erste Zeile muss die Namen der Spalten(Eigenschaften) enthalten.
@@ -681,11 +721,11 @@ export class List {
     /**
      * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.  
      * Aufsteigend: A > B = 1  
-     * Wenn der "index" noch nicht existiert, werden alle Daten sortiert.
-     * Wenn "index" angegeben und "newIndex" nicht angegeben, werden die Daten unter diesem Index sortiert, und unter dem selben Index abgelegt.
-     * Wenn "index" und "newIndex" angegeben, werden alle Daten sortiert und unter "newIndex" abgelegt.
+     * Wenn kein "index" angegeben, werden alle Daten sortiert.
+     * Wenn "index" angegeben, werden nur die Daten unter diesem Index sortiert.
+     * Wenn "newIndex" angegeben, wird die Sortierung unter "newIndex" abgelegt.
      * @param {Array<string>|CallbackSortFunction} sortCols - Liste mit Spalten nach denen Sortiert wird oder eine Sortierungsfunktion
-     * @param {string|Array<string|number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird, oder wenn nicht vorhanden, nach dem Sortieren gesetzt wird.
+     * @param {string|Array<string|number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird.
      * @param {string} [newIndexName] - Index Name der nach dem Sortieren gesetzt wird.
      * @returns {Array<string|number>} sortierte Liste mit ID's
      * @example
@@ -808,7 +848,7 @@ export class List {
             //this.#sortCols.set(newIndexName, sCols);
             //this.#sortColsDirection.set(newIndexName, sDirection);
         } else if (typeof index == "string") {
-            this.#indexList.set(index, rowList);
+            // this.#indexList.set(index, rowList);
             //this.#sortCols.set(index, sCols);
             //this.#sortColsDirection.set(index, sDirection);
         }
@@ -846,7 +886,7 @@ export class List {
         if (typeof newIndexName == "string") {
             this.#indexList.set(newIndexName, newList);
         } else if (typeof index == "string") {
-            this.#indexList.set(index, newList);
+            //this.#indexList.set(index, newList);
         }
         return newList;
     }
