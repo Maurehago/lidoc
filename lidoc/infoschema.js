@@ -106,7 +106,7 @@ export class DataEnum {
     }
 }
 
-export class DataProperty {
+export class DataAttribute {
     name = "";
     type = "";
     min = 1;
@@ -128,6 +128,23 @@ export class DataProperty {
         this.min = typeof min == "undefined" ? 1 : min;
         this.max = typeof max == "undefined" ? 1 : max;
         this.info = infos || [];
+    }
+}
+
+export class DataProperty extends DataAttribute {
+    /** @type {Map<string,any>} */
+    attributes = new Map()
+
+    /**
+     * Erstellt eine Propery oder Attribute Eigenschaft
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} [type] - Name des Datentypes. Default "string"
+     * @param {number} [min] - Optional Minimales vorkommen. Default: 1
+     * @param {number} [max] - Optional Maximales Vorkommen. Default: 1, -1 für Unendlich
+     * @param {Array<string>} [infos] - Optional Liste mit Beschreibungen
+     */
+    constructor(name, type, min, max, infos) {
+        super(name, type, min, max, infos);
     }
 }
 
@@ -181,22 +198,22 @@ export class DataType {
     /** Minimaler Wert größer als @type {string|number|undefined} */
     minExclusive;
 
-    /** @type {Array<DataProperty>} Liste mit Attributen */
-    attributes = [];
+    /** @type {Map<string,DataAttribute>} Liste mit Attributen */
+    attributes = new Map();
 
     /** @type {boolean|undefined} "true" wenn zusätzliche, nicht im Schema enthaltene Attribute dazu kommen können */
     moreAttributes;
 
-    /** @type {Array<Array<DataProperty>>}  Auswahl von Attribute (entweder/oder)*/
+    /** @type {Array<Map<string,DataAttribute>>}  Auswahl von Attribute (entweder/oder)*/
     oneOfAttributes = [];
 
-    /** @type {Array<DataProperty>} Liste mit Eigenschaften */
-    properties = [];
+    /** @type {Map<string,DataProperty>} Liste mit Eigenschaften */
+    properties = new Map();
 
     /** @type {boolean|undefined} "true" wenn zusätzliche, nicht im Schema enthaltene Eigenschaften dazu kommen können */
     moreProperties;
 
-    /** @type {Array<Array<DataProperty>>}  Auswahl von Eigenschaften (entweder/oder)*/
+    /** @type {Array<Map<string,DataProperty>>}  Auswahl von Eigenschaften (entweder/oder)*/
     oneOfProperties = [];
 
 
@@ -228,7 +245,7 @@ export class DataType {
      * @param {Array<string>} [infos] - Optional Liste mit Beschreibungen
      */
     addAttribute(name, type, min, max, infos) {
-        this.attributes.push(new DataProperty(name, type, min, max, infos));
+        this.attributes.set(name, new DataAttribute(name, type, min, max, infos));
         if (this.basetype == "string") {
             this.basetype = "object";
         }
@@ -246,10 +263,10 @@ export class DataType {
     addOneOfAttribute(index, name, type, min, max, infos) {
         let list = this.oneOfAttributes[index];
         if (typeof list == "undefined") {
-            list = [];
+            list = new Map();
             this.oneOfAttributes[index] = list;
         }
-        list.push(new DataProperty(name, type, min, max, infos));
+        list.set(name, new DataAttribute(name, type, min, max, infos));
         if (this.basetype == "string") {
             this.basetype = "object";
         }
@@ -265,10 +282,12 @@ export class DataType {
      * @param {Array<string>} [infos] - Optional Liste mit Beschreibungen
      */
     addProperty(name, type, min, max, infos) {
-        this.properties.push(new DataProperty(name, type, min, max, infos));
+        const prop = new DataProperty(name, type, min, max, infos);
+        this.properties.set(name, prop);
         if (this.basetype == "string") {
             this.basetype = "object";
         }
+        return prop;
     }
 
     /**
@@ -283,10 +302,10 @@ export class DataType {
     addOneOfProperty(index, name, type, min, max, infos) {
         let list = this.oneOfProperties[index];
         if (typeof list == "undefined") {
-            list = [];
+            list = new Map();
             this.oneOfProperties[index] = list;
         }
-        list.push(new DataProperty(name, type, min, max, infos));
+        list.set(name, new DataProperty(name, type, min, max, infos));
         if (this.basetype == "string") {
             this.basetype = "object";
         }
@@ -453,9 +472,23 @@ export class Schema {
             type = new DataType(typeName);
             this.#typeList.set(typeName, type);
         }
-        // Attribute hinzufügen
+        // Property hinzufügen
         type.addOneOfProperty(choiceIndex, propName, propType, minOccurs, maxOccours, infos);
         return type;
+    }
+
+    /**
+     * Liefert ein Property Objekt des angegebenen Types zurück
+     * @param {string} typeName - Name des Typs
+     * @param {string} propName - Name der Property
+     * @returns {DataProperty|undefined} DataProperty oder "undefined" wenn nicht vorhanden
+     */
+    getTypeProp(typeName, propName) {
+        let type = this.#typeList.get(typeName);
+        if (type) {
+            return type.properties.get(propName);
+        }
+        return;
     }
 
     /**
@@ -483,6 +516,128 @@ export class Schema {
             type.enum.set(name, item);
         }
     }
+
+    /**
+     * Fügt einen InfoText zu einer Property hinzu
+     * @param {string} typeName - Name des Typs
+     * @param {string} propName - Name des Typs
+     * @param {string} info - Infotext 
+     */
+    addPropInfo(typeName, propName, info) {
+        let type = this.#typeList.get(typeName);
+        if (!type) {
+            type = new DataType(typeName);
+            this.#typeList.set(typeName, type);
+        }
+        let prop = type.properties.get(propName);
+        if (!prop) {
+            prop = new DataProperty(propName);
+            type.properties.set(propName, prop);
+        }
+        prop.info.push(info);
+    }
+
+    /**
+     * Fügt für ein Attribute zu einem Property hinzu
+     * @param {string} typeName - Name des Types
+     * @param {string} propName - Name des Properties
+     * @param {string} attrName - Name des Attributes
+     * @param {string} [attrType] - Optional Name des Attribute Types. Default = "string"
+     * @param {number} [minOccurs] - Optional mininames Vorkommen vom Property. Default = 1
+     * @param {number} [maxOccours] - Optional maximales Vorkommen vom Property. Default = 1
+     * @param {Array<string>} [infos] - Optional zusätzliche Texte/Berschreibungen für das Property
+     */
+    addPropAttr(typeName, propName, attrName, attrType, minOccurs, maxOccours, infos) {
+        let type = this.#typeList.get(typeName);
+        if (!type) {
+            type = new DataType(typeName);
+            this.#typeList.set(typeName, type);
+        }
+        let prop = type.properties.get(propName);
+        if (!prop) {
+            prop = new DataProperty(propName);
+            type.properties.set(propName, prop);
+        }
+        // Attribute hinzufügen
+        prop.attributes.set(attrName, new DataAttribute(attrName, attrType, minOccurs, maxOccours, infos));
+    }
+
+    /**
+     * Setzt Obtionen zu einem Typ
+     * @param {string} typeName - Name des Typs
+     * @param {DataTypeOptions} options - Optionen für den Typ
+     */
+    addTypeOptions(typeName, options) {
+        let type = this.#typeList.get(typeName);
+        if (!type) {
+            type = new DataType(typeName, options);
+            this.#typeList.set(typeName, type);
+        } else {
+            Object.assign(type, options);
+        }
+    }
+
+    /**
+     * Fügt einen InfoText zu einem Typ hinzu
+     * @param {string} typeName - Name des Typs
+     * @param {string} info - Infotext 
+     */
+    addTypeInfo(typeName, info) {
+        let type = this.#typeList.get(typeName);
+        if (!type) {
+            type = new DataType(typeName);
+            this.#typeList.set(typeName, type);
+        }
+        type.info?.push(info);
+    }
+
+    /**
+     * Fügt einen InfoText zu einem Typ Attribute hinzu
+     * @param {string} typeName - Name des Typs
+     * @param {string} attrName - Name des Attributes
+     * @param {string} info - Infotext 
+     */
+    addTypeAttrInfo(typeName, attrName, info) {
+        let type = this.#typeList.get(typeName);
+        if (!type) {
+            type = new DataType(typeName);
+            this.#typeList.set(typeName, type);
+        }
+        let attr = type.attributes.get(attrName);
+        if (!attr) {
+            attr = new DataAttribute(attrName);
+            type.attributes.set(attrName, attr);
+        }
+        attr.info.push(info);
+    }
+
+    /**
+     * Fügt einen InfoText zu einem Typ Attribute hinzu
+     * @param {string} typeName - Name des Typs
+     * @param {string} propName - Name des Properties
+     * @param {string} attrName - Name des Attributes
+     * @param {string} info - Infotext 
+     */
+    addPropAttrInfo(typeName, propName, attrName, info) {
+        let type = this.#typeList.get(typeName);
+        if (!type) {
+            type = new DataType(typeName);
+            this.#typeList.set(typeName, type);
+        }
+        let prop = type.properties.get(propName);
+        if (!prop) {
+            prop = new DataProperty(propName);
+            type.properties.set(propName, prop);
+        }
+        let attr = prop.attributes.get(attrName);
+        if (!attr) {
+            attr = new DataAttribute(attrName);
+            prop.attributes.set(attrName, attr);
+        }
+        attr.info.push(info);
+    }
+
+
 
     /**
      * Fügt einen neuen Enum Eintrag in einer Enum Liste hinzu.  
