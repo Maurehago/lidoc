@@ -4,7 +4,7 @@
 // @ts-check
 
 import { Children } from "react";
-import { Schema, DataProperty, DataType, DataObject } from "./infoschema.js";
+import { Schema, DataType } from "./infoschema.js";
 
 // ============================
 //   Typen
@@ -26,6 +26,11 @@ import { Schema, DataProperty, DataType, DataObject } from "./infoschema.js";
 // neues Schema anlegen
 const XSD = new Schema("xsd");
 
+// Parameter Speicher die zwichen Funktionen ausgetauscht werden können
+/** @type {Object<string,any>} */
+let localData = {};
+
+
 
 // ============================
 //   Funktionen
@@ -33,77 +38,21 @@ const XSD = new Schema("xsd");
 
 
 /**
- * Sucht das Minimale und Maximale Vorkommen-Einstellung in einem Element
- * @param {Element} elm - Element zum prüfen
- * @param {string} [propName] - Property name
- * @returns {DataProperty} Daten Property in dem die Anzahl Vorkommen abgelegt sind
- */
-function checkOccurAttribute(elm, propName) {
-    const prop = new DataProperty(propName);
-    let min = elm.getAttribute("minOccurs");
-    let max = elm.getAttribute("maxOccurs");
-    let use = elm.getAttribute("use");
-    if (use && use == "required") {
-        prop.min = 1;
-    } else if (typeof min == "string") {
-        prop.min = parseInt(min);
-    }
-    if (typeof max == "string") {
-        if (max = "unbounded") {
-            prop.max = -1;
-        } else {
-            prop.max = parseInt(max);
-        }
-    }
-    return prop;
-}
-
-
-/**
- * Prüft die Attribute vom XSD Element
- * @param {Element} elm - XML Element
- */
-function checkAttribute(elm) {
-    const attributes = [...elm.attributes];
-
-    // alle Attribute durchgehen
-    for (let i = 0; i < attributes.length; i++) {
-        const attr = attributes[i];
-
-        // todo: je nach Element und Attribute -> Einstellungen vornehmen
-
-    }
-}
-
-
-/**
  * Prüft das XSD Element
  * @param {Element} elm - XML Element
- * @param {string} baseObjName - Eltern Objekt
- * @param {string} [basePropName] - Basis Property/Attribute
- * @param {number} [anyOfIndex] - Index bei Auswahl(choice)
+ * @param {string} baseTypeName - TabellenName
+ * param {string} [baseTypeName] - Index bei Auswahl(choice)
  */
-function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
-    /** Neue Optionen für Untergeordnete Elemente und Typen
-     * @type {DataPropOptions} */
-    let newPropOptions = {};
-    let newObjName = baseObjName;
-    let newPropName = basePropName;
-    let newAttrName = "";
-    
-    /** @type {DataObject|undefined}  Eltern Objekt */
-    let obj = XSD.getObject(baseObjName);
+function checkElement(elm, baseTypeName) {
+    let newTypeName = baseTypeName;
 
-    /** @type {DataProperty|undefined} Property Objekt */
-    let prop = basePropName ? XSD.getProp(baseObjName, basePropName) : undefined;
-
-    /** @type {DataType|undefined}  DatenTyp Objekt vom Property*/
-    const type = basePropName ? XSD.getPropType(baseObjName, basePropName) : undefined;
-
-    let newAnyOfIndex;
+    /** @type {Object<string,any>} */
+    let options = {};
 
     // Wenn Kindelment geprüft werden sollen
     let checkChildren = false;
+    let afterCheckChildren = ""; // wenn gesetzt wird die nach dem Prüfen der Kindelemente diese Option ausgeführt
+
 
     // Name, Rferenz und Typ Lesen
     const elmName = elm.getAttribute("name") || undefined;
@@ -111,7 +60,33 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
     const elmType = elm.getAttribute("type") || undefined;
     const elmBase = elm.getAttribute("base") || undefined;
     const elmValue = elm.getAttribute("value") || undefined;
+    const elmDefault = elm.getAttribute("default") || undefined;
+    const elmFixed = elm.getAttribute("fixed") || undefined;
+    const elmUse = elm.getAttribute("use") || undefined;
 
+
+    // Minnimum, Maximumm, required
+    let minString = elm.getAttribute("minOccurs") || "";
+    let maxString = elm.getAttribute("maxOccurs") || "";
+    let use = elm.getAttribute("use");
+    let min = 1;
+    let max = 1;
+    if (typeof maxString == "string") {
+        if (maxString = "unbounded") {
+            max = -1;
+        } else {
+            max = parseInt(maxString);
+        }
+    }
+    if (use == "required") {
+        min = 1;
+    } else if (use == "prohibited") {
+        max = 0;
+    } else if (typeof minString == "string") {
+        min = parseInt(minString);
+    }
+
+    // Je nach TagName anders behandeln
     switch (elm.localName) {
         case "all":
             // Alle Kindelemente können in beliebiger Reihenfolge vorkommen und können 0-mal oder 1-mal vorkommen. 
@@ -133,30 +108,26 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // Bestimmt das das Schema um zusätzliche Elemente erweitert werden darf
             // Attribute: id, maxOccurs, minOccurs, namespace, processContents, ...any
             // children: annotation(0,1)
-            
-            if (obj) {
-                obj.additionalProperties = true;
-            }
+
+            newTypeName = XSD.addAnyCol(baseTypeName, min, max).name;
+            checkChildren = true;
             break;
         case "anyAttribute":
-                // Bestimmt das das Eleternelement um zusätzliche Attribute erweitert werden darf
-                // Attribute: id, namespace, processContents, ...any
-                // children: annotation(0,1)
-                
-                if (obj) {
-                    obj.additionalAttribute = true;
-                }
+            // Bestimmt das das Eleternelement um zusätzliche Attribute erweitert werden darf
+            // Attribute: id, namespace, processContents, ...any
+            // children: annotation(0,1)
+
+            newTypeName = XSD.addAnyAttribute(baseTypeName, min, max).name;
+            //newColName = "anyattr";
+            checkChildren = true;
             break;
         case "appinfo":
             // Information zu der Anwendung
             // parent: annotation
             // attribute: -
             // children: -
-            if (basePropName) {
-                XSD.addPropInfo(baseObjName, basePropName, "appinfo: " + elm.innerHTML);
-            } else {
-                XSD.addObjInfo(baseObjName, "appinfo: " + elm.innerHTML);
-            }
+
+            XSD.addTypeAppinfo(baseTypeName, elm.innerHTML);
             checkChildren = false;
             break;
         case "attribute":
@@ -164,15 +135,23 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // parent: attributeGroup, schema, complexType, restriction (both simpleContent and complexContent), extension (both simpleContent and complexContent)
             // attribute: default, fixed, form, id, name, ref, type, use, ...any (name und ref dürfen nicht gleichzeitig vorkommen)
             // children: annotation(0,1), simpleType(0,1)
-            // todo: Datentyp für Attribute festlegen, bei "ref" DataType.attribute typ von "ref" setzen
-            newAttrName = elmName || elmRef || "";
-            prop = checkOccurAttribute(elm, newAttrName);
-            if (basePropName) {
-                // todo: setPropAttribute für Property Objekt
-                XSD.addPropAttribute(baseObjName, basePropName, newAttrName, prop);
-            } else {
-                XSD.addAttribute(baseObjName, newAttrName, prop);
+
+            options = {
+                min: elmUse == "required" ? 1 : 0
+                , max
+                , default: elmDefault
+                , fixed: elmFixed
+                , type: elmType || "string"
             }
+
+            if (elmName) {
+                newTypeName = XSD.addAttribute(baseTypeName, elmName, options).name;
+            } else if (elmRef) {
+                options.base = elmRef;
+                newTypeName = XSD.addAttribute(baseTypeName, elmRef, options).name;
+            }
+
+            // newColName = "";
             checkChildren = true;
             break;
         case "attributeGroup":
@@ -180,7 +159,16 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // parent: attributeGroup, complexType, schema, restriction (both simpleContent and complexContent), extension (both simpleContent and complexContent)
             // attribute: id, name, ref, ...any (name und ref dürfen nicht gleichzeitig vorkommen)
             // children: annotation(0,1), attribute|attributeGroup(0,-1), anyAttribute(0,1)
-            // todo: DataTyp für Attributgruppe erstellen - Kind Attribute in DataType.attributes hinzufügen
+
+            // Wenn Name dann neue Gruppe(Liste) Erstellen
+            if (elmName) {
+                newTypeName = XSD.addList(elmName).name;
+                // newColName = "";
+            } else if (elmRef) {
+                // Neues Attribute zur Liste setzen
+                newTypeName = XSD.addAttribute(baseTypeName, elmRef, {base: elmRef}).name;
+            }
+            checkChildren = true;
             break;
         case "coice":
             // Bestimmt das nur eines der Kind-Elemente vorkommen darf (entweder/oder)
@@ -189,29 +177,18 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // children: annotation(0,1), element|group|choice|sequence|any(0,-1)
             // todo: Kind Elemente in DataTyp.oneOfProperties[] einfügen
 
-            if (typeof anyOfIndex == "undefined") {
-                // index setzen
-                anyOfIndex = 0;
-            } else {
-                // Index erhöhen
-                anyOfIndex ++;
-            }
-
-            // Alle Kindelemente durchgehen
-            let coiceChildren = [...elm.children];
-            for (let i = 0; i < coiceChildren.length; i++) {
-                // KindElemente mit AuswahlIndex prüfen
-                checkElement(coiceChildren[i], baseObjName, basePropName, anyOfIndex + i);
-            }
-            checkChildren = false;
-
+            // neue AuswahlGruppe anlegen
+            newTypeName = XSD.addCol(baseTypeName, "choice", { min, max }).name;
+            // newColName = "";
+            checkChildren = true;
             break;
         case "complexContent":
             // Bestimmt Erweiterung oder Einschränkung für einen Komplexen Typ
             // parent: complexType
             // attribute: id, mixed, ...any
             // children: annotation(0,1), restriction|extension(1,1)
-            // todo: neuen DataTyp anlegen der als basetyp einen komplexen Typ erweitert
+
+            checkChildren = true;
             break;
         case "complexType":
             // Definiert einen Kompexen Typ(object)
@@ -219,28 +196,16 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // attribute: id, name, abstract, mixed, block, final, ...any
             // children: annotation(0,1), simpleContent|complexContent|group|all|choice|sequence(0,1), attribute|attributeGroup(0,-1), anyAttribute(0,1)
 
-            // Objekt anlegen und registrieren wenn "elmName" vorhanden
-            obj = XSD.setObject(elmName);
-
-            // aus Property.type wird Objekt
-            if (basePropName) {
-                prop = XSD.getProp(baseObjName, basePropName);
-            } else if (elmName) {
-                // neues Property Objekt erstellen
-                prop = XSD.addProperty(baseObjName, elmName);
-            }
-            if (prop) {
-                // Property anpassen
-                prop.art = "object";
-                if (obj.name) {
-                    prop.type = obj.name; // Eigenschaft zeigt auf neues Objekt
-                    newObjName = obj.name; // neue Objekt Referenz setzen
-                    newPropName = undefined;
-                } else {
-                    // Property Typ wird "unnamed" Objekt
-                    prop.type = obj; // Eigenschaft enthält neues Objekt
+            // Wenn Name -> Neue Liste
+            if (elmName) {
+                newTypeName = XSD.addList(elmName).name;
+                if (baseTypeName && baseTypeName != "schema") {
+                    // Referenziert auf den Komplexen Typ
+                    XSD.setType(baseTypeName, {type: newTypeName});
                 }
             }
+            // else - wird selbst zum Komplexen Typ sobald Attribute oder Cols hinzugefügt werden
+
             checkChildren = true;
             break;
         case "documentation":
@@ -248,58 +213,70 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // parent: annotation
             // attribute: source, xml:lang
             // children: -
-            if (basePropName) {
-                XSD.addPropInfo(baseObjName, basePropName, elm.innerHTML);
-            } else {
-                XSD.addObjInfo(baseObjName, elm.innerHTML);
-            }
+
+            // todo: xml:lang prüfen
+            localData.info = elm.innerHTML; // für Referenz Objekte
+            XSD.addTypeInfo(baseTypeName, elm.innerHTML);
             checkChildren = false;
             break;
         case "element":
-            // Definiert ein Element(Property) bei Komplexen Typ
+            // Definiert ein Spalte in einer Liste(komplex Type)
             // parent: schema, choice, all, sequence, group 
-            // attribute: id, name|ref, type, substitutionGroup, default, fixed, form, maxOccurs, minOccurs, nillable, abstract, block, final, ...any
+            // attribute: id, name|ref(to column), type, substitutionGroup, default, fixed, form, maxOccurs, minOccurs, nillable, abstract, block, final, ...any
             // children: annotation(0,1), simpleType|complexType(0,1), unique|key|keyref(0,-1)
 
-            // Property erstellen
-            newPropName = elmName || elmRef || ""; // es muss entweder Name oder Referenz vorhanden sein
-            prop = checkOccurAttribute(elm, newPropName);
-            prop.type = elmType || elmRef || "string";
+            // todo: weitere Attribute prüfen
 
-            // In Eltern Typ setzen
-            if (typeof anyOfIndex != undefined) {
-                XSD.addOneOfProperty(baseObjName, newPropName, anyOfIndex || 0, prop);
-            } else {
-                XSD.addProperty(baseObjName, newPropName, prop);
+            // optionen festlegen
+            options = {
+                min
+                , max
+                , default: elmDefault
+                , fixed: elmFixed
+                , type: elmType || "string"
+            };
+
+            // Neue Spalte registrieren - es muss name oder ref vorhanden sein
+            if (elmName) {
+                newTypeName = XSD.addCol(baseTypeName, elmName, options).name;
+            } else if (elmRef) {
+                options.base = elmRef;
+                newTypeName = XSD.addCol(baseTypeName, elmRef, options).name;
             }
-
+            
             checkChildren = true;
             break;
         case "enumeration":
             // Typ Einschränkung auf enum 
-            if (type) {
-                // Enum Item hinzufügen
-                if (typeof type.enum == "string") {
-                    XSD.addEnumItem(type.enum, elmValue || "");
-                } else {
-                    XSD.addEnumItem(type.name || "", elmValue || "");
-                }
+            if (typeof elmValue != "undefined") { // value muss vorhanden sein
+                XSD.addEnum(baseTypeName, elmValue);
             }
+            checkChildren = false;
             break;
         case "extension":
             // Erweitert einen Simplen oder Komplexen Typ
             // parent: simpleContent, complexContent 
             // attribute: id, base, ...any
             // children: annotation(0,1),group|all|choice|sequence(0,1),attribute|attributeGroup(0,-1),anyAttribute(0,1)
-            XSD.addTypeOptions(baseTypeName, { basetype: elmBase || "string" });
+
+            if (elmBase) { // base muss vorhanden sein
+                XSD.setType(baseTypeName, {base: elmBase});
+            }
             checkChildren = true;
             break;
         case "field":
+            // Das Feldelement gibt einen XPath-Ausdruck an, der den Wert angibt, der zur Definition einer Identitätsbeschränkung verwendet wird
+            if (Array.isArray(localData.field)) {
+                localData.field.push(elm.getAttribute("xpath"));
+            } else {
+                localData.field = [elm.getAttribute("xpath")];
+            }
             break;
         case "fractionDigits":
-            if (type) {
-                type.decimals = parseInt(elmValue || "");
+            if (elmValue) { // muss vorhanden sein
+                XSD.setType(baseTypeName, {decimals: parseInt(elmValue)});
             }
+            checkChildren = false;
             break;
         case "group":
             // Gruppe von Elementen die zu "complexType" hinzugefügt werden
@@ -307,115 +284,119 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // attribute: id, name, ref, maxOccurs, minOccurs, ...any
             // children: annotation(0,1), all|choice|sequence(0,1)
 
-            // Property erstellen
-            prop = checkOccurAttribute(elm, basePropName);
-            prop.art = "group"; // Die Property Art muss vom Typ "group" sein!
-
-            // Property dem Eltern Element zuweisen
-            // wenn Name dann neue Gruppe
             if (elmName) {
-                // Gruppe Objekt anlegen und registrieren wenn diese einen Namen hat
-                obj = XSD.setObject(elmName);
-
-                // Property Eigenschaften anpassen
-                prop.name = elmName;
-                prop.type = obj.name || obj;
-
-                // Referenz auf das Gruppe Objekt für Kind-Elemente
-                newObjName = elmName;
-                newPropName = "";
-                checkChildren = true;
+                // neue Gruppe anlegen
+                newTypeName = XSD.addType(elmName, {min, max}).name;
             } else if (elmRef) {
-                // Wenn Referenz auf bestehende Gruppe
-
-                // Property Eigenschaften anpassen
-                prop.name = elmRef;
-                prop.type = elmRef;
-
-                // Referenz auf neuen Property Namen setzen für Kind-Elemente
-                newPropName = elmRef;
-            } else {
-                prop.name = "group";
+                // Basis setzen
+                XSD.setType(baseTypeName, {base: elmRef});
             }
-
-            // Property hinzufügen
-            if (typeof anyOfIndex != "undefined") {
-                // Wenn in Auswahl (choice)
-                XSD.addOneOfProperty(baseObjName, prop.name, anyOfIndex, prop);
-            } else {
-                XSD.addProperty(baseObjName, prop.name, prop);
-            }
-
+            checkChildren = true;
             break;
         case "import":
             // Fügt weitere Schema Namespaces hinzu
             // parent: schema
-            // attribute: id, namespace, schemaLocation, ...any
+            // attribute: id(0,1), namespace(0,1), schemaLocation(0,1), ...any
             // children: annotation(0,1)
             // todo: zusätzliche Schema Namenspaces
             break;
         case "include":
+            // Das include-Element wird verwendet, um mehrere Schemas mit demselben Zielnamensraum zu einem Dokument hinzuzufügen.
+            // parent: schema
+            // attribute: id(0,1), schemaLocation(1,1), ...any(0,-1)
+            // children: annotation(0,1)
+            // todo: noch nicht unterstützt
             break;
         case "key":
+            // Das Schlüsselelement gibt ein Attribut oder einen Elementwert als Schlüssel (eindeutig, nicht nullierbar und immer vorhanden) innerhalb des enthaltenden Elements in einem Instanzdokument an.
+            // parent: element
+            // attribute: id(0,1), name(1,1), ...any(0,-1) 
+            // children: annotation(0,1),selector(1,1),field(1,-1)
+            if (elmName) {
+                afterCheckChildren = "key";
+            }
+            checkChildren = true;
             break;
         case "keyref":
+            // Das keyref-Element gibt an, dass ein Attribut oder ein Elementwert denen des angegebenen Schlüssels oder eindeutigen Elements entspricht.
+            // parent: element
+            // attribute: id(0,1), name(1,1), refer(1,1), ...any(0,-1)
+            // children: annotation(0,1), selector(1,-1), field(1,-1)
+            if (elmName) {
+                afterCheckChildren = "keyref";
+            }
+            checkChildren = true;
             break;
         case "list":
+            // Das Listenelement definiert ein einfaches Typelement als eine Liste von Werten eines bestimmten Datentyps
+            // parent: simpleType
+            // attribute: id(0,1), itemType(0,1 nur wenn kein Kind-Element "simpleType"), ...any(0,-1)
+            // children: annotation(0,1), simpleType(0,1)
+            // todo: noch nicht unterstützt
             break;
         case "maxLength":
             // Setzt die MaximalLänge eines Types
-            if (type) {
-                type.maxLength = parseInt(elmValue || "");
+            if (elmValue) {
+                XSD.setType(baseTypeName, {maxLength: parseInt(elmValue)});
             }
             break;
         case "minLength":
             // Setzt die MinimalLänge eines Types
-            if (type) {
-                type.minLength = parseInt(elmValue || "");
+            if (elmValue) {
+                XSD.setType(baseTypeName, {minLength: parseInt(elmValue)});
             }
             break;
         case "maxExclusive":
-            // Setzt ren Maximalwert eines Types
-            if (type) {
-                type.maxExclusive = parseInt(elmValue || "");
+            // Setzt den Maximalwert eines Types
+            if (elmValue) {
+                XSD.setType(baseTypeName, {maxExclusive: parseInt(elmValue)});
             }
             break;
         case "minExclusive":
-            // Setzt ren Minimalwert eines Types
-            if (type) {
-                type.minExclusive = parseInt(elmValue || "");
+            // Setzt den Minimalwert eines Types
+            if (elmValue) {
+                XSD.setType(baseTypeName, {minExclusive: parseInt(elmValue)});
             }
             break;
         case "maxInclusive":
-            // Setzt ren Maximalwert eines Types
-            if (type) {
-                type.maxInclusive = parseInt(elmValue || "");
+            // Setzt den Maximalwert eines Types
+            if (elmValue) {
+                XSD.setType(baseTypeName, {maxInclusive: parseInt(elmValue)});
             }
             break;
         case "minInclusive":
-            // Setzt ren Minimalwert eines Types
-            if (type) {
-                type.minInclusive = parseInt(elmValue || "");
+            // Setzt den Minimalwert eines Types
+            if (elmValue) {
+                XSD.setType(baseTypeName, {minInclusive: parseInt(elmValue)});
             }
             break;
         case "notation":
+            // Das Notationselement beschreibt das Format von Nicht-XML-Daten innerhalb eines XML-Dokuments.
+            // parent: schema
+            // attribute: id(0,1), name(1,1), public(1,1), system(0,1), ...any(0,-1)
+            // children: annotation(0,1)
+            // todo: noch nicht unterstützt
             break;
         case "pattern":
-            // Setzt ren Minimalwert eines Types
-            if (type) {
-                type.pattern = elmValue;
+            // Setzt eine Regular Expression für den Typ
+            if (elmValue) {
+                XSD.setType(baseTypeName, {pattern: elmValue});
             }
             break;
         case "redefine":
+            // Das Redefine-Element definiert einfache und komplexe Typen, Gruppen und Attributgruppen aus einem externen Schema neu.
+            // parent: schema
+            // attribute: id(0,1), schemaLocation(1,1), ...any(0,-1)
+            // children: annotation(0,1), simpleType|complexType|group|attributeGroup(0,-1)
+            // todo: noch nicht unterstützt
             break;
         case "restriction":
             // Bestimmt Einschränkungen für einen einfachen Typ, einfachen Inhalt oder komplexen Inhalt
             // parent: simpleType, simpleContent, complexContent
-            // attribute: id, base, ...any
+            // attribute: id(0,1), base(1,1), ...any(0,-1)
             // children: ... ist je nach Parent unterschiedlich
-
-            if (type) {
-                type.base = elmBase;
+            if (elmBase) {
+                XSD.setType(baseTypeName, {base: elmBase});
             }
             checkChildren = true;
             break;
@@ -427,12 +408,21 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             // todo: Liste mit Schema Namenspaces (xmlns:...)
             break;
         case "selector":
+            // Das Auswahlelement gibt einen XPath-Ausdruck an, der eine Reihe von Elementen für eine Identitätsbeschränkung (Eindeutige, Schlüssel- und Schlüsselelemente) auswählt.
+            // parent: key, keyref, unique
+            // attribute: id(0,1), xpath(1,1), ...any(0,-1)
+            // children: annotation(0,1)
+            localData.objPath = elm.getAttribute("xpath");
             break;
         case "sequence":
+            // Das Sequenzelement gibt an, dass die untergeordneten Elemente in einer Sequenz erscheinen müssen. Jedes untergeordnete Element kann von 0 bis zu einer beliebigen Anzahl auftreten.
+            // parent: group, choice, sequence, complexType, restriction (both simpleContent and complexContent), extension (both simpleContent and complexContent)
+            // children: annotation(0,1),element|group|choice|sequence|any(0,-1)
+            // todo: min, max für Kindelemente - können mehrere/beliebig viele der Kindelemente enthalten, ändert den default von (1,1) für neue Elemente
             checkChildren = true;
             break;
         case "simpleContent":
-            // Enthält Erweiterung oder Einschränkungen für einen simplen Typ(property) und enthält keine Eöemente
+            // Enthält Erweiterung oder Einschränkungen für einen simplen Typ(property) und enthält keine Elemente
             // parent: complexType
             // attribute: id, ...any
             // children: annotation(0,1), restriction|extension(1,1)
@@ -446,17 +436,20 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
 
             // Wenn Attribute "name" - darf nur vorhanden sein wenn "simpleType" ein Kind von "schema" ist
             if (elmName) {
-                // wird Property von Schema
-                newPropName = elmName;
-                prop = new DataProperty(newPropName);
-                prop.type = elmName;
-                XSD.addProperty(baseObjName, newPropName, prop);
-
-                // Typ registriren
-                XSD.setType(elmName);
+                // Ist Kind vom Schema - Name ist erforderlich
+                // Typ Registrieren
+                newTypeName = XSD.addType(elmName).name;
+                // kein "min", "max"
             } else {
-                // ist Kind von Property
-                newPropName = basePropName;
+                // ist Kind von Spalte oder "union" - Name darf nicht angegeben werden
+                // ändert baseType
+                
+                // wenn Elternelement "union" muss SimpleType registriert werden
+                if(elm.parentElement?.localName == "union") {
+                    newTypeName = XSD.addType().name;
+                    // TypName hinzufügen
+                    XSD.addTypeName(baseTypeName, newTypeName);
+                }
             }
 
             // Kind Elemente prüfen
@@ -464,13 +457,34 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
             break;
         case "totalDigits":
             // Setzt die Anzahl Zeichen/Stellen
-            if (type) {
-                type.length = parseInt(elmValue || "");
+            if (elmValue) {
+                XSD.setType(baseTypeName, {length: parseInt(elmValue)});
             }
             break;
         case "union":
+            // Das Union-Element definiert einen einfachen Typ als eine Sammlung (Union) von Werten aus vorgegebenen einfachen Datentypen.
+            // entweder "memberTypes"-attribute: ist eine mit Leerzeichen getrennte Liste von Registrirten simplen TypeNamen
+            // und/oder "simpleType"-Kindelemente 
+            // parent: simpleType
+            // attribute: id(0,1), memberTypes(0,1), ...any(0,-1) 
+            // children: annotation(0,1), simpleType(0,-1)
+            let memberTypes = elm.getAttribute("memberTypes");
+            if (memberTypes) {
+                XSD.addTypeName(baseTypeName, memberTypes.split(" "), true);
+            } else {
+                XSD.addTypeName(baseTypeName, [], true);
+            }
+            checkChildren = true;
             break;
         case "unique":
+            // Das unique Element definiert, dass ein Element oder ein Attributwert innerhalb des Geltungsbereichs eindeutig sein muss
+            // parent: element
+            // attribute: id(0,1), name(1,1), ...any(0,-1)
+            // children: annotation(0,1), selector(1,1), field(1,1)
+            if (elmName) {
+                afterCheckChildren = "unique";
+            }
+            checkChildren = true;
             break;
 
         default:
@@ -484,7 +498,29 @@ function checkElement(elm, baseObjName, basePropName, anyOfIndex) {
         const children = [...elm.children];
         for (let i = 0; i < children.length; i++) {
             const elm = children[i];
-            checkElement(elm, newObjName, newPropName, anyOfIndex);
+            checkElement(elm, newTypeName);
+        }
+
+        // Nach dem Prüfen von Kindelementen
+        switch (afterCheckChildren) {
+            case "unique":
+                if (elmName && localData.objPath && localData.field) {
+                    XSD.addUnique(baseTypeName, elmName, localData.objPath, localData.field, localData.info);
+                }
+                break;
+            case "key":
+                if (elmName && localData.objPath && localData.field) {
+                    XSD.addId(baseTypeName, elmName, localData.objPath, localData.field);
+                }
+                break;
+            case "keyref":
+                if (elmName && localData.objPath && localData.field && localData.refer) {
+                    XSD.addRefId(baseTypeName, elmName, localData.objPath, localData.field, localData.refer, localData.info);
+                }
+                break;
+        
+            default:
+                break;
         }
     }
 }
@@ -507,20 +543,16 @@ export function parseXSD(xsdString) {
     const schema = xmlDoc.querySelector("schema");
     if (!schema) { return; }
 
-    // Schema Objekt anlegen
-    const schemaObj = XSD.setObject("schema");
-    schemaObj.type = "object";
-
     // Schema Attribute
-    // const attributes = [...schema.attributes];
-    // for (let i = 0; i < attributes.length; i++) {
-    //     XSD.addAttribute("schema", attributes[i].name)
-    // }
+    const attributes = [...schema.attributes];
+    for (let i = 0; i < attributes.length; i++) {
+        XSD.attributes.set(attributes[i].name, attributes[i].value);
+    }
 
     // Alle Kindelemente von Schema durchgehen
     const schemaChild = [...schema.children];
     for (let i = 0; i < schemaChild.length; i++) {
         const elm = schemaChild[i];
-        checkElement(elm, "schema", "", "");
+        checkElement(elm, "schema");
     }
 }
