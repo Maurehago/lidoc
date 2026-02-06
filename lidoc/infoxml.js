@@ -3,8 +3,7 @@
 // =======================
 // @ts-check
 
-import { Children } from "react";
-import { Schema, DataType } from "./infoschema.js";
+import { Schema } from "./infoschema.js";
 
 // ============================
 //   Typen
@@ -24,7 +23,7 @@ import { Schema, DataType } from "./infoschema.js";
 // --------------
 
 // neues Schema anlegen
-const XSD = new Schema("xsd");
+export const XSD = new Schema("xsd");
 
 // Parameter Speicher die zwichen Funktionen ausgetauscht werden können
 /** @type {Object<string,any>} */
@@ -71,8 +70,8 @@ function checkElement(elm, baseTypeName) {
     let use = elm.getAttribute("use");
     let min = 1;
     let max = 1;
-    if (typeof maxString == "string") {
-        if (maxString = "unbounded") {
+    if (maxString) {
+        if (maxString == "unbounded") {
             max = -1;
         } else {
             max = parseInt(maxString);
@@ -82,7 +81,7 @@ function checkElement(elm, baseTypeName) {
         min = 1;
     } else if (use == "prohibited") {
         max = 0;
-    } else if (typeof minString == "string") {
+    } else if (minString) {
         min = parseInt(minString);
     }
 
@@ -138,7 +137,7 @@ function checkElement(elm, baseTypeName) {
 
             options = {
                 min: elmUse == "required" ? 1 : 0
-                , max
+                , max: max
                 , default: elmDefault
                 , fixed: elmFixed
                 , type: elmType || "string"
@@ -229,8 +228,8 @@ function checkElement(elm, baseTypeName) {
 
             // optionen festlegen
             options = {
-                min
-                , max
+                min: min
+                , max: max
                 , default: elmDefault
                 , fixed: elmFixed
                 , type: elmType || "string"

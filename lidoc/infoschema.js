@@ -6,48 +6,6 @@
 // Basis Typen: string, number, boolean, object, enum
 // Datum Typen: date, time, datetime, range
 
-// DataType:
-// name {string}: Name der Eigenschaft
-// base {string}: BasisTyp der Eigenschaft
-// info: Liste mit Beschreibungstexten
-// - length: exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
-// - minLength: Minimale Anzahl Zeichen (für string)
-// - maxLength: Maximale Anzahl Zeichen (für string)
-// - pattern: Regular Expression (für string)
-// - whitespace: wie wird mit Leerzeichen umgegangen (für string)
-// - casing: camelCase, PascalCase, snake_case, lower snake_case, upper snake_case (für string)
-// - enum: Werte die in einer Liste vorkommen (für string, number, date, time, datetime, range)
-// - additionalEnum: Zusätzliche enum werte erlaubt (für string, number, date, time, datetime, range)
-// - decimals: Anzahl der Dezimalstellen (für number)
-// - minInclusive: Minimum Wert inclusive angegebenen Wert (für number, date, time, datetime, range)
-// - minExclusive: Minimum Wert größer angegebenen Wert (für number, date, time, datetime, range)
-// - maxExclusive: Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
-// - maxInclusive: Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
-
-// DataProperty:
-// name: Name der Eigenschaft
-// type: BasisTyp der Eigenschaft
-// info: Liste mit Beschreibungstexten
-// - min: Minimales Vorkommen der Eigenschaft/attribute. 0: Optional
-// - max: Maximales Vorkommen der Eigenschaft/Attribute. -1: Unendlich
-// - fixed: Fixer Wert
-// - default: Standard Wert
-
-// "object" Ausprägung:
-// - Name
-// - type {string|DataType}:
-// - info: Liste mit Beschreibungstexten
-// - min {number}: Minimales Vorkommen vom Objekt. 0: Optional
-// - max {number}: Maximales Vorkommen vom Objekt. -1: Unendlich
-// - attribute {Array<DataProperty>}: Liste mit DataProperties
-// - oneOfAttribute {Array<Array<DataProperty|number>>}: Entweder Oder Attribute, Liste mit DataProperties oder Liste mit indexes für weitere Auswahlmöglichkeiten.
-// - properties {Array<DataProperty>}: Liste mit Eigenschaften
-// - oneOfProperties {Array<Array<DataProperty|number>>}: Entweder Oder Eigenschaften, Liste mit DataProperties oder Liste mit indexes für weitere Auswahlmöglichkeiten.
-// - additionalAttribute {boolean}: Zusätzliche Attribute erlaubt
-// - additionalProperties {boolean}: Zusätzlich Properties erlaubt
-
-
-
 /**
  * @typedef {object} DataTypeOptions
  * @property {string} [base] - Name des Basistype
@@ -70,39 +28,6 @@
 /**
  * @typedef {object} DataPropertyOptions
  */
-
-
-// /**
-//  * @typedef {object} DataObjOptions
-//  * @property {string|DataType} [type] Objekt Typ oder TypName. default: "string"
-//  * @property {Array<string>} [info] Liste mit Beschreibungstexten
-//  * @property {number} [min] Minimales Vorkommen vom Objekt. optional: 0, default: 1
-//  * @property {number} [max] Maximales Vorkommen vom Objekt. unendlich: -1, default: 1
-//  * @property {Array<DataProperty>} [attribute] Liste mit DataProperties
-//  * @property {Array<DataProperty>} [properties] Liste mit Eigenschaften oder Objekten
-//  * @property {Array<Array<DataProperty|number>>} [oneOfAttribute] Entweder Oder Attribute, Liste mit DataProperties oder Liste mit indexes für weitere Auswahlmöglichkeiten.
-//  * @property {Array<Array<DataProperty|number>>} [oneOfProperties] Entweder Oder Eigenschaften, Liste mit DataProperties oder Liste mit indexes für weitere Auswahlmöglichkeiten.
-//  * @property {boolean} [additionalAttribute] Zusätzliche Attribute erlaubt
-//  * @property {boolean} [additionalProperties] Zusätzlich Properties erlaubt
-//  */
-
-
-// base: BasisTyp der Eigenschaft
-// Restriction
-// - length: exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
-// - minLength: Minimale Anzahl Zeichen (für string)
-// - maxLength: Maximale Anzahl Zeichen (für string)
-// - pattern: Regular Expression (für string)
-// - whitespace: wie wird mit Leerzeichen umgegangen (für string)
-// - casing: camelCase, PascalCase, snake_case, lower snake_case, upper snake_case (für string)
-// - enum: Werte die in einer Liste vorkommen (für string, number, date, time, datetime, range)
-// - additionalEnum: Zusätzliche enum werte erlaubt (für string, number, date, time, datetime, range)
-// - decimals: Anzahl der Dezimalstellen (für number)
-// - minInclusive: Minimum Wert inclusive angegebenen Wert (für number, date, time, datetime, range)
-// - minExclusive: Minimum Wert größer angegebenen Wert (für number, date, time, datetime, range)
-// - maxExclusive: Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
-// - maxInclusive: Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
-
 
 /**
  * Gibt eine neue GlobalShortId zurück
@@ -238,7 +163,7 @@ export class DataType {
     /** @type {string|undefined} Typ der bestimmt ob weitere Attribute erlaubt sind */
     moreCols;
     /** @type {Map<string,IdItem>} Liste mit Index ID's */
-    id= new Map();
+    id = new Map();
     /** @type {Map<string,IdItem>} Liste mit Referenzen zu Indexes */
     idref = new Map();
     /** @type {Map<string,IdItem>} Liste mit Unique's */
@@ -273,98 +198,6 @@ export class DataType {
         this.art = art || "type";
     }
 }
-
-
-class ColSchema {
-    /** @type {string} Name des Schemas */
-    schemaName = "";
-
-    /** @type {string} Name der Liste zu dem die Spalte gehört*/
-    listName = "";
-
-    /** @type {string} Name der Spalte/Attribute */
-    name = "";
-
-    /** @type{string} Typ der Spalte/Attribute / default: "string" */
-    type = "string";
-
-    /** @type {Array<string>} Liste mit Beschreibungstexten */
-    info = [];
-
-    /** @type {number} Minimales Vorkommen der Spalte/Attribute / optional: 0 / default: 1 */
-    min = 1;
-    /** @type {number} Maximales Vorkommen der Spalte/Attribute / unendlich: -1 / default: 1 */
-    max = 1;
-    /** @type{any} - Fixer Wert */
-    fixed;
-    /** @type {any} Standard Wert */
-    default;
-    /** @type {boolean} "true" wenn Arrtibute. default: "false" */
-    isAttribute = false;
-
-    /**
-     * Erzeugt ein neues Schema Property
-     * @param {string} schemaName - Name des Schemas
-     * @param {string} listName - Name der Liste
-     * @param {string} colName - Name der Spalte/Attribute
-     * @param {string} [typeName] - Optional Name des Datentypes
-     * @param {boolean} [isAttribute] - Obtional "true" wenn die Spalte ein Attribute ist
-     */
-    constructor(schemaName, listName, colName, typeName, isAttribute) {
-        this.schemaName = schemaName;
-        this.listName = listName;
-        this.name = colName;
-        this.type = typeName || "string";
-        this.isAttribute = isAttribute || false;
-    }
-}
-
-
-
-
-class ListSchema {
-    /** @type {string} Name des Schemas */
-    schemaName = "";
-
-    /** @type {string} Name der Tabelle */
-    name = "";
-
-    /** @type {Array<string>}  Informationen zum Schema*/
-    info = [];
-
-    /** @type {Map<string,ColSchema>} */
-    attributes = new Map();
-
-    /** @type {ColSchema} weitere Attribute erlaubt */
-    moreAttributes = new ColSchema("", "", "moreAttributes");
-
-    /** @type {Array<string>} Liste mit Property-Namen */
-    cols = [];
-
-    /** @type {ColSchema} weitere Attribute erlaubt */
-    moreCols = new ColSchema("", "", "moreCols");
-
-    /** @type {Map<string,ColSchema>} Property Typen */
-    colSchemas = new Map();
-
-    /**
-     * Erzeugt eine neue SchemaListe
-     * @param {string} schemaName - Name des Schemas
-     * @param {string} name - Name vom ListSchema
-     */
-    constructor(schemaName, name) {
-        this.schemaName = schemaName;
-        this.name = name;
-
-        // Propertie für weitere Attribute und Propperties ausbessern
-        this.moreAttributes = new ColSchema(schemaName, name, "moreAttributes");
-        this.moreAttributes.max = 0; // keine weiteren Attribute
-        this.moreCols = new ColSchema(schemaName, name, "moreCols");
-        this.moreCols.max = 0; // keine weiteren Properties
-    }
-}
-
-
 
 
 // Schema Klasse
@@ -454,7 +287,7 @@ export class Schema {
                     // fügt nur hinzu wenn noch nicht vorhanden (doppelte vermeiden)
                     if (type.type.indexOf(newType[i]) < 0) {
                         type.type.push(newType[i]);
-                    } 
+                    }
                 }
             }
         } // wenn Typ
@@ -545,121 +378,6 @@ export class Schema {
         return this.#types.get(typeName);
     }
 
-    /**
-     * Prüft einen Typ/Typnamen, registriert den Typ (wenn DataType), und gibt den TypNamen oder neuen eindeutigen Namen zurück
-     * @param {string|DataType|undefined} type - Name oder TypObjekt
-     */
-    #checkTyp(type) {
-        // Typ prüfen
-        let typeName = "string";
-        // typeof type == "string" ? type : type?.name || "string";
-        if (typeof type == "string") {
-            typeName = type;
-        } else if (type instanceof DataType) {
-            if (type.name) {
-                typeName = type.name;
-                this.#types.set(typeName, type);
-            } else {
-                // neuer Random Typname
-                typeName = getGSID();
-                type.name = typeName;
-                this.#types.set(typeName, type);
-            }
-        }
-        return typeName;
-    }
-
-    // /**
-    //  * Prüft den Listennamen Ob der Typ und die Liste vorhanden sind.  
-    //  * Wenn nicht vorhanden werden diese angelegt.
-    //  * @param {string} listName - Name der Liste
-    //  * @returns {ListSchema} Listen Schema Objekt
-    //  */
-    // #checkList(listName) {
-    //     let type = this.#types.get(listName);
-    //     if (!type) {
-    //         type = new DataType(listName);
-    //         type.type = "object";
-    //         type.list = listName;
-    //     }
-
-    //     if (!type.list) {
-    //         type.list = listName;
-    //     }
-
-    //     let list = this.#lists.get(type.list);
-    //     if (!list) {
-    //         list = new ListSchema(this.name, type.list);
-    //     }
-
-    //     return list;
-    // }
-
-    // /**
-    //  * Registriert eine neue Schematabelle
-    //  * @param {string|undefined} tableName - Name der Tabelle
-    //  * @returns {SchemaTable} neue SchemaTabelle
-    //  */
-    // addTable(tableName) {
-    //     if (!tableName) {tableName = getGSID();}
-    //     let table = new SchemaTable(this.name, tableName);
-    //     this.#tables.set(tableName, table);
-    //     return table;
-    // }
-
-    // /**
-    //  * Gibt ein TabellenSchema Objekt zurück
-    //  * @param {string} listName - Name der Tabelle
-    //  * @returns {ListSchema|undefined} TabellenSchema
-    //  */
-    // getListSchema(listName) {
-    //     return this.#lists.get(listName);
-    // }
-
-
-    // /**
-    //  * Registriert eine DatenSpalte für eine Liste.  
-    //  * @param {string} listName - Name vom Listen Schema Typ
-    //  * @param {string} colName - Eindeutiger Name der Spalte
-    //  * @param {string|DataType} [type] - Name oder DatenTyp der Spalte - Default: "string"
-    //  * @returns {ColSchema} Schema für Spalte
-    //  */
-    // addCol(listName, colName, type) {
-    //     let typeName = this.#checkTyp(type);
-
-    //     // Objekte lesen oder erstellen
-    //     let list = this.#checkList(listName);
-    //     let col = this.#colSchemas.get(colName) || new ColSchema(this.name, list.name, colName, typeName);
-
-    //     // Spalte zuweisen
-    //     list.cols.push(colName);
-    //     list.colSchemas.set(colName, col);
-
-    //     return col;
-    // }
-
-
-    // /**
-    //  * Registriert ein Attribut auf einer Tabelle.  
-    //  * @param {string} listName - Tabellen Name
-    //  * @param {string} attrName - Eindeutiger Name des Attributes
-    //  * @param {string|DataType} [type] - Name oder DatenTyp des Attributes - Default: "string"
-    //  * @returns {ColSchema} Schema für Attribut
-    //  */
-    // addAttribute(listName, attrName, type) {
-    //     // Typ prüfen
-    //     let typeName = this.#checkTyp(type);
-
-    //     // Objekte lesen oder erstellen
-    //     let list = this.#checkList(listName);
-    //     let attr = new ColSchema(this.name, listName, attrName, typeName, true);
-    //     attr.min = 0; // Default: nicht erforderlich
-
-    //     // Spalte zuweisen
-    //     list.attributes.set(attrName, attr);
-
-    //     return attr;
-    // }
 
     /**
      * Setzt einen Any-Typ für eine Liste
@@ -673,7 +391,7 @@ export class Schema {
         let list = this.#types.get(listName) || this.addList(listName);
         list.type = "object";
         list.art = "list";
-        let type = this.addType("", { min, max }, typeArt);
+        let type = this.addType("", { min: min, max: max }, typeArt);
         if (typeArt == "col") {
             list.moreCols = type.name;
         } else if (typeArt == "attribute") {
@@ -844,7 +562,7 @@ export class Schema {
         if (typeName == "" || typeName == "schema") {
             this.appinfo.push(info);
         } else {
-             let type = this.#types.get(typeName);
+            let type = this.#types.get(typeName);
             if (type) {
                 type.info.push("appinfo: " + info);
             }
@@ -862,4 +580,182 @@ export class Schema {
         //this.object = new DataObject(name);
         //this.#objList.set(name, this.object);
     }
+}
+
+
+// ==========================
+//   Schema anzeigen
+// --------------------
+
+/**
+ * Liefert die Infotexte aufbereitet zurück
+ * @param {Array<string>} infos - Liste mit Infotexten
+ */
+function getInfoHTML(infos) {
+    let html = "";
+    for (let i = 0; i < infos.length; i++) {
+        let info = infos[i].replaceAll("\n", "<br>");
+        html += info;
+    }
+    return html;
+}
+
+
+
+/**
+ * Lieftert einen HTML-String als Name, (min,max), type, info
+ * @param {DataType} type - Typ der Datenzeile
+ * @returns {string} HTMLString
+ */
+function getNameTypeHTML(type) {
+    let html = "";
+    if (!(type instanceof DataType)) { return html; }
+
+    let typeType = type.type;
+    if (Array.isArray(type.type)) {
+        typeType = "";
+        for (let i = 0; i < type.type.length; i++) {
+            if (i > 0) { typeType += ","; }
+            typeType += type.type[i];
+        }
+    }
+
+    // Zeile zusammenbauen
+    //html = `<li>${type.name}&nbsp;(${type.min},${type.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(type.info)}</li>`;
+    html = `${type.name}&nbsp;(${type.min},${type.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(type.info)}`;
+    return html;
+}
+
+
+/**
+ * Lieftert einen HTML-String je TypeArt zurück
+ * @param {Schema} schema - Schema das als basis genommen wird
+ * @param {string|Array<string>} typeName - Typ der Datenzeile
+ * @returns {string} HTMLString
+ */
+function getTypeHTML(schema, typeName) {
+    let html = "<ul>";
+    let html1 = "";
+    let html2 = "";
+
+    if (Array.isArray(typeName)) {
+        for (let i = 0; i < typeName.length; i++) {
+            // typ prüfen
+            html += getTypeHTML(schema, typeName[i]);
+        }
+        return html;
+    }
+
+    // Typnamen prüfen
+    if (["string", "number", "boolean", "object"].indexOf(typeName) >= 0) {
+        return "";
+    }
+
+    const type = schema.getType(typeName);
+    if (!type) {
+        html += `<p>Type ${typeName} not found</p>`;
+        return "";
+    }
+
+    // Art lesen
+    // "type"|"attribute"|"col"|"list"
+    switch (type.art) {
+        case "type":
+
+            break;
+        case "attribute":
+
+            break;
+        case "col":
+            // base
+            // art
+            html1 = getNameTypeHTML(type);
+            html2 = getTypeHTML(schema, type.type);
+            if (html2) {
+                html += `<details><summary>${html1}</summary>${html2}</details>`;
+            } else {
+                html += html1;
+            }
+            break;
+        case "list":
+            // base
+            // art
+            //html += getNameTypeHTML(type);
+            // attribute
+            if (type.attributes.length > 0) {
+                html += "<li><b>Attributes</b>(" + type.attributes.length + ")";
+                html += "<ul>";
+                for (let i = 0; i < type.attributes.length; i++) {
+                    let typeAttr = schema.getType(type.attributes[i]);
+                    if (typeAttr) {
+                        html += getNameTypeHTML(typeAttr);
+                    } else {
+                        html += `<li>${type.attributes[i]}</li>`;
+                    }
+                }
+                html += "</ul></li>";
+            }
+            // moreattribute
+            // cols
+            if (type.cols.length > 0) {
+                html += "<li><b>Cols</b>(" + type.cols.length + ")";
+                html += "<ul>";
+                for (let i = 0; i < type.cols.length; i++) {
+                    let typeCol = schema.getType(type.cols[i]);
+                    if (typeCol) {
+                        html1 = getNameTypeHTML(typeCol);
+                        html2 = getTypeHTML(schema, typeCol.type);
+                        if (html2) {
+                            html += `<details><summary>${html1}</summary>${html2}</details>`;
+                        } else {
+                            html += `<li>${html1}</li>`;
+                        }
+                    } else {
+                        html += `<li>${type.cols[i]}</li>`;
+                    }
+                }
+                html += "</ul></li>";
+            }
+            // morecols
+            break;
+
+        default:
+            break;
+    }
+
+    // Typ.Typ prüfen
+    //html += getTypeHTML(schema, type.type);
+
+    return html + "</ul>";
+}
+
+
+// Schema ab einem Einstiegspunkt anzeigen
+
+/**
+ * Liefert einen HTML-String vom angegebenen Schema und  SchemaTyp als Startpunkt zurück.
+ * @param {Schema} schema - Schema das als basis genommen wird
+ * @param {string} typeName - Name des Types/ Startpunkt
+ * @returns {string|undefined} HTML-String oder "undefined" wenn Typ im Schema nicht gefunden wird
+ */
+export function getSchemaTypeHTML(schema, typeName) {
+    if (!(schema instanceof Schema)) { return; }
+    let html = "";
+
+    // Schema Name
+    html += `<h1>${schema.name}</h1>`;
+
+    // Schema APPInfo
+    if (schema.appinfo.length > 0) {
+        html += "<h2>APP-Info></h2>" + getInfoHTML(schema.appinfo);
+    }
+
+    // Schema Info
+    if (schema.info.length > 0) {
+        html += "<h2>Info</h2>" + getInfoHTML(schema.info);
+    }
+
+    // Type auflösen
+    html += getTypeHTML(schema, typeName);
+    return html;
 }
