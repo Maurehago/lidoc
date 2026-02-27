@@ -672,7 +672,7 @@ function getTypeHTML(schema, typeName) {
             html1 = getNameTypeHTML(type);
             html2 = getTypeHTML(schema, type.type);
             if (html2) {
-                html += `<details><summary>${html1}</summary>${html2}</details>`;
+                html += `<details><summary><p icon-r>${html1}</p></summary>${html2}</details>`;
             } else {
                 html += html1;
             }
@@ -698,7 +698,7 @@ function getTypeHTML(schema, typeName) {
             // moreattribute
             // cols
             if (type.cols.length > 0) {
-                html += "<li><b>Cols</b>(" + type.cols.length + ")";
+                html += "<li icon-r><b>Cols</b>(" + type.cols.length + ")";
                 html += "<ul>";
                 for (let i = 0; i < type.cols.length; i++) {
                     let typeCol = schema.getType(type.cols[i]);
@@ -706,7 +706,7 @@ function getTypeHTML(schema, typeName) {
                         html1 = getNameTypeHTML(typeCol);
                         html2 = getTypeHTML(schema, typeCol.type);
                         if (html2) {
-                            html += `<details><summary>${html1}</summary>${html2}</details>`;
+                            html += `<details><summary><p icon-r>${html1}</p></summary>${html2}</details>`;
                         } else {
                             html += `<li>${html1}</li>`;
                         }
