@@ -82,11 +82,17 @@
 
 /**
  * Gibt eine neue GlobalShortId zurück
+ * @param {boolean} [large] - "true" Wenn in langer Form
  * @returns {string}
  */
-export function getGSID() {
-    return new Date().getTime().toString(36) +
-        crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+export function getGSID(large) {
+    if (large) {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    } else {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint16Array(1))[0].toString(36);
+    } 
 }
 
 /**
@@ -696,7 +702,7 @@ export class List {
     /**
      * Gibt ein Array an Werten für die Spalten(fieldList) eines Datensatzes(id) zurück.
      * @param {string|number} rowID - ID des Datensatzes
-     * @param {Array<string>} colList - Liste mit Spaltennamen oder Spaltennummern
+     * @param {Array<string>} colList - Liste mit Spaltennamen
      * @returns {Array<any>} Liste mit Werten der angegebenen Spalten
      */
     getColValues(rowID, colList) {

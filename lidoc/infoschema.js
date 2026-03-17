@@ -8,7 +8,7 @@
 
 /**
  * @typedef {object} DataTypeOptions
- * @property {string} [base] - Name des Basistype
+ * @property {string|Array<string>} [base] BasisTyp(abgeleitet von) der Eigenschaft. Defaults: "string"|"number"|"boolean"|"object"|"enum"|"GSID"|string
  * @property {Array<string>} [info] - Beschreibungstexte zum Datentyp
  * @property {number} [length] - Exakte Länge eines Strings oder Anzahl Zeichen bei Nummern
  * @property {number} [minLength] - Minimale Länge eines Strings
@@ -16,26 +16,29 @@
  * @property {string} [pattern] - Regular Expression
  * @property {string} [whitespace] - Wie wird mit Leerzeichen umgegangen
  * @property {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"} [casing] - Schreibweise für String. Wenn nicht angegeben dann ist es egal.
- * @property {Array<EnumItem>} [enum] - Enums Auswahlmöglichkeit
- * @property {boolean} [additionalEnum] - Weitere EnumItems möglich
+ * @property {string|undefined} [additionalEnum] TypName für zusätzliche enum werte erlaubt
  * @property {number} [decimals] - Anzahl der Dezimalstellen
  * @property {string|number} [minInclusive] - Minimaler Wert inclusive
  * @property {string|number} [minExclusive] - Minimaler Wert größer als
  * @property {string|number} [maxExclusive] - Maximaler Wert kleiner als
  * @property {string|number} [maxInclusive] - Maximaler Wert inclusive
+ * @property {string|Array<string>} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben
  */
 
-/**
- * @typedef {object} DataPropertyOptions
- */
 
 /**
  * Gibt eine neue GlobalShortId zurück
+ * @param {boolean} [large] - "true" Wenn in langer Form
  * @returns {string}
  */
-export function getGSID() {
-    return new Date().getTime().toString(36) +
-        crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+export function getGSID(large) {
+    if (large) {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    } else {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint16Array(1))[0].toString(36);
+    } 
 }
 
 
@@ -43,7 +46,7 @@ export function getGSID() {
 //   Klassen
 // -----------
 
-class EnumItem {
+export class EnumItem {
     /** @type {string} */
     name = "";
     /** @type {string|number} */
@@ -65,30 +68,92 @@ class EnumItem {
 }
 
 
-class IdItem {
+export class RefItem {
     /** @type {string} */
     name = "";
-    /** @type {string} Pfad zum Untergeordneten Objekt oder "." wenn aktuelles Objekt */
-    objPath = ".";
-    /** @type {Array<string>} Selector für das/die ID Felder */
-    field = [];
+
+    /** @type {Array<string>} Selector für Eigenschaften vom Aktuellen objekt */
+    props = [];
+
+    /** @type {string} Name des Fremd Objektes */
+    refObj = "";
+
+    /** @type {Array<string>} Selector für Eigenschaften vom Referenzierten objekt */
+    refProps = [];
+
+    /** @type {"NO"|"UPDATE"|"NULL"|"DEFAULT"} Regel für Update */
+    onUpdate = "UPDATE";
+
+    /** @type {"NO"|"DELETE"|"NULL"|"DEFAULT"} Regel für Löschen */
+    onDelete = "DELETE";
+
     /** @type {string} */
     info = "";
-    /** @type {string} ID-Name für Referenz Objekt */
-    refId = "";
 
     /**
      * ID Item Eintrag
      * @param {string} name - Name der ID
-     * @param {string} objPath - Pfad zum Untergeordneten Objekt oder "." für aktuelles Objekt
-     * @param {Array<string>} field - Selector für das/die ID-Felder
+     * @param {Array<string>} props - Property Namen zum Verknüpfen vom aktuellen Objekt
+     * @param {string} refObj - Name/Type des Fremd Opbjektes
+     * @param {Array<string>} refProps - Property Namen zum Verknüpfen vom fremden Objekt
+     * @param {"NO"|"UPDATE"|"NULL"|"DEFAULT"} [onUpdate] - Optional Beschreibung zur ID
+     * @param {"NO"|"DELETE"|"NULL"|"DEFAULT"} [onDelete] - Optional Beschreibung zur ID
      * @param {string} [info] - Optional Beschreibung zur ID
      */
-    constructor(name, objPath, field, info) {
+    constructor(name, props, refObj, refProps, onUpdate, onDelete, info) {
         this.name = name;
-        this.objPath = objPath;
-        this.field = field;
+        this.props = props;
+        this.refObj = refObj;
+        this.refProps = refProps;
+        this.onUpdate = onUpdate || "UPDATE";
+        this.onDelete = onDelete || "DELETE";
         this.info = info || "";
+    }
+}
+
+
+export class PropItem {
+    /** @type {string} Name der Eigenschaft/Attribute */
+    name = "";
+
+    /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. Defaults: "string"|"number"|"boolean"|"object"|"enum"|"GSID"|string */
+    base = "string";
+
+    /** @type {Array<string>} Liste mit Beschreibungstexten */
+    info = [];
+
+    
+    /** @type {number} Minimales Vorkommen der Spalte/Attribute / optional: 0 / default: 1 */
+    min = 1;
+    /** @type {number} Maximales Vorkommen der Spalte/Attribute / unendlich: -1 / default: 1 */
+    max = 1;
+    
+    /** @type {any} Standard Wert */
+    defaultValue;
+    /** @type{any} - Fixer Wert */
+    fix;
+
+    /** @type {string|undefined} Bedingung, wann die Eigenschaft/Attribute vorkommt. Wenn nicht angegegeben dann immer verwenden. */
+    use = "";
+
+    /**
+     * Erzeugt eine Property oder ein Atribute
+     * @param {string} name - Name der Property(Spalte)
+     * @param {string|Array<string>} base - Basistyp(en) der Property(Spalte)
+     * @param {number} [min] - Optional Minimales Vorkommen. Default = 1.
+     * @param {number} [max] - Optional Maximales Vorkommen. Default = 1. Unendlich = -1.
+     * @param {any} [defaultValue] - Optional Default Wert
+     * @param {any} [fix] - Optional Fixer Wert  
+     * @param {string} [use] - Optional Bedingung wann diese Property verwendet wird
+     */
+    constructor(name, base, min, max, defaultValue, fix, use) {
+        this.name = name;
+        this.base = base || "string";
+        this.min = min || 1;
+        this.max = max || 1;
+        this.defaultValue = defaultValue;
+        this.fix = fix;
+        this.use = use || "";
     }
 }
 
@@ -96,18 +161,23 @@ class IdItem {
 
 // DataType:
 export class DataType {
-    /** @type {"type"|"attribute"|"col"|"list"}  Art des Types */
-    art = "type";
+    ///** @type {"type"|"attribute"|"col"|"list"}  Art des Types */
+    //art = "type";
+    
     /** @type {string} Name des Schemas */
     schemaName = "";
+    
     /** @type {string} Name des Datentypes */
     name;
-    /** @type {string|undefined} BasisTyp(abgeleitet von) der Eigenschaft */
-    base;
-    /** @type {string|Array<string>} Typ der Eigenschaft oder Liste von TypNamen - default "string" */
-    type = "string";
-    /** @type {string|undefined} Name der Liste wenn vom type="object" */
-    list;
+    
+    /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. Defaults: "string"|"number"|"boolean"|"object"|"enum"|"GSID"|string */
+    base = "string";
+    
+    ///** @type {string|Array<string>} Typ der Eigenschaft oder Liste von TypNamen - default "string" */
+    //type = "string";
+    ///** @type {string|undefined} Name der Liste wenn vom type="object" */
+    //list;
+    
     /** @type {Array<string>} Liste mit Beschreibungstexten */
     info = [];
 
@@ -143,30 +213,23 @@ export class DataType {
     /** @type {number|string|undefined} Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range) */
     maxInclusive;
 
-    //  --- Spalte eigenschaften ---
-    /** @type {number} Minimales Vorkommen der Spalte/Attribute / optional: 0 / default: 1 */
-    min = 1;
-    /** @type {number} Maximales Vorkommen der Spalte/Attribute / unendlich: -1 / default: 1 */
-    max = 1;
-    /** @type{any} - Fixer Wert */
-    fixed;
-    /** @type {any} Standard Wert */
-    default;
 
-    // --- Liste Eigenschaften ---
-    /** @type {Array<string>} Liste mit Attribute-Namen*/
-    attributes = [];
-    /** @type {string|undefined} weitere Attribute erlaubt */
+    // --- Objekt Eigenschaften ---
+    /** @type {Map<string,PropItem>} Liste mit Attribute*/
+    attributes = new Map();
+    /** @type {PropItem|undefined} weitere Attribute erlaubt */
     moreAttributes;
-    /** @type {Array<string>} Liste mit Property-Namen */
-    cols = [];
-    /** @type {string|undefined} Typ der bestimmt ob weitere Attribute erlaubt sind */
-    moreCols;
-    /** @type {Map<string,IdItem>} Liste mit Index ID's */
-    id = new Map();
-    /** @type {Map<string,IdItem>} Liste mit Referenzen zu Indexes */
-    idref = new Map();
-    /** @type {Map<string,IdItem>} Liste mit Unique's */
+    /** @type {Map<string,PropItem>} Liste mit Property */
+    props = new Map();
+    /** @type {PropItem|undefined} Typ der bestimmt ob weitere Properties erlaubt sind */
+    moreProps;
+    /** @type {string|Array<string>} Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben */
+    id = "GSID";
+    
+    /** @type {Map<string,RefItem>} Liste mit Referenzen zu Indexes */
+    ref = new Map();
+
+    /** @type {Map<string,Array<string>>} Map mit Listen von PropertyNamen die zusammen eine Eindeutigkeit ergeben müssen  */
     unique = new Map();
 
     /**
@@ -189,13 +252,13 @@ export class DataType {
     /**
      * Erstellt einen DatenTyp
      * @param {string} [name] - Optional - Name des Types
+     * @param {string|Array<string>} [base] - Optional - BasisTyp
      * @param {Object<string,any>} [options] - Optional Eigenschaften des Types
-     * @param {"type"|"attribute"|"col"|"list"} [art] - Optional - Art des Types
      */
-    constructor(name, options, art) {
+    constructor(name, base, options) {
         Object.assign(this, options);
         this.name = name || getGSID(); // Name nach Options setzen falls in Optionen ein anderer Name drinnen ist
-        this.art = art || "type";
+        this.base = base || "string";
     }
 }
 
@@ -214,237 +277,49 @@ export class Schema {
     attributes = new Map(); // Sind Daten und keine Typen!
 
     /** @type {Map<string,DataType>} */
-    #types = new Map();
+    types = new Map();
 
     /**
-     * Registriert einen neuen Typ im Schema.  
+     * Registriert eine neue Propperty für einen Typ.  
      * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * Wird kein Typname angegeben wird ein Random Typname generiert.  
-     * @param {string} [typeName] - TypName 
-     * @param {Object<string,any>} [options] - Optionale Einstellungen für den Typ
-     * @param {"type"|"attribute"|"col"|"list"} [typeArt] - Optional Art des Types "type"|"attribute"|"col"|"list"
-     * @returns {DataType} neuen DatenTyp
+     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
+     * @param {string} propertyName - Name der Spalte 
+     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
+     * @returns {DataType} Objekt DatenTyp
      */
-    addType(typeName, options, typeArt) {
-        let type;
-        if (typeName) {
-            type = new DataType(typeName, options, typeArt);
-        } else {
-            type = new DataType(undefined, options, typeArt);
+    addProperty(typeName, propertyName, propItem) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, "object");
+            this.types.set(typeName, dataType);
+        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
+            dataType.base = "object";
         }
-
-        // Typ Registrieren
-        this.#types.set(type.name, type);
-
-        // Typ zurückgeben
-        return type;
+        dataType.props.set(propertyName, propItem);
+        return dataType;
     }
 
-    /**
-     * Ändert einen bestehenden Typ, oder legt diesen an wenn dieser nicht existiert 
-     * Wird kein Typname angegeben wird ein Random Typname generiert.  
-     * @param {string} [typeName] - TypName 
-     * @param {Object<string,any>} [options] - Optionale Einstellungen für den Typ
-     * @param {"type"|"attribute"|"col"|"list"} [typeArt] - Optional Art des Types "type"|"attribute"|"col"|"list"
-     * @returns {DataType} neuen DatenTyp
-     */
-    setType(typeName, options, typeArt) {
-        if (typeName) {
-            let type = this.#types.get(typeName);
-            if (type) {
-                Object.assign(type, options);
-                type.name = typeName;
-                type.art = typeArt || type.art;
-                return type;
-            } else {
-                return this.addType(typeName, options, typeArt);
-            }
-        } else {
-            return this.addType(getGSID(), options, typeArt);
-        }
-    }
 
     /**
-     * Fügt zu einem Bestehenden Typ mehrere Typnamen hinzu
-     * @param {string} baseType - Name vom Typ dem weitere Typnamen hinzugefügt werden
-     * @param {string|Array<string>} newType - Typname oder Liste von TypNamen die hinzugefügt werden 
-     * @param {boolean} [replace] - Optional "true" wenn bestehender Typ.typ beibehalten 
-     */
-    addTypeName(baseType, newType, replace) {
-        let type = this.#types.get(baseType);
-        if (!Array.isArray(newType)) {
-            newType = [newType];
-        }
-        if (type) {
-            if (!Array.isArray(type.type)) {
-                type.type = [type.type];
-            }
-
-            if (replace) {
-                type.type = newType;
-            } else {
-                for (let i = 0; i < newType.length; i++) {
-                    // fügt nur hinzu wenn noch nicht vorhanden (doppelte vermeiden)
-                    if (type.type.indexOf(newType[i]) < 0) {
-                        type.type.push(newType[i]);
-                    }
-                }
-            }
-        } // wenn Typ
-    }
-
-    /**
-     * Registriert einen neuen Typ als Liste im Schema.  
+     * Registriert eine neue Attribute für einen Typ.  
      * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * Wird kein Typname angegeben wird ein Random Typname generiert.  
-     * @param {string} [listName] - ListName oder DatenTyp 
-     * @param {Object<string,any>} [options] - Optionale Einstellungen für den Typ
-     * @returns {DataType} neuen DatenTyp
+     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
+     * @param {string} attributeName - Name der Spalte 
+     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
+     * @returns {DataType} Objekt DatenTyp
      */
-    addList(listName, options) {
-        return this.addType(listName, options, "list");
-    }
-
-    /**
-     * Registriert einen neuen Typ als Spalte oder Attribute im Schema.  
-     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * Wird kein Typname angegeben wird ein Random Typname generiert.  
-     * @param {"col"|"attribute"} typeArt - "col"|"attribute"
-     * @param {string} listName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
-     * @param {string} name - Name der Spalte/Attribute 
-     * @param {Object<string,any>} [options] - Optionale Einstellungen für die Spalte
-     * @returns {DataType} neuen DatenTyp
-     */
-    #addToList(typeArt, listName, name, options) {
-        let typeName = name;
-        if (listName && listName != "schema") {
-            // Liste Lesen oder erzeugen
-            let list = this.#types.get(listName) || this.addList(listName);
-            list.art = "list";
-            list.type = "object";
-
-            // Liste Spalte hinzufügen
-            if (typeArt == "col") {
-                list.cols.push(name);
-            } else if (typeArt == "attribute") {
-                list.attributes.push(name);
-            }
-
-            // Liste in Spalte registrieren
-            if (!options) {
-                options = { list: listName };
-            } else {
-                options.list = listName;
-            }
-
-            // neuer Typ Name
-            typeName = listName + "-" + name;
+    addAttribute(typeName, attributeName, propItem) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, "object");
+            this.types.set(typeName, dataType);
+        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
+            dataType.base = "object";
         }
-        return this.setType(typeName, options, typeArt);
+        dataType.attributes.set(attributeName, propItem);
+        return dataType;
     }
 
-    /**
-     * Registriert einen neuen Typ als Spalte im Schema.  
-     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * Wird kein Typname angegeben wird ein Random Typname generiert.  
-     * @param {string} listName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
-     * @param {string} [colName] - Name der Spalte 
-     * @param {Object<string,any>} [options] - Optionale Einstellungen für die Spalte
-     * @returns {DataType} neuen DatenTyp
-     */
-    addCol(listName, colName, options) {
-        return this.#addToList("col", listName, colName || getGSID(), options);
-    }
-
-    /**
-     * Registriert einen neuen Typ als Spalte im Schema.  
-     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * Wird kein Typname angegeben wird ein Random Typname generiert.  
-     * @param {string} listName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
-     * @param {string} attrName - Name des Attributes 
-     * @param {Object<string,any>} [options] - Optionale Einstellungen für die Spalte
-     * @returns {DataType} neuen DatenTyp
-     */
-    addAttribute(listName, attrName, options) {
-        return this.#addToList("attribute", listName, attrName, options);
-    }
-
-    /**
-     * Liefert ein Datentyp-Objekt vom Schema zurück oder "undefined" wenn nicht vorhanden.
-     * @param {string} typeName - Name des Typs
-     * @returns {DataType|undefined} DatenTyp
-     */
-    getType(typeName) {
-        return this.#types.get(typeName);
-    }
-
-
-    /**
-     * Setzt einen Any-Typ für eine Liste
-     * @param {"col"|"attribute"} typeArt - "col"|"attribute"
-     * @param {string} listName - Name der Liste
-     * @param {number} min - Minimale Anzahl der Spalten. Default: 0
-     * @param {number} max - Maximale Anzahl der Spalten/attribute. Default: -1
-     * @returns {DataType} Any-DatenTyp für die Liste
-     */
-    #addAny(typeArt, listName, min, max) {
-        let list = this.#types.get(listName) || this.addList(listName);
-        list.type = "object";
-        list.art = "list";
-        let type = this.addType("", { min: min, max: max }, typeArt);
-        if (typeArt == "col") {
-            list.moreCols = type.name;
-        } else if (typeArt == "attribute") {
-            list.moreAttributes = type.name;
-        }
-        return type;
-    }
-
-    /**
-     * Fügt der Liste Information für zusätzliche Spalten hinzu.  
-     * @param {string} listName - Name vom Listen Schema
-     * @param {number} [min] - Minimales Vorkommen neuer Spalten. Default: 0
-     * @param {number} [max] - Maximales Vorkommen neuer Spalten. Default: -1
-     * @returns {DataType} DatenTyp für Any Spalte
-     */
-    addAnyCol(listName, min, max) {
-        return this.#addAny("col", listName, min || 0, max || -1);
-    }
-
-    /**
-     * Fügt der Liste Information für zusätzliche Attribute hinzu.  
-     * @param {string} listName - Name vom Listen Schema
-     * @param {number} [min] - Minimales Vorkommen neuer Attribute. Default: 0
-     * @param {number} [max] - Maximales Vorkommen neuer Attribute. Default: -1
-     * @returns {DataType} DatenTyp für Any Attribute
-     */
-    addAnyAttribute(listName, min, max) {
-        return this.#addAny("attribute", listName, min || 0, max || -1);
-    }
-
-    /**
-     * Liefert ein Spaltenschema Objekt zurück, oder "undefined" wenn nicht gefunden.
-     * @param {string} listName - Name der Liste
-     * @param {string} colName - Name der Spalte
-     * @returns {DataType|undefined} DatenTyp der Spalte wenn vorhanden
-     */
-    getColType(listName, colName) {
-        if (listName && listName != "schema") {
-            return this.#types.get(listName + "-" + colName);
-        } else {
-            return this.#types.get(colName);
-        }
-    }
-
-    /**
-     * Liefert ein Spaltenschema Objekt zurück, oder "undefined" wenn nicht gefunden.
-     * @param {string} listName - Name der Liste
-     * @param {string} attrName - Name des Atributes
-     * @returns {DataType|undefined} Datentyp für Attribute wenn vorhanden
-     */
-    getAttrType(listName, attrName) {
-        return this.getColType(listName, attrName);
-    }
 
     /**
      * Fügt ein neues Enum Item zu einem EnumTyp hinzu
@@ -454,121 +329,50 @@ export class Schema {
      * @param {string} [info] - Optional Beschreibung zum EnumItem
      */
     addEnum(typeName, name, value, info) {
-        let type = this.#types.get(typeName) || this.addType(typeName);
-
-        // Enum Werte hinzufügen
-        type.addEnum(name, value, info);
-    }
-
-    /**
-     * Fügt einem Typ ein Unique Item hinzu
-     * @param {"id"|"unique"|"idref"} idArt - Art der ID
-     * @param {string} typeName - Name des Types dem das Unique hinzugefügt wird
-     * @param {string} name - Unique Bezeichner
-     * @param {string} objPath - XPath zum Objekt, "." wenn das Type Objekt gemeint ist
-     * @param {Array<string>} field - XPath zum Feld/Felder des Objektes das den Unique erzeugt
-     * @param {string} [info] - Optional Beschreibung des Unique's
-     * @returns {IdItem|undefined} IdItem
-     */
-    #addId(idArt, typeName, name, objPath, field, info) {
-        let type = this.#types.get(typeName);
-        let id = new IdItem(name, objPath, field, info);
-        if (type) {
-            switch (idArt) {
-                case "id":
-                    type.id.set(name, id);
-                    break;
-                case "idref":
-                    type.idref.set(name, id);
-                    break;
-                case "unique":
-                    type.unique.set(name, id);
-                    break;
-                default:
-                    break;
-            }
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, "enum");
+            this.types.set(typeName, dataType);
         }
-        return id;
+        // Enum Werte hinzufügen
+        dataType.addEnum(name, value, info);
     }
+
 
     /**
      * Fügt einem Typ ein Unique Item hinzu
      * @param {string} typeName - Name des Types dem das Unique hinzugefügt wird
      * @param {string} uniqueName - Unique Bezeichner
-     * @param {string} objPath - XPath zum Objekt, "." wenn das Type Objekt gemeint ist
-     * @param {Array<string>} field - XPath zum Feld/Felder des Objektes das den Unique erzeugt
-     * @param {string} [info] - Optional Beschreibung des Unique's
+     * @param {Array<string>} fieldList - Felder des Objektes das den Unique erzeugt
      */
-    addUnique(typeName, uniqueName, objPath, field, info) {
-        let id = this.#addId("unique", typeName, uniqueName, objPath, field, info);
+    addUnique(typeName, uniqueName, fieldList) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, "object");
+            this.types.set(typeName, dataType);
+        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
+            dataType.base = "object";
+        }
+        dataType.unique.set(uniqueName, fieldList);
     }
 
+
     /**
-     * Fügt einem Typ eine ID(index) hinzu
-     * @param {string} typeName - Name des Types dem das Unique hinzugefügt wird
-     * @param {string} idName - ID Bezeichner
-     * @param {string} objPath - XPath zum Objekt, "." wenn das Type Objekt gemeint ist
-     * @param {Array<string>} field - XPath zum Feld/Felder des Objektes
-     * @param {string} [info] - Optional Beschreibung des Unique's
+     * Fügt einem Datentyp ein ReferenzObjekt hinzu
+     * @param {string} typeName - Name des DatenTyps
+     * @param {string} refName - Name der Referenz
+     * @param {RefItem} refItem - ReferentItem Objekt
      */
-    addId(typeName, idName, objPath, field, info) {
-        let id = this.#addId("id", typeName, idName, objPath, field, info);
+    addRef(typeName, refName, refItem) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, "object");
+            this.types.set(typeName, dataType);
+        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
+            dataType.base = "object";
+        }
+        dataType.ref.set(refName, refItem);
     }
-
-    /**
-     * Fügt einem Typ eine ID(index) hinzu
-     * @param {string} typeName - Name des Types dem das Unique hinzugefügt wird
-     * @param {string} idName - ID Bezeichner
-     * @param {string} objPath - XPath zum Objekt, "." wenn das Type Objekt gemeint ist
-     * @param {Array<string>} field - XPath zum Feld/Felder des Objektes
-     * @param {string} refer - Name der ID beim Zielobjekt
-     * @param {string} [info] - Optional Beschreibung des Unique's
-     */
-    addRefId(typeName, idName, objPath, field, refer, info) {
-        let id = this.#addId("id", typeName, idName, objPath, field, info);
-        if (id) {
-            id.refId = refer;
-        }
-    }
-
-    /**
-     * Fügt einem Typ/Spalte/Attribute einen Infotext hinzu
-     * @param {string} typeName - Name des Types
-     * @param {string} info - Infotext
-     */
-    addTypeInfo(typeName, info) {
-        // if (listName && listName != "schema") {
-        //     typeName = listName + "-" + typeName;
-        // }
-        if (typeName == "" || typeName == "schema") {
-            this.info.push(info);
-        } else {
-            let type = this.#types.get(typeName);
-            if (type) {
-                type.info.push(info);
-            }
-        }
-    };
-
-    /**
-     * Fügt einem Typ/Spalte/Attribute einen APP-Infotext hinzu
-     * @param {string} typeName - Name des Types
-     * @param {string} info - Infotext
-     */
-    addTypeAppinfo(typeName, info) {
-        // if (listName && listName != "schema") {
-        //     typeName = listName + "-" + typeName;
-        // }
-        if (typeName == "" || typeName == "schema") {
-            this.appinfo.push(info);
-        } else {
-            let type = this.#types.get(typeName);
-            if (type) {
-                type.info.push("appinfo: " + info);
-            }
-        }
-    };
-
 
 
     /**
@@ -577,8 +381,6 @@ export class Schema {
      */
     constructor(name) {
         this.name = name;
-        //this.object = new DataObject(name);
-        //this.#objList.set(name, this.object);
     }
 }
 
