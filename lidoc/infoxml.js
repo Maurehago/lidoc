@@ -3,7 +3,7 @@
 // =======================
 // @ts-check
 
-import { Schema } from "./infoschema.js";
+import { Schema, PropItem, DataType, getGSID } from "./infoschema.js";
 
 // ============================
 //   Typen
@@ -30,7 +30,6 @@ export const XSD = new Schema("xsd");
 let localData = {};
 
 
-
 // ============================
 //   Funktionen
 // --------------
@@ -39,11 +38,13 @@ let localData = {};
 /**
  * Prüft das XSD Element
  * @param {Element} elm - XML Element
- * @param {string} baseTypeName - TabellenName
- * param {string} [baseTypeName] - Index bei Auswahl(choice)
+ * @param {DataType} baseType - ObjektName
+ * @param {PropItem} [baseProp] - Objekt Eigenschaft Name
+ * @param {string} [chois] - Index bei Auswahl(choice)
  */
-function checkElement(elm, baseTypeName) {
-    let newTypeName = baseTypeName;
+function checkElement(elm, baseType, baseProp, chois) {
+    let newType = baseType;
+    let newProp = baseProp;
 
     /** @type {Object<string,any>} */
     let options = {};
@@ -108,16 +109,19 @@ function checkElement(elm, baseTypeName) {
             // Attribute: id, maxOccurs, minOccurs, namespace, processContents, ...any
             // children: annotation(0,1)
 
-            newTypeName = XSD.addAnyCol(baseTypeName, min, max).name;
+            // todo: Prüfen von Namespace -> ##any - elements from any namespace is allowed (this is default) / ##other - elements from any namespace that is not the namespace of the parent element can be present / ##local - elements must come from no namespace / ##targetNamespace - elements from the namespace of the parent element can be present List of {URI references of namespaces, ##targetNamespace, ##local} - elements from a space-delimited list of the namespaces can be present
+            //newTypeName = XSD.addAnyCol(baseTypeName, min, max).name;
+            newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, chois);
+            baseType.moreProps = newProp;
+            // newTypeName = XSD.setMoreProperty(baseTypeName, new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, chois)).name;
             checkChildren = true;
             break;
         case "anyAttribute":
             // Bestimmt das das Eleternelement um zusätzliche Attribute erweitert werden darf
             // Attribute: id, namespace, processContents, ...any
             // children: annotation(0,1)
-
-            newTypeName = XSD.addAnyAttribute(baseTypeName, min, max).name;
-            //newColName = "anyattr";
+            newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, chois);
+            baseType.moreAttributes = newProp;
             checkChildren = true;
             break;
         case "appinfo":
@@ -126,7 +130,11 @@ function checkElement(elm, baseTypeName) {
             // attribute: -
             // children: -
 
-            XSD.addTypeAppinfo(baseTypeName, elm.innerHTML);
+            if (baseProp) {
+                baseProp.info.push(elm.innerHTML);
+            } else {
+                baseType.appinfo.push(elm.innerHTML);
+            }
             checkChildren = false;
             break;
         case "attribute":
@@ -135,22 +143,11 @@ function checkElement(elm, baseTypeName) {
             // attribute: default, fixed, form, id, name, ref, type, use, ...any (name und ref dürfen nicht gleichzeitig vorkommen)
             // children: annotation(0,1), simpleType(0,1)
 
-            options = {
-                min: elmUse == "required" ? 1 : 0
-                , max: max
-                , default: elmDefault
-                , fixed: elmFixed
-                , type: elmType || "string"
-            }
+            //newTypeName = elmName || elmRef || baseTypeName;
+            newProp = new PropItem(elmName || elmRef || getGSID(), elmType || elmRef, min, max, elmDefault, elmFixed, chois);
+            baseType.attributes.set(newProp.name, newProp);
+            //XSD.addAttribute(baseTypeName, newTypeName, new PropItem(newTypeName, "string", min, max, elmDefault, elmFixed, chois));
 
-            if (elmName) {
-                newTypeName = XSD.addAttribute(baseTypeName, elmName, options).name;
-            } else if (elmRef) {
-                options.base = elmRef;
-                newTypeName = XSD.addAttribute(baseTypeName, elmRef, options).name;
-            }
-
-            // newColName = "";
             checkChildren = true;
             break;
         case "attributeGroup":
@@ -159,13 +156,20 @@ function checkElement(elm, baseTypeName) {
             // attribute: id, name, ref, ...any (name und ref dürfen nicht gleichzeitig vorkommen)
             // children: annotation(0,1), attribute|attributeGroup(0,-1), anyAttribute(0,1)
 
-            // Wenn Name dann neue Gruppe(Liste) Erstellen
+            // Wenn Name dann neue Gruppe(Type) Erstellen
             if (elmName) {
-                newTypeName = XSD.addList(elmName).name;
-                // newColName = "";
+                newType = new DataType(elmName, "group");
+                newProp = undefined; // WICHTIG! Auf "undefined" setzen da der newType noch keine Properties hat.
+                XSD.types.set(elmName, newType);
             } else if (elmRef) {
                 // Neues Attribute zur Liste setzen
-                newTypeName = XSD.addAttribute(baseTypeName, elmRef, {base: elmRef}).name;
+                newProp =  new PropItem(elmRef, elmRef, min, max, elmDefault, elmFixed, chois);
+                baseType.attributes.set(newProp.name, newProp);
+            } else {
+                // sollte nicht vorkommen
+                newType = new DataType(baseType.name + "_" + (baseProp?.name || getGSID()), "group");
+                newProp = undefined; // WICHTIG! Auf "undefined" setzen da der newType noch keine Properties hat.
+                XSD.types.set(newType.name, newType);
             }
             checkChildren = true;
             break;
@@ -176,9 +180,12 @@ function checkElement(elm, baseTypeName) {
             // children: annotation(0,1), element|group|choice|sequence|any(0,-1)
             // todo: Kind Elemente in DataTyp.oneOfProperties[] einfügen
 
-            // neue AuswahlGruppe anlegen
-            newTypeName = XSD.addCol(baseTypeName, "choice", { min, max }).name;
-            // newColName = "";
+            // Auswahlzähler erhöhen
+            if (!chois) {
+                chois = "a";    
+            } else {
+                chois += 1;
+            }
             checkChildren = true;
             break;
         case "complexContent":
@@ -195,15 +202,21 @@ function checkElement(elm, baseTypeName) {
             // attribute: id, name, abstract, mixed, block, final, ...any
             // children: annotation(0,1), simpleContent|complexContent|group|all|choice|sequence(0,1), attribute|attributeGroup(0,-1), anyAttribute(0,1)
 
-            // Wenn Name -> Neue Liste
+            // Wenn Name -> Neuer ObjektTyp
             if (elmName) {
-                newTypeName = XSD.addList(elmName).name;
-                if (baseTypeName && baseTypeName != "schema") {
-                    // Referenziert auf den Komplexen Typ
-                    XSD.setType(baseTypeName, {type: newTypeName});
+                newType = new DataType(elmName, "object");
+                newProp = undefined; // WICHTIG! Auf "undefined" setzen da der newType noch keine Properties hat.
+                XSD.types.set(elmName, newType);
+            } else {
+                // Property Base auf Objekt setzen
+                newType = new DataType(baseType.name + "_" + (baseProp?.name || getGSID()), "object");
+                newProp = undefined; // WICHTIG! Auf "undefined" setzen da der newType noch keine Properties hat.
+                XSD.types.set(newType.name, newType);
+
+                if (baseProp) {
+                    baseProp.base = newType.name;
                 }
             }
-            // else - wird selbst zum Komplexen Typ sobald Attribute oder Cols hinzugefügt werden
 
             checkChildren = true;
             break;
@@ -215,40 +228,30 @@ function checkElement(elm, baseTypeName) {
 
             // todo: xml:lang prüfen
             localData.info = elm.innerHTML; // für Referenz Objekte
-            XSD.addTypeInfo(baseTypeName, elm.innerHTML);
+            if (baseProp) {
+                baseProp.info.push(elm.innerHTML);
+            } else {
+                baseType.info.push(elm.innerHTML);
+            }
             checkChildren = false;
             break;
         case "element":
-            // Definiert ein Spalte in einer Liste(komplex Type)
+            // Definiert eine Property in einem Objekt
             // parent: schema, choice, all, sequence, group 
             // attribute: id, name|ref(to column), type, substitutionGroup, default, fixed, form, maxOccurs, minOccurs, nillable, abstract, block, final, ...any
             // children: annotation(0,1), simpleType|complexType(0,1), unique|key|keyref(0,-1)
 
             // todo: weitere Attribute prüfen
 
-            // optionen festlegen
-            options = {
-                min: min
-                , max: max
-                , default: elmDefault
-                , fixed: elmFixed
-                , type: elmType || "string"
-            };
+            newProp = new PropItem(elmName || elmRef || getGSID(), elmType || elmRef, min, max, elmDefault, elmFixed, chois);
+            baseType.props.set(newProp.name, newProp);
 
-            // Neue Spalte registrieren - es muss name oder ref vorhanden sein
-            if (elmName) {
-                newTypeName = XSD.addCol(baseTypeName, elmName, options).name;
-            } else if (elmRef) {
-                options.base = elmRef;
-                newTypeName = XSD.addCol(baseTypeName, elmRef, options).name;
-            }
-            
             checkChildren = true;
             break;
         case "enumeration":
             // Typ Einschränkung auf enum 
             if (typeof elmValue != "undefined") { // value muss vorhanden sein
-                XSD.addEnum(baseTypeName, elmValue);
+                baseType.addEnum(elmValue);
             }
             checkChildren = false;
             break;
@@ -259,7 +262,7 @@ function checkElement(elm, baseTypeName) {
             // children: annotation(0,1),group|all|choice|sequence(0,1),attribute|attributeGroup(0,-1),anyAttribute(0,1)
 
             if (elmBase) { // base muss vorhanden sein
-                XSD.setType(baseTypeName, {base: elmBase});
+                baseType.base = elmBase;
             }
             checkChildren = true;
             break;
@@ -273,7 +276,8 @@ function checkElement(elm, baseTypeName) {
             break;
         case "fractionDigits":
             if (elmValue) { // muss vorhanden sein
-                XSD.setType(baseTypeName, {decimals: parseInt(elmValue)});
+                baseType.decimals = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {decimals: parseInt(elmValue)});
             }
             checkChildren = false;
             break;
@@ -283,13 +287,22 @@ function checkElement(elm, baseTypeName) {
             // attribute: id, name, ref, maxOccurs, minOccurs, ...any
             // children: annotation(0,1), all|choice|sequence(0,1)
 
+            // Wenn Name dann neue Gruppe(Type) Erstellen
             if (elmName) {
-                // neue Gruppe anlegen
-                newTypeName = XSD.addType(elmName, {min, max}).name;
+                newType = new DataType(elmName, "group");
+                newProp = undefined; // WICHTIG! Auf "undefined" setzen da der newType noch keine Properties hat.
+                XSD.types.set(elmName, newType);
             } else if (elmRef) {
-                // Basis setzen
-                XSD.setType(baseTypeName, {base: elmRef});
+                // Neues Property zur Liste setzen
+                newProp =  new PropItem(elmRef, elmRef, min, max, elmDefault, elmFixed, chois);
+                baseType.props.set(newProp.name, newProp);
+            } else {
+                // sollte nicht vorkommen
+                newType = new DataType(baseType.name + "_" + (baseProp?.name || getGSID()), "group");
+                newProp = undefined; // WICHTIG! Auf "undefined" setzen da der newType noch keine Properties hat.
+                XSD.types.set(newType.name, newType);
             }
+
             checkChildren = true;
             break;
         case "import":
@@ -336,37 +349,43 @@ function checkElement(elm, baseTypeName) {
         case "maxLength":
             // Setzt die MaximalLänge eines Types
             if (elmValue) {
-                XSD.setType(baseTypeName, {maxLength: parseInt(elmValue)});
+                baseType.maxLength = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {maxLength: parseInt(elmValue)});
             }
             break;
         case "minLength":
             // Setzt die MinimalLänge eines Types
             if (elmValue) {
-                XSD.setType(baseTypeName, {minLength: parseInt(elmValue)});
+                baseType.minLength = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {minLength: parseInt(elmValue)});
             }
             break;
         case "maxExclusive":
             // Setzt den Maximalwert eines Types
             if (elmValue) {
-                XSD.setType(baseTypeName, {maxExclusive: parseInt(elmValue)});
+                baseType.maxExclusive = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {maxExclusive: parseInt(elmValue)});
             }
             break;
         case "minExclusive":
             // Setzt den Minimalwert eines Types
             if (elmValue) {
-                XSD.setType(baseTypeName, {minExclusive: parseInt(elmValue)});
+                baseType.minExclusive = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {minExclusive: parseInt(elmValue)});
             }
             break;
         case "maxInclusive":
             // Setzt den Maximalwert eines Types
             if (elmValue) {
-                XSD.setType(baseTypeName, {maxInclusive: parseInt(elmValue)});
+                baseType.maxInclusive = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {maxInclusive: parseInt(elmValue)});
             }
             break;
         case "minInclusive":
             // Setzt den Minimalwert eines Types
             if (elmValue) {
-                XSD.setType(baseTypeName, {minInclusive: parseInt(elmValue)});
+                baseType.minInclusive = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {minInclusive: parseInt(elmValue)});
             }
             break;
         case "notation":
@@ -379,7 +398,8 @@ function checkElement(elm, baseTypeName) {
         case "pattern":
             // Setzt eine Regular Expression für den Typ
             if (elmValue) {
-                XSD.setType(baseTypeName, {pattern: elmValue});
+                baseType.pattern = elmValue;
+                //XSD.setType(baseTypeName, {pattern: elmValue});
             }
             break;
         case "redefine":
@@ -395,7 +415,8 @@ function checkElement(elm, baseTypeName) {
             // attribute: id(0,1), base(1,1), ...any(0,-1)
             // children: ... ist je nach Parent unterschiedlich
             if (elmBase) {
-                XSD.setType(baseTypeName, {base: elmBase});
+                baseType.base = elmBase;
+                //XSD.setType(baseTypeName, {base: elmBase});
             }
             checkChildren = true;
             break;
@@ -436,18 +457,27 @@ function checkElement(elm, baseTypeName) {
             // Wenn Attribute "name" - darf nur vorhanden sein wenn "simpleType" ein Kind von "schema" ist
             if (elmName) {
                 // Ist Kind vom Schema - Name ist erforderlich
-                // Typ Registrieren
-                newTypeName = XSD.addType(elmName).name;
+                newType = new DataType(elmName);
+                newProp = undefined;
+                XSD.types.set(newType.name, newType);
                 // kein "min", "max"
             } else {
                 // ist Kind von Spalte oder "union" - Name darf nicht angegeben werden
                 // ändert baseType
                 
-                // wenn Elternelement "union" muss SimpleType registriert werden
+                newType = new DataType(baseType.name + "_" + (baseProp?.name || getGSID()));
+                newProp = undefined;
+                XSD.types.set(newType.name, newType);
+
+                // wenn Elternelement "union" muss SimpleType in einer Liste hinzugefügt werden
                 if(elm.parentElement?.localName == "union") {
-                    newTypeName = XSD.addType().name;
-                    // TypName hinzufügen
-                    XSD.addTypeName(baseTypeName, newTypeName);
+                    if (Array.isArray(baseType.base)) {
+                        baseType.base.push(newType.name);
+                    } else {
+                        baseType.base = [newType.name];
+                    }
+                } else if (baseProp) {
+                    baseProp.base = newType.name;
                 }
             }
 
@@ -457,7 +487,8 @@ function checkElement(elm, baseTypeName) {
         case "totalDigits":
             // Setzt die Anzahl Zeichen/Stellen
             if (elmValue) {
-                XSD.setType(baseTypeName, {length: parseInt(elmValue)});
+                baseType.length = parseInt(elmValue);
+                //XSD.setType(baseTypeName, {length: parseInt(elmValue)});
             }
             break;
         case "union":
@@ -469,9 +500,11 @@ function checkElement(elm, baseTypeName) {
             // children: annotation(0,1), simpleType(0,-1)
             let memberTypes = elm.getAttribute("memberTypes");
             if (memberTypes) {
-                XSD.addTypeName(baseTypeName, memberTypes.split(" "), true);
+                baseType.base = memberTypes.split(" ");
+                //XSD.addTypeName(baseTypeName, memberTypes.split(" "), true);
             } else {
-                XSD.addTypeName(baseTypeName, [], true);
+                baseType.base = [];
+                //XSD.addTypeName(baseTypeName, [], true);
             }
             checkChildren = true;
             break;
@@ -497,24 +530,33 @@ function checkElement(elm, baseTypeName) {
         const children = [...elm.children];
         for (let i = 0; i < children.length; i++) {
             const elm = children[i];
-            checkElement(elm, newTypeName);
+            checkElement(elm, newType, newProp, chois);
         }
 
         // Nach dem Prüfen von Kindelementen
         switch (afterCheckChildren) {
             case "unique":
                 if (elmName && localData.objPath && localData.field) {
-                    XSD.addUnique(baseTypeName, elmName, localData.objPath, localData.field, localData.info);
+                    if (Array.isArray(localData.field)) {
+                        let fieldList = [];
+                        for (let i = 0; i < localData.field.length; i++) {
+                            fieldList.push(localData.objPath + "." + localData.field);
+                        }
+                        baseType.unique.set(elmName, fieldList);
+                    } else {
+                        baseType.unique.set(elmName, [localData.objPath + "." + localData.field]);
+                    }
+                    //XSD.addUnique(baseTypeName, elmName, localData.objPath, localData.field, localData.info);
                 }
                 break;
             case "key":
                 if (elmName && localData.objPath && localData.field) {
-                    XSD.addId(baseTypeName, elmName, localData.objPath, localData.field);
+                    //XSD.addId(baseTypeName, elmName, localData.objPath, localData.field);
                 }
                 break;
             case "keyref":
                 if (elmName && localData.objPath && localData.field && localData.refer) {
-                    XSD.addRefId(baseTypeName, elmName, localData.objPath, localData.field, localData.refer, localData.info);
+                    //XSD.addRefId(baseTypeName, elmName, localData.objPath, localData.field, localData.refer, localData.info);
                 }
                 break;
         
@@ -548,10 +590,14 @@ export function parseXSD(xsdString) {
         XSD.attributes.set(attributes[i].name, attributes[i].value);
     }
 
+    // Schema Typ
+    const schemaTyp = new DataType("schema", "object");
+    XSD.types.set(schemaTyp.name, schemaTyp);
+
     // Alle Kindelemente von Schema durchgehen
     const schemaChild = [...schema.children];
     for (let i = 0; i < schemaChild.length; i++) {
         const elm = schemaChild[i];
-        checkElement(elm, "schema");
+        checkElement(elm, schemaTyp);
     }
 }

@@ -139,7 +139,7 @@ export class PropItem {
     /**
      * Erzeugt eine Property oder ein Atribute
      * @param {string} name - Name der Property(Spalte)
-     * @param {string|Array<string>} base - Basistyp(en) der Property(Spalte)
+     * @param {string|Array<string>} [base] - Basistyp(en) der Property(Spalte)
      * @param {number} [min] - Optional Minimales Vorkommen. Default = 1.
      * @param {number} [max] - Optional Maximales Vorkommen. Default = 1. Unendlich = -1.
      * @param {any} [defaultValue] - Optional Default Wert
@@ -170,7 +170,7 @@ export class DataType {
     /** @type {string} Name des Datentypes */
     name;
     
-    /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. Defaults: "string"|"number"|"boolean"|"object"|"enum"|"GSID"|string */
+    /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. Defaults: "string"|"number"|"boolean"|"object"|"enum"|"group"|"GSID"|string */
     base = "string";
     
     ///** @type {string|Array<string>} Typ der Eigenschaft oder Liste von TypNamen - default "string" */
@@ -180,6 +180,9 @@ export class DataType {
     
     /** @type {Array<string>} Liste mit Beschreibungstexten */
     info = [];
+
+    /** @type {Array<string>} Liste mit APP Beschreibungstexten */
+    appinfo = [];
 
     // --- String Eigenschaften ---
     /** @type {number|undefined} exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?) */
@@ -292,10 +295,26 @@ export class Schema {
         if (!dataType) {
             dataType = new DataType(typeName, "object");
             this.types.set(typeName, dataType);
-        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
-            dataType.base = "object";
-        }
+        } 
         dataType.props.set(propertyName, propItem);
+        return dataType;
+    }
+
+
+    /**
+     * Registriert Einstellungen für weitere Properties.  
+     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
+     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
+     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
+     * @returns {DataType} Objekt DatenTyp
+     */
+    setMoreProperty(typeName, propItem) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, "object");
+            this.types.set(typeName, dataType);
+        } 
+        dataType.moreProps = propItem;
         return dataType;
     }
 
@@ -313,13 +332,45 @@ export class Schema {
         if (!dataType) {
             dataType = new DataType(typeName, "object");
             this.types.set(typeName, dataType);
-        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
-            dataType.base = "object";
-        }
+        } 
         dataType.attributes.set(attributeName, propItem);
         return dataType;
     }
 
+
+    /**
+     * Registriert eine neue Attribute für einen Typ.  
+     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
+     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
+     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
+     * @returns {DataType} Objekt DatenTyp
+     */
+    setMoreAttribute(typeName, propItem) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, "object");
+            this.types.set(typeName, dataType);
+        } 
+        dataType.moreAttributes = propItem;
+        return dataType;
+    }
+
+
+    /**
+     * Setzt einen neuen BasisTyp bei einem Bestehenden Typ
+     * @param {string} typeName - Name des Types
+     * @param {string} baseTypeName - Neuer BasisTyp Name
+     * @returns {DataType} Veränderten DatenTyp
+     */
+    setBaseType(typeName, baseTypeName) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName, baseTypeName);
+            this.types.set(typeName, dataType);
+        } 
+        dataType.base = baseTypeName;
+        return dataType;
+    }
 
     /**
      * Fügt ein neues Enum Item zu einem EnumTyp hinzu
@@ -350,9 +401,7 @@ export class Schema {
         if (!dataType) {
             dataType = new DataType(typeName, "object");
             this.types.set(typeName, dataType);
-        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
-            dataType.base = "object";
-        }
+        } 
         dataType.unique.set(uniqueName, fieldList);
     }
 
@@ -368,12 +417,49 @@ export class Schema {
         if (!dataType) {
             dataType = new DataType(typeName, "object");
             this.types.set(typeName, dataType);
-        } else if (Array.isArray(dataType.base) || dataType.base == "string") {
-            dataType.base = "object";
-        }
+        } 
         dataType.ref.set(refName, refItem);
     }
 
+
+    /**
+     * Setzt einen Infotext für einen Typ oder das "schema"
+     * @param {string} typeName - Name des Types. "schema" für Das Schema selbst.
+     * @param {string} infoText - Infotext für den Typ
+     */
+    addInfo(typeName, infoText) {
+        if (typeName == "schema") {
+            this.info.push(infoText);
+        } else {
+            let dataType = this.types.get(typeName);
+            if (!dataType) {
+                dataType = new DataType(typeName);
+                this.types.set(typeName, dataType);
+            }
+            dataType.info.push(infoText);
+        }
+    }
+
+
+    /**
+     * Setzt einen InfoText für eine Property
+     * @param {string} typeName - Name des Types
+     * @param {string} propName - name der Property
+     * @param {string} infoText - Infotext für die Property
+     */
+    addPropInfo(typeName, propName, infoText) {
+        let dataType = this.types.get(typeName);
+        if (!dataType) {
+            dataType = new DataType(typeName);
+            this.types.set(typeName, dataType);
+        }
+        let propItem = dataType.props.get(propName);
+        if (!propItem) {
+            propItem = new PropItem(propName);
+            dataType.props.set(propName, propItem);
+        }
+        propItem.info.push(infoText);
+    }
 
     /**
      * Erzeugt ein neues Schema
@@ -406,25 +492,25 @@ function getInfoHTML(infos) {
 
 /**
  * Lieftert einen HTML-String als Name, (min,max), type, info
- * @param {DataType} type - Typ der Datenzeile
+ * @param {PropItem} item - Typ der Datenzeile
  * @returns {string} HTMLString
  */
-function getNameTypeHTML(type) {
+function getNameTypeHTML(item) {
     let html = "";
-    if (!(type instanceof DataType)) { return html; }
+    if (!(item instanceof PropItem)) { return html; }
 
-    let typeType = type.type;
-    if (Array.isArray(type.type)) {
+    let typeType = item.base;
+    if (Array.isArray(item.base)) {
         typeType = "";
-        for (let i = 0; i < type.type.length; i++) {
+        for (let i = 0; i < item.base.length; i++) {
             if (i > 0) { typeType += ","; }
-            typeType += type.type[i];
+            typeType += item.base[i];
         }
     }
 
     // Zeile zusammenbauen
     //html = `<li>${type.name}&nbsp;(${type.min},${type.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(type.info)}</li>`;
-    html = `${type.name}&nbsp;(${type.min},${type.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(type.info)}`;
+    html = `${item.name}&nbsp;(${item.min},${item.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(item.info)}`;
     return html;
 }
 
@@ -449,84 +535,64 @@ function getTypeHTML(schema, typeName) {
     }
 
     // Typnamen prüfen
-    if (["string", "number", "boolean", "object"].indexOf(typeName) >= 0) {
+    if (["string", "number", "boolean", "object", "enum", "GSID"].indexOf(typeName) >= 0) {
         return "";
     }
 
-    const type = schema.getType(typeName);
+    const type = schema.types.get(typeName);
     if (!type) {
         html += `<p>Type ${typeName} not found</p>`;
         return "";
     }
 
-    // Art lesen
-    // "type"|"attribute"|"col"|"list"
-    switch (type.art) {
-        case "type":
-
-            break;
-        case "attribute":
-
-            break;
-        case "col":
-            // base
-            // art
-            html1 = getNameTypeHTML(type);
-            html2 = getTypeHTML(schema, type.type);
-            if (html2) {
-                html += `<details><summary><p icon-r>${html1}</p></summary>${html2}</details>`;
+    // Attribute
+    if (type.attributes.size > 0) {
+        const attrNames = [...type.attributes.keys()];
+        html += "<li><b>Attributes</b>(" + attrNames.length + ")";
+        html += "<ul>";
+        for (let i = 0; i < attrNames.length; i++) {
+            let typeAttr = type.attributes.get(attrNames[i]);
+            if (typeAttr) {
+                if (attrNames[i] != typeAttr.name) {
+                    html += attrNames[i] + "&nbsp;";
+                }
+                html += getNameTypeHTML(typeAttr);
             } else {
-                html += html1;
+                html += `<li>${attrNames[i]}</li>`;
             }
-            break;
-        case "list":
-            // base
-            // art
-            //html += getNameTypeHTML(type);
-            // attribute
-            if (type.attributes.length > 0) {
-                html += "<li><b>Attributes</b>(" + type.attributes.length + ")";
-                html += "<ul>";
-                for (let i = 0; i < type.attributes.length; i++) {
-                    let typeAttr = schema.getType(type.attributes[i]);
-                    if (typeAttr) {
-                        html += getNameTypeHTML(typeAttr);
-                    } else {
-                        html += `<li>${type.attributes[i]}</li>`;
-                    }
-                }
-                html += "</ul></li>";
-            }
-            // moreattribute
-            // cols
-            if (type.cols.length > 0) {
-                html += "<li icon-r><b>Cols</b>(" + type.cols.length + ")";
-                html += "<ul>";
-                for (let i = 0; i < type.cols.length; i++) {
-                    let typeCol = schema.getType(type.cols[i]);
-                    if (typeCol) {
-                        html1 = getNameTypeHTML(typeCol);
-                        html2 = getTypeHTML(schema, typeCol.type);
-                        if (html2) {
-                            html += `<details><summary><p icon-r>${html1}</p></summary>${html2}</details>`;
-                        } else {
-                            html += `<li>${html1}</li>`;
-                        }
-                    } else {
-                        html += `<li>${type.cols[i]}</li>`;
-                    }
-                }
-                html += "</ul></li>";
-            }
-            // morecols
-            break;
+        }
 
-        default:
-            break;
+        if (type.moreAttributes) {
+            html += `<li>...any&nbsp;${getNameTypeHTML(type.moreAttributes)}</li>`;
+        }
+        html += "</ul></li>";
+    }
+
+    // Properties
+    if (type.props.size > 0) {
+        const propNames = [...type.props.keys()];
+        html += "<li icon-r><b>Properties</b>(" + propNames.length + ")";
+        html += "<ul>";
+        for (let i = 0; i < propNames.length; i++) {
+            let typeProp = type.attributes.get(propNames[i]);
+            if (typeProp) {
+                if (propNames[i] != typeProp.name) {
+                    html += propNames[i] + "&nbsp;";
+                }
+                html += getNameTypeHTML(typeProp);
+            } else {
+                html += `<li>${propNames[i]}</li>`;
+            }
+        }
+
+        if (type.moreProps) {
+            html += `<li>...any&nbsp;${getNameTypeHTML(type.moreProps)}</li>`;
+        }
+        html += "</ul></li>";
     }
 
     // Typ.Typ prüfen
-    //html += getTypeHTML(schema, type.type);
+    html += getTypeHTML(schema, type.base);
 
     return html + "</ul>";
 }
