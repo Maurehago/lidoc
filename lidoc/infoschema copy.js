@@ -6,9 +6,6 @@
 // Basis Typen: string, number, boolean, object, enum
 // Datum Typen: date, time, datetime, range
 
-export * from "./infodata.js";
-import { DataList, getGSID } from "./infodata.js";
-
 /**
  * Optionen für DataType
  * @typedef {object} DataTypeOptions
@@ -45,82 +42,109 @@ import { DataList, getGSID } from "./infodata.js";
 /** @type {Map<string,Schema>} */
 const SchemaList = new Map();
 
+/**
+ * Gibt eine neue GlobalShortId zurück
+ * @param {boolean} [large] - "true" Wenn in langer Form
+ * @returns {string}
+ */
+export function getGSID(large) {
+    if (large) {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    } else {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint16Array(1))[0].toString(36);
+    } 
+}
 
 
 // ==============================
 //   Klassen
 // -----------
 
-class RefItem {
-    GSID = getGSID();
-
-    /** @type {string} Name/GSID des DatenTypes */
-    dataType_name = "";
-
-    /** @type {string} */
-    name = "";
-    
-    /** @type {Array<string>} Selector für Eigenschaften vom Aktuellen objekt */
-    props = [];
-    
-    /** @type {string} Pfad des Fremd Objektes */
-    refObj = "";
-    
-    /** @type {Array<string>} Selector für Eigenschaften vom Referenzierten objekt */
-    refProps = [];
-    
-    /** @type {"NO"|"UPDATE"|"NULL"|"DEFAULT"} Regel für Update */
-    onUpdate = "UPDATE";
-    
-    /** @type {"NO"|"DELETE"|"NULL"|"DEFAULT"} Regel für Löschen */
-    onDelete = "DELETE";
-    
-    /** @type {string} */
-    info = "";
-}
-
-
-
-class UniqueItem {
-    GSID = getGSID();
-
-    /** @type {string} Name/GSID des DatenTypes */
-    dataType_name = "";
-
-    /** @type {string} */
-    name = "";
-    
-    /** @type {Array<string>} Feigenschaftsnamen(Properties) die zusammen eine Eindeutigkeit ergeben */
-    props = [];
-    
-    /** @type {string} */
-    info = "";
-}
-
-
-class EnumItem {
-    GSID = getGSID();
-    /** @type {string} Datentyp Name/GSID */
-    dataType_name = "";
-
+export class EnumItem {
     /** @type {string} */
     name = "";
     /** @type {string|number} */
-    value = "";
+    value;
     /** @type {string} */
     info = "";
+
+    /**
+     * Enum Eintrag
+     * @param {string} name - Name des Enums
+     * @param {string|number} [value] - Wert des Enums
+     * @param {string} [info] - Infotext
+     */
+    constructor(name, value, info) {
+        this.name = name;
+        this.value = value == undefined ? name : value;
+        this.info = info || "";
+    }
 }
 
 
-
-class PropItem {
-    GSID = getGSID();
-    
-    /** @type {string} Name/GSID des Datentyp-Objektes */
-    dataType_name = "";
-    
-    /** @type {string} Name der Eigenschaft/Attribute bei Attribute ein "@" vor dem Namen */
+export class RefItem {
+    /** @type {string} */
     name = "";
+
+    /** @type {Array<string>} Selector für Eigenschaften vom Aktuellen objekt */
+    props = [];
+
+    /** @type {string} Name des Fremd Objektes */
+    refObj = "";
+
+    /** @type {Array<string>} Selector für Eigenschaften vom Referenzierten objekt */
+    refProps = [];
+
+    /** @type {"NO"|"UPDATE"|"NULL"|"DEFAULT"} Regel für Update */
+    onUpdate = "UPDATE";
+
+    /** @type {"NO"|"DELETE"|"NULL"|"DEFAULT"} Regel für Löschen */
+    onDelete = "DELETE";
+
+    /** @type {string} */
+    info = "";
+
+    /**
+     * ID Item Eintrag
+     * @param {string} name - Name der ID
+     * @param {Array<string>} props - Property Namen zum Verknüpfen vom aktuellen Objekt
+     * @param {string} refObj - Name/Type des Fremd Opbjektes
+     * @param {Array<string>} refProps - Property Namen zum Verknüpfen vom fremden Objekt
+     * @param {"NO"|"UPDATE"|"NULL"|"DEFAULT"} [onUpdate] - Optional Beschreibung zur ID
+     * @param {"NO"|"DELETE"|"NULL"|"DEFAULT"} [onDelete] - Optional Beschreibung zur ID
+     * @param {string} [info] - Optional Beschreibung zur ID
+     */
+    constructor(name, props, refObj, refProps, onUpdate, onDelete, info) {
+        this.name = name;
+        this.props = props;
+        this.refObj = refObj;
+        this.refProps = refProps;
+        this.onUpdate = onUpdate || "UPDATE";
+        this.onDelete = onDelete || "DELETE";
+        this.info = info || "";
+    }
+}
+
+
+export class PropItem {
+    #schemaName = "";
+    /** @type {string} Name des Schemas */
+    get schemaName() {
+        return this.#schemaName;
+    }
+    #parentType = "";
+    /** @type {string} Name des Eltern-Objekt-Type */
+    get parentType() {
+        return this.#parentType;
+    }
+
+    /** @type {string} Name der Eigenschaft/Attribute */
+    #name = "";
+    get name() {
+        return this.#name;
+    }
 
     /** @type {string|Array<string>} TypName oder Liste von TypNamen - default "string" */
     itemType = "string";
@@ -140,19 +164,46 @@ class PropItem {
     
     /** @type {Array<string>} Liste mit Beschreibungstexten */
     info = [];
+
+    /**
+     * Erzeugt eine Property oder ein Atribute
+     * @param {string} schemaName - Name des Schemas
+     * @param {string} parentType - Name des Objekt-Types zu dem diese property gehört 
+     * @param {string} name - Name der Property(Spalte)
+     * @param {string|Array<string>} [itemType] - Name vom Typ oder Liste von Typnamen. Default: "string"
+     * @param {PropItemOptions} [options] - Optional Optionen für das PropItem.
+     */
+    constructor(schemaName, parentType, name, itemType, options) {
+        Object.assign(this, options);
+        this.#schemaName = schemaName;
+        this.#parentType = parentType;
+        this.#name = name;
+        this.itemType = itemType || "string";
+    }
 }
 
 
-// DataType:
-class DataType {
-    /** @type {string} Name des Datentypes */
-    name = "";
 
-    /** @type {string} Pfad innerhalb des Schemas */
-    schemaPath = "";
+// DataType:
+export class DataType {
+    
+    /** @type {string} Name des Schemas */
+    #schemaName = "";
+    get schemaName() {
+        return this.#schemaName;
+    }
+    
+    /** @type {string} Name des Datentypes */
+    #name;
+    get name() {
+        return this.#name;
+    }
     
     /** @type {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"} BasisTyp - default "string" */
-    art = "string";
+    #art = "string";
+    get art() {
+        return this.#art;
+    }
 
     /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. */
     base = "";
@@ -190,19 +241,173 @@ class DataType {
     maxInclusive;
     
     // --- Enum Eigenschaft ---
-    // Enum Items aus der Enum Item Liste mit Datentyp GSID
+    /** @type {Map<string,EnumItem>|undefined} Enum Auswahl Items */
+    #enum;
+    /** @type {PropItem|undefined} TypName oder Liste von Typnamen für zusätzliche erlaubte enum werte */
+    #moreEnum;
+
 
     // --- Objekt Eigenschaften ---
-    // Properties aus der Property Liste mit GSID
+    /** @type {Map<string,PropItem>} Liste mit Attribute*/
+    #attributes = new Map();
+    /** @type {PropItem|undefined} weitere Attribute erlaubt */
+    #moreAttributes;
+
+    /** @type {Map<string,PropItem>} Liste mit Property */
+    #props = new Map();
+    /** @type {PropItem|undefined} Typ der bestimmt ob weitere Properties erlaubt sind */
+    #moreProps;
 
     /** @type {string|Array<string>} Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben */
     id = "GSID";
     
-    //--- Referenzen aus der refID Liste mit GSID */
-    
-    //--- Unique aus der uniqueID Liste mit GSID */
-}
+    /** @type {Map<string,RefItem>} Liste mit Referenzen zu Indexes */
+    #ref = new Map();
 
+    /** @type {Map<string,Array<string>>} Map mit Listen von PropertyNamen die zusammen eine Eindeutigkeit ergeben müssen  */
+    #unique = new Map();
+
+    /**
+     * Fügt einen neuen Enum Eintrag im DataTyp
+     * @param {string} name - Name des Enum-Eintrag
+     * @param {string|number} [value] - Wert des Enum-Eintrag
+     * @param {string} [info] - Infotext für den Enum Eintrag
+     */
+    addEnum(name, value, info) {
+        // prüfen ob vorhanden
+        if (!this.#enum) {
+            // neue Enum Map anlegen
+            this.#enum = new Map();
+        }
+
+        let item = new EnumItem(name, value, info);
+        this.#enum.set(name, item);
+        this.#art = "enum";
+    }
+
+    /**
+     * Fügt eine Eigenschaft für zusätzliche Enums hinzu. Dieser DatenTyp wird somit zu "enum"
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} dataTypeName - Name des Datentypes der Eigenschaft
+     * @param {PropItemOptions} options - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Angelegte Eigenschaft
+     */
+    setMoreEnum(name, dataTypeName, options) {
+        const prop = new PropItem(this.#schemaName, this.#name, name, dataTypeName, options);
+        this.#moreEnum = prop;
+        this.#art = "enum";
+        return prop;
+    }
+
+
+    // todo: getEnum (as Object?)
+
+    /**
+     * Fügt eine neue Eigenschaft zu dem Datentyp hinzu. Dieser DatenTyp wird somit zu "object"
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} dataTypeName - Name des Datentypes der Eigenschaft
+     * @param {PropItemOptions} options - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Angelegte Eigenschaft
+     */
+    addProperty(name, dataTypeName, options) {
+        const prop = new PropItem(this.#schemaName, this.#name, name, dataTypeName, options);
+        this.#props.set(name, prop);
+        this.#art = "object";
+        return prop;
+    }
+
+    /**
+     * Fügt eine Eigenschaft für zusätzliche Eigenschaften hinzu. Dieser DatenTyp wird somit zu "object"
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} dataTypeName - Name des Datentypes der Eigenschaft
+     * @param {PropItemOptions} options - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Angelegte Eigenschaft
+     */
+    addMoreProperty(name, dataTypeName, options) {
+        const prop = new PropItem(this.#schemaName, this.#name, name, dataTypeName, options);
+        this.#moreProps = prop;
+        this.#art = "object";
+        return prop;
+    }
+
+    /**
+     * Fügt eine neue Auswahl-Eigenschaft zu dem Datentyp hinzu. Dieser DatenTyp wird somit zu "choice"
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} dataTypeName - Name des Datentypes der Eigenschaft
+     * @param {PropItemOptions} options - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Angelegte Eigenschaft
+     */
+    addChoice(name, dataTypeName, options) {
+        const prop = new PropItem(this.#schemaName, this.#name, name, dataTypeName, options);
+        this.#props.set(name, prop);
+        this.#art = "choice";
+        return prop;
+    }
+
+    /**
+     * Fügt eine neue Gruppen-Eigenschaft zu dem Datentyp hinzu. Dieser DatenTyp wird somit zu "group"
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} dataTypeName - Name des Datentypes der Eigenschaft
+     * @param {PropItemOptions} options - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Angelegte Eigenschaft
+     */
+    addGroupItem(name, dataTypeName, options) {
+        const prop = new PropItem(this.#schemaName, this.#name, name, dataTypeName, options);
+        this.#props.set(name, prop);
+        this.#art = "group";
+        return prop;
+    }
+
+    /**
+     * Fügt eine neues Attribute zu dem Datentyp hinzu. Dieser DatenTyp wird somit zu "object"
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} dataTypeName - Name des Datentypes der Eigenschaft
+     * @param {PropItemOptions} options - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Angelegtes Attribute
+     */
+    addAttribute(name, dataTypeName, options) {
+        const attr = new PropItem(this.#schemaName, this.#name, name, dataTypeName, options);
+        this.#attributes.set(name, attr);
+        this.#art = "object";
+        return attr;
+    }
+
+    /**
+     * Fügt eine Eigenschaft für zusätzliche Attribute hinzu. Dieser DatenTyp wird somit zu "object"
+     * @param {string} name - Name der Eigenschaft
+     * @param {string} dataTypeName - Name des Datentypes der Eigenschaft
+     * @param {PropItemOptions} options - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Angelegte Eigenschaft
+     */
+    addMoreAttribute(name, dataTypeName, options) {
+        const prop = new PropItem(this.#schemaName, this.#name, name, dataTypeName, options);
+        this.#moreAttributes = prop;
+        this.#art = "object";
+        return prop;
+    }
+
+    // todo: Referenzen (set/get)
+
+    // todo: Uniques (set/get)
+
+    /**
+     * Erstellt einen DatenTyp
+     * @param {string} schemaName - Name des Schemas zu dem der Typ gehört
+     * @param {string} name - Name des Types
+     * @param {"string"|"number"|"boolean"|"object"|"enum"|"group"} [art] - Optional - Art des Types - default: "string"
+     * @param {Object<string,any>} [options] - Optional Eigenschaften des Types
+     */
+    constructor(schemaName, name, art, options) {
+        Object.assign(this, options);
+        this.#schemaName = schemaName;
+        this.#name = name; // Name nach Options setzen falls in Optionen ein anderer Name drinnen ist
+        this.#art = art || "string";
+
+        // am Schema registrieren
+        const schema = SchemaList.get(schemaName) || new Schema(schemaName);
+        schema.types.set(name, this);
+    }
+}
 
 
 // Schema Klasse
@@ -225,37 +430,8 @@ export class Schema {
     /** @type {Map<string,DataType>} Schema Typen */
     types = new Map();
 
-    /** Schema Globale DatenTypen */
-    #dataTypeList = new DataList(DataType, "name");
-
-    /** Schema Globale Propertys */
-    #propItemList = new DataList(PropItem);
-
-    /** Schema Globale Enums */
-    #enumItemList = new DataList(EnumItem);
-
-    /** Schema Globale Referenzen */
-    #refItemList = new DataList(RefItem);
-
-    /** Unique Liste */
-    #uniqueItemList = new DataList(UniqueItem);
-
-
-    /**
-     * Fügt ein neues Datentyp Objekt hinzu
-     * @param {string} typeName - Name des DatenTyps
-     * @param {Object<string,any>} options - Optional Optionen für den Datentyp
-     * @returns {DataType} DatenTyp Objekt
-     */
-    addDataType(typeName, options) {
-        const dataType = new DataType();
-        Object.assign(dataType, options);
-        dataType.name = typeName;
-        this.#dataTypeList.set(dataType);
-        return dataType;
-    } 
-
-
+    /** @type {Map<string,PropItem>} Schema PropItems (Schema globale Properties)*/
+    propItems = new Map();
 
     /**
      * Registriert eine neue Propperty für einen Typ.  
