@@ -7,7 +7,7 @@
 // Datum Typen: date, time, datetime, range
 
 export * from "./infodata.js";
-import { DataList, getGSID } from "./infodata.js";
+import { DataMap, getGSID } from "./infodata.js";
 
 /**
  * Optionen für DataType
@@ -51,6 +51,26 @@ const SchemaList = new Map();
 //   Klassen
 // -----------
 
+class InfoText {
+    GSID = getGSID();
+    
+    /** @type {string} Zuordnung Referenz */
+    refID = "";
+    
+    /** @type {"schema"|"DataType"|"PropItem"|"EnumItem"|"UniqueItem"|"RefItem"} Zuordnung Referenz Typ */
+    refType = "DataType";
+
+    /** @type {string} Sprache */
+    lang = "de";
+    
+    /** @type {string} Datum(ISO) */
+    date = new Date().toISOString().substring(0,10);
+    
+    /** @type {string} InfoText */
+    text = "";
+}
+
+
 class RefItem {
     GSID = getGSID();
 
@@ -74,9 +94,6 @@ class RefItem {
     
     /** @type {"NO"|"DELETE"|"NULL"|"DEFAULT"} Regel für Löschen */
     onDelete = "DELETE";
-    
-    /** @type {string} */
-    info = "";
 }
 
 
@@ -92,9 +109,6 @@ class UniqueItem {
     
     /** @type {Array<string>} Feigenschaftsnamen(Properties) die zusammen eine Eindeutigkeit ergeben */
     props = [];
-    
-    /** @type {string} */
-    info = "";
 }
 
 
@@ -107,8 +121,6 @@ class EnumItem {
     name = "";
     /** @type {string|number} */
     value = "";
-    /** @type {string} */
-    info = "";
 }
 
 
@@ -137,9 +149,6 @@ class PropItem {
     
     /** @type {string|undefined} Bedingung, wann die Eigenschaft/Attribute vorkommt. Wenn nicht angegegeben dann immer verwenden. */
     use = "";
-    
-    /** @type {Array<string>} Liste mit Beschreibungstexten */
-    info = [];
 }
 
 
@@ -213,11 +222,11 @@ export class Schema {
         return this.#name;
     }
 
-    /** @type {Array<string>}  Informationen zum Schema*/
-    info = [];
+    /** @type {Map<string,InfoText>}  Informationen zum Schema*/
+    #infoList = new DataMap(InfoText);
 
-    /** @type {Array<string>}  APP Informationen zum Schema*/
-    appinfo = [];
+    /** @type {Map<string,InfoText>} APP Informationen zum Schema*/
+    #appinfoList = new DataMap(InfoText);
 
     /** @type {Map<string,string>} Schema Attribute */
     attributes = new Map(); // Sind Daten und keine Typen!
@@ -225,149 +234,108 @@ export class Schema {
     /** @type {Map<string,DataType>} Schema Typen */
     types = new Map();
 
-    /** Schema Globale DatenTypen */
-    #dataTypeList = new DataList(DataType, "name");
+    /** @type {Map<string,DataType>} Schema Globale DatenTypen */
+    #dataTypeList = new DataMap(DataType, "name");
 
     /** Schema Globale Propertys */
-    #propItemList = new DataList(PropItem);
+    #propItemList = new DataMap(PropItem);
 
     /** Schema Globale Enums */
-    #enumItemList = new DataList(EnumItem);
+    #enumItemList = new DataMap(EnumItem);
 
     /** Schema Globale Referenzen */
-    #refItemList = new DataList(RefItem);
+    #refItemList = new DataMap(RefItem);
 
     /** Unique Liste */
-    #uniqueItemList = new DataList(UniqueItem);
+    #uniqueItemList = new DataMap(UniqueItem);
 
 
     /**
      * Fügt ein neues Datentyp Objekt hinzu
      * @param {string} typeName - Name des DatenTyps
-     * @param {Object<string,any>} options - Optional Optionen für den Datentyp
+     * @param {DataTypeOptions} [options] - Optional Optionen für den Datentyp
      * @returns {DataType} DatenTyp Objekt
      */
     addDataType(typeName, options) {
         const dataType = new DataType();
         Object.assign(dataType, options);
         dataType.name = typeName;
-        this.#dataTypeList.set(dataType);
+        this.#dataTypeList.set(typeName, dataType);
         return dataType;
     } 
 
 
-
     /**
-     * Registriert eine neue Propperty für einen Typ.  
-     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
-     * @param {string} propertyName - Name der Spalte 
-     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
-     * @returns {DataType} Objekt DatenTyp
+     * Fügt eine neue Eigenschaft/Atribute zu einem Datentyp hinzu
+     * @param {string} typeName - Name des DatenTyps
+     * @param {string} propertyName - Name der Eigenschaft
+     * @param {PropItemOptions} [options] - Optional Optionen für die Eigenschaft
+     * @returns {PropItem} Eigenschaft Objekt
      */
-    addProperty(typeName, propertyName, propItem) {
-        let dataType = this.types.get(typeName);
+    addProperty(typeName, propertyName, options) {
+        let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = new DataType(typeName, "object");
-            this.types.set(typeName, dataType);
+            dataType = this.addDataType(typeName);
         }
-        dataType.type = "object";
-        dataType.props.set(propertyName, propItem);
-        return dataType;
-    }
+        dataType.art = "object";
+
+        const prop = new PropItem();
+        Object.assign(prop, options);
+        prop.name = propertyName;
+        prop.dataType_name = typeName;
+        this.#propItemList.set(propertyName, prop);
+        return prop;
+    } 
 
 
     /**
-     * Registriert Einstellungen für weitere Properties.  
-     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
-     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
-     * @returns {DataType} Objekt DatenTyp
+     * Fügt eine neues EnumItem zu einem Datentyp hinzu
+     * @param {string} typeName - Name des DatenTyps
+     * @param {string} name - Name vom EnumItem
+     * @param {string|number} [value] - Optional Wert vom Enum Item. Wenn nicht angegeben wird der Name als Wert genommen.
+     * @returns {DataType} DatenTyp Objekt
      */
-    setMoreProperty(typeName, propItem) {
-        let dataType = this.types.get(typeName);
+    addEnumItem(typeName, name, value) {
+        let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = new DataType(typeName, "object");
-            this.types.set(typeName, dataType);
-        } 
-        dataType.type = "object";
-        dataType.moreProps = propItem;
-        return dataType;
-    }
-
-
-    /**
-     * Registriert eine neue Attribute für einen Typ.  
-     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
-     * @param {string} attributeName - Name der Spalte 
-     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
-     * @returns {DataType} Objekt DatenTyp
-     */
-    addAttribute(typeName, attributeName, propItem) {
-        let dataType = this.types.get(typeName);
-        if (!dataType) {
-            dataType = new DataType(typeName, "object");
-            this.types.set(typeName, dataType);
-        } 
-        dataType.type = "object";
-        dataType.attributes.set(attributeName, propItem);
-        return dataType;
-    }
-
-
-    /**
-     * Registriert eine neue Attribute für einen Typ.  
-     * Wenn ein Typ mit dem Selben Namen existiert, so wird dieser überschrieben.  
-     * @param {string} typeName - Name der Liste in die die Spalte eingefügt wird. Bei "schema" oder "" wird nur der SpaltenTyp registriert.
-     * @param {PropItem} propItem - Optionale Einstellungen für die Spalte
-     * @returns {DataType} Objekt DatenTyp
-     */
-    setMoreAttribute(typeName, propItem) {
-        let dataType = this.types.get(typeName);
-        if (!dataType) {
-            dataType = new DataType(typeName, "object");
-            this.types.set(typeName, dataType);
-        } 
-        dataType.type = "object";
-        dataType.moreAttributes = propItem;
-        return dataType;
-    }
-
-
-    /**
-     * Setzt einen neuen BasisTyp bei einem Bestehenden Typ
-     * @param {string} typeName - Name des Types
-     * @param {string} baseTypeName - Neuer BasisTyp Name
-     * @returns {DataType} Veränderten DatenTyp
-     */
-    setBaseType(typeName, baseTypeName) {
-        let dataType = this.types.get(typeName);
-        if (!dataType) {
-            dataType = new DataType(typeName);
-            this.types.set(typeName, dataType);
-        } 
-        dataType.base = baseTypeName;
-        return dataType;
-    }
-
-    /**
-     * Fügt ein neues Enum Item zu einem EnumTyp hinzu
-     * @param {string} typeName - Name des ENUM-Types
-     * @param {string} name - EnumItem Name
-     * @param {string} [value] - Optional EnumItem Wert. Wenn nicht angegeben wird der Name auch zum Wert.
-     * @param {string} [info] - Optional Beschreibung zum EnumItem
-     */
-    addEnum(typeName, name, value, info) {
-        let dataType = this.types.get(typeName);
-        if (!dataType) {
-            dataType = new DataType(typeName, "enum");
-            this.types.set(typeName, dataType);
+            dataType = this.addDataType(typeName);
         }
-        // Enum Werte hinzufügen
-        dataType.addEnum(name, value, info);
+        dataType.art = "enum";
+
+        const item = new EnumItem();
+        item.dataType_name = typeName;
+        item.name = name;
+        item.value = value || name;
+        this.#enumItemList.set(item.GSID, item);
+        return dataType;
     }
 
+    /**
+     * Fügt einem Typ ein Referenz Item hinzu
+     * @param {string} typeName - Name des Types dem das Unique hinzugefügt wird
+     * @param {string} refName - Referenz Bezeichner
+     * @param {Array<string>} fieldList - Felder des Objektes das den Unique erzeugt
+     * @param {string} refTypeName - Referenz Typ Name
+     * @param {Array<string>} refFieldList - Felder des Referenz Types das mit den Feldern des Types verknüpft sind.
+     * @param {"NO"|"UPDATE"|"NULL"|"DEFAULT"} [onUpdate] - Optional was bei einem Update weiter gegeben wird. Default: "UPDATE"
+     * @param {"NO"|"NULL"|"DEFAULT"|"DELETE"} [onDelete] - Optional was beim Löschen weiter gegeben wird. Default: "DELETE"
+     */
+    addRefItem(typeName, refName, fieldList, refTypeName, refFieldList, onUpdate, onDelete) {
+        let dataType = this.#dataTypeList.get(typeName);
+        if (!dataType) {
+            dataType = this.addDataType(typeName);
+        }
+        dataType.art = "object";
+        const item = new RefItem();
+        item.dataType_name = typeName;
+        item.name = refName;
+        item.props = fieldList;
+        item.refObj = refTypeName;
+        item.refProps = refFieldList;
+        item.onUpdate = onUpdate || "UPDATE";
+        item.onDelete = onDelete || "DELETE";
+        this.#uniqueItemList.set(item.GSID, item);
+    }
 
     /**
      * Fügt einem Typ ein Unique Item hinzu
@@ -375,69 +343,75 @@ export class Schema {
      * @param {string} uniqueName - Unique Bezeichner
      * @param {Array<string>} fieldList - Felder des Objektes das den Unique erzeugt
      */
-    addUnique(typeName, uniqueName, fieldList) {
-        let dataType = this.types.get(typeName);
+    addUniqueItem(typeName, uniqueName, fieldList) {
+        let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = new DataType(typeName, "object");
-            this.types.set(typeName, dataType);
-        } 
-        dataType.unique.set(uniqueName, fieldList);
+            dataType = this.addDataType(typeName);
+        }
+        dataType.art = "object";
+        const item = new UniqueItem();
+        item.dataType_name = typeName;
+        item.name = uniqueName;
+        item.props = fieldList;
+        this.#uniqueItemList.set(item.GSID, item);
     }
 
 
     /**
-     * Fügt einem Datentyp ein ReferenzObjekt hinzu
+     * Setzt Optionen für einen Datentyp
      * @param {string} typeName - Name des DatenTyps
-     * @param {string} refName - Name der Referenz
-     * @param {RefItem} refItem - ReferentItem Objekt
+     * @param {DataTypeOptions} options - Optionen für den Datentyp
+     * @returns {DataType} DatenTyp Objekt
      */
-    addRef(typeName, refName, refItem) {
-        let dataType = this.types.get(typeName);
+    setDataTypeOptions(typeName, options) {
+        let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = new DataType(typeName, "object");
-            this.types.set(typeName, dataType);
-        } 
-        dataType.ref.set(refName, refItem);
+            dataType = this.addDataType(typeName);
+        }
+        Object.assign(dataType, options);
+        dataType.name = typeName;
+        return dataType;
     }
 
 
     /**
-     * Setzt einen Infotext für einen Typ oder das "schema"
-     * @param {string} typeName - Name des Types. "schema" für Das Schema selbst.
+     * Setzt einen Infotext für "schema", "DataType","PropItem","EnumItem","RefItem","UniqueItem"
+     * @param {"schema"|"DataType"|"PropItem"|"EnumItem"|"RefItem"|"UniqueItem"} refType - Name des Types. "schema" für Das Schema selbst.
+     * @param {string} refID - ID des Objektes dem der Infotext zugeordnet wird
      * @param {string} infoText - Infotext für den Typ
+     * @param {string} [lang] - Optional Sprache für den Text. Default: "de"
+     * @param {string} [date] - Optional ISO Datum für den Text. Default: aktuelles Datum
      */
-    addInfo(typeName, infoText) {
-        if (typeName == "schema") {
-            this.info.push(infoText);
-        } else {
-            let dataType = this.types.get(typeName);
-            if (!dataType) {
-                dataType = new DataType(typeName);
-                this.types.set(typeName, dataType);
-            }
-            dataType.info.push(infoText);
+    addInfo(refType, refID, infoText, lang, date) {
+        const info = new InfoText();
+        info.refType = refType;
+        info.refID = refID;
+        info.text = infoText;
+        info.lang = lang || "de";
+        if (date) {
+            info.date = date;
         }
+        this.#infoList.set(info.GSID, info);
     }
 
-
     /**
-     * Setzt einen InfoText für eine Property
-     * @param {string} typeName - Name des Types
-     * @param {string} propName - name der Property
-     * @param {string} infoText - Infotext für die Property
+     * Setzt einen APP Infotext für "schema", "DataType","PropItem","EnumItem","RefItem","UniqueItem"
+     * @param {"schema"|"DataType"|"PropItem"|"EnumItem"|"RefItem"|"UniqueItem"} refType - Name des Types. "schema" für Das Schema selbst.
+     * @param {string} refID - ID des Objektes dem der Infotext zugeordnet wird
+     * @param {string} infoText - Infotext für den Typ
+     * @param {string} [lang] - Optional Sprache für den Text. Default: "de"
+     * @param {string} [date] - Optional ISO Datum für den Text. Default: aktuelles Datum
      */
-    addPropInfo(typeName, propName, infoText) {
-        let dataType = this.types.get(typeName);
-        if (!dataType) {
-            dataType = new DataType(typeName);
-            this.types.set(typeName, dataType);
+    addAppInfo(refType, refID, infoText, lang, date) {
+        const info = new InfoText();
+        info.refType = refType;
+        info.refID = refID;
+        info.text = infoText;
+        info.lang = lang || "de";
+        if (date) {
+            info.date = date;
         }
-        let propItem = dataType.props.get(propName);
-        if (!propItem) {
-            propItem = new PropItem(propName);
-            dataType.props.set(propName, propItem);
-        }
-        propItem.info.push(infoText);
+        this.#appinfoList.set(info.GSID, info);
     }
 
     /**
