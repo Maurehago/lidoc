@@ -438,7 +438,7 @@ export class DataMap extends Map {
      * Sucht alle Objekte aus der Liste das mit dem übergebenen Objekt übereinstimmen und gibt eine ObjektListe zurück.
      * @param {Object<string,any>} quest - Wert nach dem gesucht wird 
      * @param {string} [index] - Optional Index der für die Suche verwendet wird 
-     * @returns {Array<Object<string,any>>}
+     * @returns {Array<T>}
      */
     findAll(quest, index) {
         const list = this.getIndex(index);

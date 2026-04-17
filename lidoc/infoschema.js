@@ -12,9 +12,8 @@ import { DataMap, getGSID } from "./infodata.js";
 /**
  * Optionen für DataType
  * @typedef {object} DataTypeOptions
- * @property {string|Array<string>} [base] BasisTyp(abgeleitet von) der Eigenschaft. Defaults: "string"|"number"|"boolean"|"object"|"enum"|"GSID"|string
- * @property {Array<string>} [info] - Beschreibungstexte zum Datentyp
- * @property {Array<string>} [appInfo] - Beschreibungstexte zur Applikation
+ * @property {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"|"multi"} [art] - BasisTyp - default "string"
+ * @property {string|Array<string>} [base] - BasisTyp(abgeleitet von) der Eigenschaft.
  * @property {number} [length] - Exakte Länge eines Strings oder Anzahl Zeichen bei Nummern
  * @property {number} [minLength] - Minimale Länge eines Strings
  * @property {number} [maxLength] - Maximale Länge eines Strings
@@ -29,17 +28,23 @@ import { DataMap, getGSID } from "./infodata.js";
  * @property {string|Array<string>} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben
  */
 
+/** @type {DataTypeOptions} */
+export const DataTypeOptions = {};
+
 
 /**
  * Optionen für PropItem
  * @typedef {object} PropItemOptions
+ * @property {string|Array<string>} [itemType] - TypName oder Liste von TypNamen - default "string"
  * @property {number} [min] - Minimales Vorkommen, 0: optional
  * @property {number} [max] - Maximales Vorkommen, 0: darf nicht vorkommen, -1: darf unendlich vorkommen
  * @property {any} [defaultValue] - Standard Wert
  * @property {any} [fix] - fixer Wert, es darf kein anderer Wert vorkommen
  * @property {string} [use] - Name der Gruppierung in der die Property vorkommt. Wenn nicht angegeben ist die Eigenschaft immer zu behandeln.
- * @property {Array<string>} [info] - Liste mit Infotexten.
  */
+
+/** @type {PropItemOptions} */
+export const PropItemOptions = {};
 
 
 /** @type {Map<string,Schema>} */
@@ -134,7 +139,7 @@ class PropItem {
     /** @type {string} Name der Eigenschaft/Attribute bei Attribute ein "@" vor dem Namen */
     name = "";
 
-    /** @type {string|Array<string>} TypName oder Liste von TypNamen - default "string" */
+    /** @type {string} TypName oder Liste von TypNamen - default "string" */
     itemType = "string";
 
     /** @type {number} Minimales Vorkommen der Spalte/Attribute / optional: 0 / default: 1 */
@@ -160,18 +165,12 @@ class DataType {
     /** @type {string} Pfad innerhalb des Schemas */
     schemaPath = "";
     
-    /** @type {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"} BasisTyp - default "string" */
+    /** @type {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"|"multi"} BasisTyp - default "string" */
     art = "string";
 
     /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. */
     base = "";
     
-    /** @type {Array<string>} Liste mit Beschreibungstexten */
-    info = [];
-
-    /** @type {Array<string>} Liste mit APP Beschreibungstexten */
-    appinfo = [];
-
     // --- String Eigenschaften ---
     /** @type {number|undefined} exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?) */
     length;
@@ -222,31 +221,28 @@ export class Schema {
         return this.#name;
     }
 
-    /** @type {Map<string,InfoText>}  Informationen zum Schema*/
+    /** @type {DataMap<InfoText>}  Informationen zum Schema*/
     #infoList = new DataMap(InfoText);
 
-    /** @type {Map<string,InfoText>} APP Informationen zum Schema*/
+    /** @type {DataMap<InfoText>} APP Informationen zum Schema*/
     #appinfoList = new DataMap(InfoText);
 
     /** @type {Map<string,string>} Schema Attribute */
     attributes = new Map(); // Sind Daten und keine Typen!
 
-    /** @type {Map<string,DataType>} Schema Typen */
-    types = new Map();
-
-    /** @type {Map<string,DataType>} Schema Globale DatenTypen */
+    /** @type {DataMap<DataType>} Schema Globale DatenTypen */
     #dataTypeList = new DataMap(DataType, "name");
 
-    /** Schema Globale Propertys */
+    /** @type {DataMap<PropItem>} Schema Globale Propertys */
     #propItemList = new DataMap(PropItem);
 
-    /** Schema Globale Enums */
+    /** @type {DataMap<EnumItem>} Schema Globale Enums */
     #enumItemList = new DataMap(EnumItem);
 
-    /** Schema Globale Referenzen */
+    /** @type {DataMap<RefItem>} Schema Globale Referenzen */
     #refItemList = new DataMap(RefItem);
 
-    /** Unique Liste */
+    /** @type {DataMap<UniqueItem>} Unique Liste */
     #uniqueItemList = new DataMap(UniqueItem);
 
 
@@ -286,6 +282,33 @@ export class Schema {
         this.#propItemList.set(propertyName, prop);
         return prop;
     } 
+
+
+    /**
+     * Fügt einen BaseType zu einer Property hinzu. Wenn Base des DataType noch kein Array ist, wird der bestehende base durch ein Array mit dem neuen TypeNamen ersetzt.
+     * @param {string} typeName - ID der Property
+     * @param {string|Array<string>} baseName - Name des Types der hinzugefügt wird
+     */
+    addDataTypeBase(typeName, baseName) {
+        let dataType = this.#dataTypeList.get(typeName);
+        if (!dataType) {
+            dataType = this.addDataType(typeName);
+        }
+        dataType.art = "multi";
+        if (Array.isArray(dataType.base)) {
+            if (Array.isArray(baseName)) {
+                dataType.base.concat(baseName);
+            } else {
+                dataType.base.push(baseName);
+            }
+        } else {
+            if (Array.isArray(baseName)) {
+                dataType.base = baseName;
+            } else {
+                dataType.base = [baseName];
+            }
+        }
+    }
 
 
     /**
@@ -375,6 +398,19 @@ export class Schema {
 
 
     /**
+     * Setzt Eigenschaften für eine Property
+     * @param {string} propID - Eindeutige ID(GSID) der Property
+     * @param {PropItemOptions} options - Optionen für die Property
+     */
+    setPropOptions(propID, options) {
+        let prop = this.#propItemList.get(propID);
+        if (prop) {
+            Object.assign(prop, options);
+            prop.GSID = propID;
+        }
+    }
+
+    /**
      * Setzt einen Infotext für "schema", "DataType","PropItem","EnumItem","RefItem","UniqueItem"
      * @param {"schema"|"DataType"|"PropItem"|"EnumItem"|"RefItem"|"UniqueItem"} refType - Name des Types. "schema" für Das Schema selbst.
      * @param {string} refID - ID des Objektes dem der Infotext zugeordnet wird
@@ -414,6 +450,65 @@ export class Schema {
         this.#appinfoList.set(info.GSID, info);
     }
 
+
+    /**
+     * Liefert alle Appinfos zu der referenz
+     * @param {string} refID - Referenz ID für die AppInfos
+     * @returns {Array<InfoText>}
+     */
+    getAppInfos(refID) {
+        return this.#appinfoList.findAll({refID})
+    }
+
+    /**
+     * Liefert alle InfoTexte zu der referenz
+     * @param {string} refID - Referenz ID für die Infos
+     * @returns {Array<InfoText>}
+     */
+    getInfos(refID) {
+        return this.#infoList.findAll({refID})
+    }
+
+
+    /**
+     * Liefert einel Liste mit PropertyItems zurück
+     * @param {string} typeName - Referenz ID für die Items
+     * @param {"a"|"p"|undefined} [propAttr] - Optional - "a": nur Attribute, "p": nur Properties
+     * @returns {Array<PropItem>}
+     */
+    getPropItems(typeName, propAttr) {
+        const propItemList = this.#propItemList.findAll({dataType_name: typeName});
+        if (propAttr) {
+            const attrList = [];
+            const propList = [];
+            for (let i= 0; i < propItemList.length; i++) {
+                if (propItemList[i].name.startsWith("@")) {
+                    // nur Attribute
+                    attrList.push(propItemList[i]);
+                } else {
+                    propList.push(propItemList[i]);
+                }
+            }
+
+            if (propAttr == "a") {
+                return attrList;
+            } else {
+                return propList;
+            }
+        } 
+        return propItemList;
+    }
+
+
+    /**
+     * Gibt einen Datentyp zurück
+     * @param {string} typeName - Name des Types
+     * @returns {DataType|undefined} Datentyp oder undefined wenn nicht gefunden  
+     */
+    getType(typeName) {
+        return this.#dataTypeList.get(typeName);
+    }
+
     /**
      * Erzeugt ein neues Schema
      * @param {string} name - Name des Schemas
@@ -431,12 +526,12 @@ export class Schema {
 
 /**
  * Liefert die Infotexte aufbereitet zurück
- * @param {Array<string>} infos - Liste mit Infotexten
+ * @param {Array<InfoText>} infos - Liste mit Infotexten
  */
 function getInfoHTML(infos) {
     let html = "";
     for (let i = 0; i < infos.length; i++) {
-        let info = infos[i].replaceAll("\n", "<br>");
+        let info = infos[i].text.replaceAll("\n", "<br>");
         html += info;
     }
     return html;
@@ -453,18 +548,18 @@ function getNameTypeHTML(item) {
     let html = "";
     if (!(item instanceof PropItem)) { return html; }
 
-    let typeType = item.base;
-    if (Array.isArray(item.base)) {
+    let typeType = item.itemType;
+    if (Array.isArray(item.itemType)) {
         typeType = "";
-        for (let i = 0; i < item.base.length; i++) {
+        for (let i = 0; i < item.itemType.length; i++) {
             if (i > 0) { typeType += ","; }
-            typeType += item.base[i];
+            typeType += item.itemType[i];
         }
     }
 
     // Zeile zusammenbauen
     //html = `<li>${type.name}&nbsp;(${type.min},${type.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(type.info)}</li>`;
-    html = `${item.name}&nbsp;(${item.min},${item.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(item.info)}`;
+    html = `${item.name}&nbsp;(${item.min},${item.max})&nbsp;{${typeType}}`;
     return html;
 }
 
@@ -476,6 +571,7 @@ function getNameTypeHTML(item) {
  * @returns {string} HTMLString
  */
 function getTypeHTML(schema, typeName) {
+    if (!typeName) {return "";}
     let html = "<ul>";
     let html1 = "";
     let html2 = "";
@@ -493,56 +589,39 @@ function getTypeHTML(schema, typeName) {
         return "";
     }
 
-    const type = schema.types.get(typeName);
+    const type = schema.getType(typeName);
     if (!type) {
         html += `<p>Type ${typeName} not found</p>`;
         return "";
     }
 
-    // Attribute
-    if (type.attributes.size > 0) {
-        const attrNames = [...type.attributes.keys()];
-        html += "<li><b>Attributes</b>(" + attrNames.length + ")";
-        html += "<ul>";
-        for (let i = 0; i < attrNames.length; i++) {
-            let typeAttr = type.attributes.get(attrNames[i]);
-            if (typeAttr) {
-                if (attrNames[i] != typeAttr.name) {
-                    html += attrNames[i] + "&nbsp;";
+    switch (type.art) {
+        case "object":
+            // Attribute
+            const attrList = schema.getPropItems(typeName, "a");
+        
+            if (attrList.length > 0) {
+                //html += "<li><b>Attributes</b>(" + attrList.length + ")";
+                for (let i = 0; i < attrList.length; i++) {
+                    html += `<li><details><summary>${attrList[i].name}&nbsp;(${attrList[i].min},${attrList[i].max})&nbsp;${attrList[i].itemType}</summary>`;
+                    html += getTypeHTML(schema, attrList[i].itemType) + "</details></li>";
                 }
-                html += getNameTypeHTML(typeAttr);
-            } else {
-                html += `<li>${attrNames[i]}</li>`;
             }
-        }
-
-        if (type.moreAttributes) {
-            html += `<li>...any&nbsp;${getNameTypeHTML(type.moreAttributes)}</li>`;
-        }
-        html += "</ul></li>";
-    }
-
-    // Properties
-    if (type.props.size > 0) {
-        const propNames = [...type.props.keys()];
-        html += "<li icon-r><b>Properties</b>(" + propNames.length + ")";
-        html += "<ul>";
-        for (let i = 0; i < propNames.length; i++) {
-            let typeProp = type.attributes.get(propNames[i]);
-            if (typeProp) {
-                if (propNames[i] != typeProp.name) {
-                    html += propNames[i] + "&nbsp;";
+        
+            // Properties
+            const propList = schema.getPropItems(typeName, "p");
+        
+            if (propList.length > 0) {
+                // html += "<li><b>Properies</b>(" + propList.length + ")";
+                for (let i = 0; i < propList.length; i++) {
+                    html += `<li><details><summary>${propList[i].name}&nbsp;(${propList[i].min},${propList[i].max})&nbsp;${propList[i].itemType}</summary>`;
+                    html += getTypeHTML(schema, propList[i].itemType) + "</details></li>";
                 }
-                html += getNameTypeHTML(typeProp);
-            } else {
-                html += `<li>${propNames[i]}</li>`;
             }
-        }
-
-        if (type.moreProps) {
-            html += `<li>...any&nbsp;${getNameTypeHTML(type.moreProps)}</li>`;
-        }
-        html += "</ul></li>";
+            break;
+    
+        default:
+            break;
     }
 
     // Typ.Typ prüfen
@@ -568,13 +647,15 @@ export function getSchemaTypeHTML(schema, typeName) {
     html += `<h1>${schema.name}</h1>`;
 
     // Schema APPInfo
-    if (schema.appinfo.length > 0) {
-        html += "<h2>APP-Info></h2>" + getInfoHTML(schema.appinfo);
+    const appInfoList = schema.getAppInfos("schema");
+    if (appInfoList.length > 0) {
+        html += "<h2>APP-Info></h2>" + getInfoHTML(appInfoList);
     }
 
     // Schema Info
-    if (schema.info.length > 0) {
-        html += "<h2>Info</h2>" + getInfoHTML(schema.info);
+    const infoList = schema.getInfos("schema");
+    if (infoList.length > 0) {
+        html += "<h2>Info</h2>" + getInfoHTML(infoList);
     }
 
     // Type auflösen
