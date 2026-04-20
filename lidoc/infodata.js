@@ -341,6 +341,65 @@ export class DataMap extends Map {
 
 
     /**
+     * Liefert einen JSON-String von Eigenschaften aller Objekte vom index zurück.  
+     * In der ersten Zeile stehen die Spaltennamen.  
+     * @param {string} [index] - Optionale Name des zu verendenden Indexes. Wenn nicht angegeben werden alle Objekte zurückgegeben.
+     * @param {Array<string>} [colNames] - Optional Namen der Spalten die gelesen werden
+     * @returns {string} JSON-String.
+     */
+    getAsJSON(index, colNames) {
+        return JSON.stringify(this.getValueArray(index, colNames));
+    }
+
+    /**
+     * Liefert einen String von Eigenschaften aller Objekte vom index zurück.  
+     * In der ersten Zeile stehen die Spaltennamen.  
+     * Die Zeilen werden durch "▲"(ASCII 30) getrennt und die Spalten mit "▼" (ASCII 31). Somit bleiben Sonderzeichen, Zeilenumbrüche, Tabulatoren, Komas, usw. erhalten.
+     * @param {string} [index] - Optionale Name des zu verendenden Indexes. Wenn nicht angegeben werden alle Objekte zurückgegeben.
+     * @param {Array<string>} [colNames] - Optional Namen der Spalten die gelesen werden
+     * @returns {string} CSV-String.
+     */
+    getAsText(index, colNames) {
+        let list = "";
+        const ids = this.getIndex(index);
+
+        // Spalten die gelesen werden
+        let cols = [];
+        if (Array.isArray(colNames)) {
+            cols = colNames;
+        } else {
+            cols = this.#properties;
+        }
+
+        // Erste Zeile mit Feldnamen
+        list += `${cols.join('▼')}"▲`;
+
+        for (let i = 0; i < ids.length; i++) {
+            const obj = this.get(ids[i]);
+
+            if (obj) {
+                // Neue Eigenschaftsliste
+                let a = "";
+                for (let j = 0; j < cols.length; j++) {
+                    // Wert der Property in die Eigenschaftsliste
+                    // todo: was tun wein Eigenschaft-Wert ein Objekt ist? 
+                    //@ts-ignore
+                    const value = obj[cols[j]];
+                    if (a) { a += "▼";}
+                    if (typeof value == "undefined") {
+                        // keine zusätzliche Daten
+                    } else {
+                        a += value;
+                    }
+                }
+                list += a + "▲";
+            }
+        }
+        return list;
+    }
+
+
+    /**
      * Liefert ein Array mit Objekten laut angegeben index zurück. Wird kein Index angegeben, werden alle Objekte zurückgeliefert.  
      * Wenn keine Konvertierungs-Funktion angegeben, werden die Originalen Objekte zurückgegeben(referenzen)
      * @param {string|Array<string|number>} [index] - Optional Name des Indexes oder Liste mit Key's
