@@ -38,9 +38,9 @@ let localData = {};
  * @param {Element} elm - XML Element
  * @param {string} typeName - ObjektName
  * @param {string} [propID] - Objekt Eigenschaft Name
- * @param {string} [chois] - Index bei Auswahl(choice)
+ * @param {string} [choice] - Index bei Auswahl(choice)
  */
-function checkElement(elm, typeName, propID, chois) {
+function checkElement(elm, typeName, propID, choice) {
     let newTypeName = typeName;
     let newPropID = propID;
 
@@ -93,8 +93,8 @@ function checkElement(elm, typeName, propID, chois) {
     if (typeof elmFixed != "undefined") {
         options.fix = elmFixed;
     }
-    if (typeof chois != "undefined") {
-        options.use = chois;
+    if (typeof choice != "undefined") {
+        options.use = choice;
     }
     if (elmType) {
         options.itemType = elmType;
@@ -130,23 +130,23 @@ function checkElement(elm, typeName, propID, chois) {
 
             // todo: Prüfen von Namespace -> ##any - elements from any namespace is allowed (this is default) / ##other - elements from any namespace that is not the namespace of the parent element can be present / ##local - elements must come from no namespace / ##targetNamespace - elements from the namespace of the parent element can be present List of {URI references of namespaces, ##targetNamespace, ##local} - elements from a space-delimited list of the namespaces can be present
             //newTypeName = XSD.addAnyCol(baseTypeName, min, max).name;
-            //newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, chois);
+            //newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, choice);
 
             options.min = elmUse == "required" ? 1 : 0;
-            newPropID = XSD.addProperty(typeName, "any", options).GSID;
+            newPropID = XSD.addProperty(typeName, "any", options);
             
             //baseType.moreProps = newProp;
-            // newTypeName = XSD.setMoreProperty(baseTypeName, new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, chois)).name;
+            // newTypeName = XSD.setMoreProperty(baseTypeName, new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, choice)).name;
             checkChildren = true;
             break;
         case "anyAttribute":
             // Bestimmt das das Eleternelement um zusätzliche Attribute erweitert werden darf
             // Attribute: id, namespace, processContents, ...any
             // children: annotation(0,1)
-            // newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, chois);
+            // newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, choice);
             // baseType.moreAttributes = newProp;
             options.min = elmUse == "required" ? 1 : 0;
-            newPropID = XSD.addProperty(typeName, "@any", options).GSID;
+            newPropID = XSD.addProperty(typeName, "@any", options);
 
             checkChildren = true;
             break;
@@ -166,12 +166,12 @@ function checkElement(elm, typeName, propID, chois) {
             // attribute: default, fixed, form, id, name, ref, type, use, ...any (name und ref dürfen nicht gleichzeitig vorkommen)
             // children: annotation(0,1), simpleType(0,1)
 
-            newPropID = XSD.addProperty(typeName, "@" + (elmName || elmRef || ""), options).GSID;
+            newPropID = XSD.addProperty(typeName, "@" + (elmName || elmRef || ""), options);
 
             //newTypeName = elmName || elmRef || baseTypeName;
-            //newProp = new PropItem(elmName || elmRef || getGSID(), elmType || elmRef, min, max, elmDefault, elmFixed, chois);
+            //newProp = new PropItem(elmName || elmRef || getGSID(), elmType || elmRef, min, max, elmDefault, elmFixed, choice);
             //baseType.attributes.set(newProp.name, newProp);
-            //XSD.addAttribute(baseTypeName, newTypeName, new PropItem(newTypeName, "string", min, max, elmDefault, elmFixed, chois));
+            //XSD.addAttribute(baseTypeName, newTypeName, new PropItem(newTypeName, "string", min, max, elmDefault, elmFixed, choice));
 
             checkChildren = true;
             break;
@@ -188,13 +188,13 @@ function checkElement(elm, typeName, propID, chois) {
                 newPropID = undefined;
             } else if (elmRef) {
                 // Neues Attribute zur Liste setzen
-                newPropID = XSD.addProperty(typeName, "@" + elmRef, options).GSID;
+                newPropID = XSD.addProperty(typeName, "@" + elmRef, options);
             } else {
                 // sollte nicht vorkommen
             }
             checkChildren = true;
             break;
-        case "coice":
+        case "choice":
             // Bestimmt das nur eines der Kind-Elemente vorkommen darf (entweder/oder)
             // parent: group, choice, sequence, complexType, restriction (both simpleContent and complexContent), extension (both simpleContent and complexContent)
             // attribute: id, maxOccurs, minOccurs, ...any
@@ -202,10 +202,10 @@ function checkElement(elm, typeName, propID, chois) {
             // todo: Kind Elemente in DataTyp.oneOfProperties[] einfügen
 
             // Auswahlzähler erhöhen
-            if (!chois) {
-                chois = "a";    
+            if (!choice) {
+                choice = "a";    
             } else {
-                chois += 1;
+                choice += 1;
             }
             checkChildren = true;
             break;
@@ -259,7 +259,7 @@ function checkElement(elm, typeName, propID, chois) {
             // children: annotation(0,1), simpleType|complexType(0,1), unique|key|keyref(0,-1)
 
             // todo: weitere Attribute prüfen
-            newPropID = XSD.addProperty(typeName, elmName || elmRef || getGSID(), options).GSID;
+            newPropID = XSD.addProperty(typeName, elmName || elmRef || getGSID(), options);
             checkChildren = true;
             break;
         case "enumeration":
@@ -308,7 +308,7 @@ function checkElement(elm, typeName, propID, chois) {
             } else if (elmRef) {
                 // Neues Property zur Liste setzen
                 options.itemType = elmRef;
-                newPropID = XSD.addProperty(typeName, elmRef, options).GSID;
+                newPropID = XSD.addProperty(typeName, elmRef, options);
             } else {
                 // sollte nicht vorkommen
                 newTypeName = getGSID();
@@ -525,7 +525,7 @@ function checkElement(elm, typeName, propID, chois) {
         const children = [...elm.children];
         for (let i = 0; i < children.length; i++) {
             const elm = children[i];
-            checkElement(elm, newTypeName, newPropID, chois);
+            checkElement(elm, newTypeName, newPropID, choice);
         }
 
         // Nach dem Prüfen von Kindelementen

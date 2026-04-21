@@ -341,7 +341,7 @@ export class DataMap extends Map {
 
 
     /**
-     * Liefert einen JSON-String von Eigenschaften aller Objekte vom index zurück.  
+     * Liefert einen JSON-String mit einer Liste von Arrays von Eigenschaften aller Objekte vom index zurück.  
      * In der ersten Zeile stehen die Spaltennamen.  
      * @param {string} [index] - Optionale Name des zu verendenden Indexes. Wenn nicht angegeben werden alle Objekte zurückgegeben.
      * @param {Array<string>} [colNames] - Optional Namen der Spalten die gelesen werden
@@ -350,6 +350,20 @@ export class DataMap extends Map {
     getAsJSON(index, colNames) {
         return JSON.stringify(this.getValueArray(index, colNames));
     }
+
+
+    /**
+     * Erstellt Einträge in der DataMap anhand von einem JSON-String mit einer Liste von Eigenschaften. In der ersten Zeile müssen die Spaltennamen stehen.
+     * @param {string} jsonString - JSON String mit Liste von Arrays
+     * @param {boolean} [clear] - true wenn die Liste zuvor gelöscht wird
+     */
+    setFromJSON(jsonString, clear) {
+        const list = JSON.parse(jsonString);
+        if (Array.isArray(list)) {
+            this.setValueArray(list, clear);
+        }
+    }
+
 
     /**
      * Liefert einen String von Eigenschaften aller Objekte vom index zurück.  
@@ -398,6 +412,40 @@ export class DataMap extends Map {
         return list;
     }
 
+    /**
+     * Erstellt Einträge in der DataMap anhand von einem Text der mit Trennzeichen(▲ ASCII 30 für Zeilentrennung, ▼ ASCII 31 für Spaltentrennung) getrennt ist.
+     * @param {string} text - Text mit Trennzeichen
+     * @param {boolean} [clear] - Optional "true" wenn Liste zuvor gelöscht wird.
+     */
+    setFromText(text, clear) {
+        if (!text) {return;}
+        const list = text.split("▲"); // Zeilentrennzeichen ASCII 30
+        if (!Array.isArray(list)) { return; }
+
+        if (clear) {
+            // Daten zurücksetzen
+            this.clear();
+        }
+
+        // erste Zeile sind Feldnamen
+        if (list.length < 1) { return; }
+        const properties = list[0].split("▼"); // SpaltenTrennzeichen ASCII 31
+
+        // alle Datenzeilen durchgehen
+        for (let i = 1; i < list.length; i++) {
+            // @ts-ignore neue Klasse
+            const obj = new this.#class();
+            const values = list[i].split("▼"); // SpaltenTrennzeichen ASCII 31
+
+            // alle Spalten durchgehen
+            for (let j = 0; j < properties.length; j++) {
+                obj[properties[j]] = values[j];
+            }
+
+            // in Daten setzen
+            this.set(this.getID(obj), obj);
+        }
+    }
 
     /**
      * Liefert ein Array mit Objekten laut angegeben index zurück. Wird kein Index angegeben, werden alle Objekte zurückgeliefert.  

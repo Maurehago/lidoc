@@ -57,7 +57,7 @@ const SchemaList = new Map();
 // -----------
 
 class InfoText {
-    GSID = getGSID();
+    GSID = "";
 
     /** @type {string} Zuordnung Referenz */
     refID = "";
@@ -73,11 +73,15 @@ class InfoText {
 
     /** @type {string} InfoText */
     text = "";
+
+    constructor() {
+        this.GSID = getGSID();
+    }
 }
 
 
 class RefItem {
-    GSID = getGSID();
+    GSID = "";
 
     /** @type {string} Name/GSID des DatenTypes */
     dataType_name = "";
@@ -99,12 +103,16 @@ class RefItem {
 
     /** @type {"NO"|"DELETE"|"NULL"|"DEFAULT"} Regel für Löschen */
     onDelete = "DELETE";
+
+    constructor() {
+        this.GSID = getGSID();
+    }
 }
 
 
 
 class UniqueItem {
-    GSID = getGSID();
+    GSID = "";
 
     /** @type {string} Name/GSID des DatenTypes */
     dataType_name = "";
@@ -114,11 +122,16 @@ class UniqueItem {
 
     /** @type {Array<string>} Feigenschaftsnamen(Properties) die zusammen eine Eindeutigkeit ergeben */
     props = [];
+
+    constructor() {
+        this.GSID = getGSID();
+    }
 }
 
 
 class EnumItem {
-    GSID = getGSID();
+    GSID = "";
+    
     /** @type {string} Datentyp Name/GSID */
     dataType_name = "";
 
@@ -126,12 +139,16 @@ class EnumItem {
     name = "";
     /** @type {string|number} */
     value = "";
+
+    constructor() {
+        this.GSID = getGSID();
+    }
 }
 
 
 
 class PropItem {
-    GSID = getGSID();
+    GSID = "";
 
     /** @type {string} Name/GSID des Datentyp-Objektes */
     dataType_name = "";
@@ -154,6 +171,10 @@ class PropItem {
 
     /** @type {string|undefined} Bedingung, wann die Eigenschaft/Attribute vorkommt. Wenn nicht angegegeben dann immer verwenden. */
     use = "";
+
+    constructor() {
+        this.GSID = getGSID();
+    }
 }
 
 
@@ -250,14 +271,14 @@ export class Schema {
      * Fügt ein neues Datentyp Objekt hinzu
      * @param {string} typeName - Name des DatenTyps
      * @param {DataTypeOptions} [options] - Optional Optionen für den Datentyp
-     * @returns {DataType} DatenTyp Objekt
+     * @returns {string} Name des Datentypes
      */
     addDataType(typeName, options) {
         const dataType = new DataType();
         Object.assign(dataType, options);
         dataType.name = typeName;
         this.#dataTypeList.set(typeName, dataType);
-        return dataType;
+        return typeName;
     }
 
 
@@ -266,12 +287,14 @@ export class Schema {
      * @param {string} typeName - Name des DatenTyps
      * @param {string} propertyName - Name der Eigenschaft
      * @param {PropItemOptions} [options] - Optional Optionen für die Eigenschaft
-     * @returns {PropItem} Eigenschaft Objekt
+     * @returns {string} GSID der Eigenschaft
      */
     addProperty(typeName, propertyName, options) {
         let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = this.addDataType(typeName);
+            dataType = new DataType();
+            dataType.name = typeName;
+            this.#dataTypeList.set(typeName, dataType);
         }
         dataType.art = "object";
 
@@ -279,8 +302,8 @@ export class Schema {
         Object.assign(prop, options);
         prop.name = propertyName;
         prop.dataType_name = typeName;
-        this.#propItemList.set(propertyName, prop);
-        return prop;
+        this.#propItemList.set(prop.GSID, prop);
+        return prop.GSID;
     }
 
 
@@ -292,7 +315,9 @@ export class Schema {
     addDataTypeBase(typeName, baseName) {
         let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = this.addDataType(typeName);
+            dataType = new DataType();
+            dataType.name = typeName;
+            this.#dataTypeList.set(typeName, dataType);
         }
         dataType.art = "multi";
         if (Array.isArray(dataType.base)) {
@@ -316,12 +341,13 @@ export class Schema {
      * @param {string} typeName - Name des DatenTyps
      * @param {string} name - Name vom EnumItem
      * @param {string|number} [value] - Optional Wert vom Enum Item. Wenn nicht angegeben wird der Name als Wert genommen.
-     * @returns {DataType} DatenTyp Objekt
      */
     addEnumItem(typeName, name, value) {
         let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = this.addDataType(typeName);
+            dataType = new DataType();
+            dataType.name = typeName;
+            this.#dataTypeList.set(typeName, dataType);
         }
         dataType.art = "enum";
 
@@ -330,7 +356,6 @@ export class Schema {
         item.name = name;
         item.value = value || name;
         this.#enumItemList.set(item.GSID, item);
-        return dataType;
     }
 
     /**
@@ -346,7 +371,9 @@ export class Schema {
     addRefItem(typeName, refName, fieldList, refTypeName, refFieldList, onUpdate, onDelete) {
         let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = this.addDataType(typeName);
+            dataType = new DataType();
+            dataType.name = typeName;
+            this.#dataTypeList.set(typeName, dataType);
         }
         dataType.art = "object";
         const item = new RefItem();
@@ -369,7 +396,9 @@ export class Schema {
     addUniqueItem(typeName, uniqueName, fieldList) {
         let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = this.addDataType(typeName);
+            dataType = new DataType();
+            dataType.name = typeName;
+            this.#dataTypeList.set(typeName, dataType);
         }
         dataType.art = "object";
         const item = new UniqueItem();
@@ -384,16 +413,16 @@ export class Schema {
      * Setzt Optionen für einen Datentyp
      * @param {string} typeName - Name des DatenTyps
      * @param {DataTypeOptions} options - Optionen für den Datentyp
-     * @returns {DataType} DatenTyp Objekt
      */
     setDataTypeOptions(typeName, options) {
         let dataType = this.#dataTypeList.get(typeName);
         if (!dataType) {
-            dataType = this.addDataType(typeName);
+            dataType = new DataType();
+            dataType.name = typeName;
+            this.#dataTypeList.set(typeName, dataType);
         }
         Object.assign(dataType, options);
         dataType.name = typeName;
-        return dataType;
     }
 
 
@@ -666,7 +695,16 @@ function getTypeHTML(schema, typeName) {
             if (attrList.length > 0) {
                 //html += "<li><b>Attributes</b>(" + attrList.length + ")";
                 for (let i = 0; i < attrList.length; i++) {
-                    html += `<li><details><summary>${attrList[i].name}&nbsp;(${attrList[i].min},${attrList[i].max})&nbsp;${attrList[i].itemType}</summary>`;
+                    let name = attrList[i].name;
+                    if (attrList[i].min > 0) {
+                        name = "<b>" + name + "</b>";
+                    }
+                    if (attrList[i].use) {
+                        name = "[&nbsp;]&nbsp;" + name;
+                    }
+                    let defaultValue = typeof attrList[i].defaultValue == "undefined" ? "" : "&nbsp;default:" + attrList[i].defaultValue;
+                    let fix = typeof attrList[i].fix == "undefined" ? "" : "&nbsp;fix:" + attrList[i].fix;                    
+                    html += `<li><details><summary>${name}&nbsp;(${attrList[i].min},${attrList[i].max})&nbsp;${attrList[i].itemType}${defaultValue}${fix}</summary>`;
                     html += getTypeHTML(schema, attrList[i].itemType) + "</details></li>";
                 }
             }
@@ -677,7 +715,16 @@ function getTypeHTML(schema, typeName) {
             if (propList.length > 0) {
                 // html += "<li><b>Properies</b>(" + propList.length + ")";
                 for (let i = 0; i < propList.length; i++) {
-                    html += `<li><details><summary>${propList[i].name}&nbsp;(${propList[i].min},${propList[i].max})&nbsp;${propList[i].itemType}</summary>`;
+                    let name = propList[i].name;
+                    if (propList[i].min > 0) {
+                        name = "<b>" + name + "</b>";
+                    }
+                    if (propList[i].use) {
+                        name = "[&nbsp;]&nbsp;" + name;
+                    }
+                    let defaultValue = typeof propList[i].defaultValue == "undefined" ? "" : "&nbsp;default:" + propList[i].defaultValue;
+                    let fix = typeof propList[i].fix == "undefined" ? "" : "&nbsp;fix:" + propList[i].fix;
+                    html += `<li><details><summary>${name}&nbsp;(${propList[i].min},${propList[i].max})&nbsp;${propList[i].itemType}${defaultValue}${fix}</summary>`;
                     html += getTypeHTML(schema, propList[i].itemType) + "</details></li>";
                 }
             }
