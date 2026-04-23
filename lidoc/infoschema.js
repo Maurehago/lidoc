@@ -575,6 +575,40 @@ export class Schema {
         return schemaString;
     }
 
+
+    /**
+     * Erzeugt das Schema von einem JSON-String
+     * @param {string} jsonString - JSON-String von dem das Schema erzeugt wird
+     */
+    setFromJSON(jsonString) {
+        if (!jsonString || typeof jsonString != "string") {return;}
+
+        const obj = JSON.parse(jsonString);
+        if (typeof obj == "object") {
+            if (Array.isArray(obj.infos)) {
+                this.#infoList.setValueArray(obj.infos, true);
+            }
+            if (Array.isArray(obj.appinfos)) {
+                this.#appinfoList.setValueArray(obj.appinfos, true);
+            }
+            if (Array.isArray(obj.datatypes)) {
+                this.#dataTypeList.setValueArray(obj.datatypes, true);
+            }
+            if (Array.isArray(obj.properties)) {
+                this.#propItemList.setValueArray(obj.properties, true);
+            }
+            if (Array.isArray(obj.enums)) {
+                this.#enumItemList.setValueArray(obj.enums, true);
+            }
+            if (Array.isArray(obj.refs)) {
+                this.#refItemList.setValueArray(obj.refs, true);
+            }
+            if (Array.isArray(obj.uniques)) {
+                this.#uniqueItemList.setValueArray(obj.uniques, true);
+            }
+        }
+    }
+
     toText() {
         let schemaString = "name: " + this.name + "▲"; // ASCII 30 Zeilentrenner
 
@@ -793,3 +827,39 @@ export function getSchemaTypeHTML(schema, typeName) {
     }
     return html;
 }
+
+const infoSchema = new Schema("infoSchema");
+
+infoSchema.addProperty("InfoText", "GSID");
+infoSchema.addProperty("InfoText", "refID");
+infoSchema.addProperty("InfoText", "refType", {itemType: "refType", defaultValue: "DataType"});
+infoSchema.addProperty("InfoText", "lang", {defaultValue: "de"});
+infoSchema.addProperty("InfoText", "date");
+infoSchema.addProperty("InfoText", "text");
+
+infoSchema.addEnumItem("refType", "schema");
+infoSchema.addEnumItem("refType", "DataType");
+infoSchema.addEnumItem("refType", "PropItem");
+infoSchema.addEnumItem("refType", "EnumItem");
+infoSchema.addEnumItem("refType", "UniqueItem");
+infoSchema.addEnumItem("refType", "RefItem");
+
+
+infoSchema.addProperty("RefItem", "GSID");
+infoSchema.addProperty("RefItem", "dataType_name");
+infoSchema.addProperty("RefItem", "name");
+infoSchema.addProperty("RefItem", "props", {max: -1});
+infoSchema.addProperty("RefItem", "refObj");
+infoSchema.addProperty("RefItem", "refProps", {max: -1});
+infoSchema.addProperty("RefItem", "onUpdate", {itemType: "onUpdate", defaultValue: "UPDATE"});
+infoSchema.addProperty("RefItem", "onDelete", {itemType: "onDelete", defaultValue: "DELETE"});
+
+infoSchema.addEnumItem("onUpdate", "NO");
+infoSchema.addEnumItem("onUpdate", "UPDATE");
+infoSchema.addEnumItem("onUpdate", "NULL");
+infoSchema.addEnumItem("onUpdate", "DEFAULT");
+
+infoSchema.addEnumItem("onDelete", "NO");
+infoSchema.addEnumItem("onDelete", "DELETE");
+infoSchema.addEnumItem("onDelete", "NULL");
+infoSchema.addEnumItem("onDelete", "DEFAULT");
