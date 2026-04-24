@@ -35,7 +35,7 @@ export const DataTypeOptions = {};
 /**
  * Optionen für PropItem
  * @typedef {object} PropItemOptions
- * @property {string|Array<string>} [itemType] - TypName oder Liste von TypNamen - default "string"
+ * @property {string} [itemType] - TypName - default "string"
  * @property {number} [min] - Minimales Vorkommen, 0: optional
  * @property {number} [max] - Maximales Vorkommen, 0: darf nicht vorkommen, -1: darf unendlich vorkommen
  * @property {any} [defaultValue] - Standard Wert
@@ -610,31 +610,76 @@ export class Schema {
     }
 
     toText() {
-        let schemaString = "name: " + this.name + "▲"; // ASCII 30 Zeilentrenner
-
-        schemaString += "↔infos:▲"; // Gruppentrenner ASCII 29, und Zeilentrenner ASCII 30
+        let schemaString = "infos:"; // Gruppentrenner ASCII 29, und Zeilentrenner ASCII 30
         schemaString +=  this.#infoList.getAsText();
 
-        schemaString += "↔appinfos:▲";
+        schemaString += "↔appinfos:";
         this.#appinfoList.getAsText();
 
-        schemaString += "↔types:▲";
+        schemaString += "↔types:";
         schemaString += this.#dataTypeList.getAsText();
         
-        schemaString += "↔properties:▲";
+        schemaString += "↔properties:";
         schemaString += this.#propItemList.getAsText();
         
-        schemaString += "↔enums:▲";
+        schemaString += "↔enums:";
         schemaString += this.#enumItemList.getAsText();
 
-        schemaString += "↔refs:▲";
+        schemaString += "↔refs:";
         schemaString += this.#refItemList.getAsText();
 
-        schemaString += "↔uniques:▲";
+        schemaString += "↔uniques:";
         schemaString += this.#uniqueItemList.getAsText();
 
         return schemaString;
     }
+
+    /**
+     * Erstelle Schema Einträge von einem Schematext
+     * @param {string} text - Schema als Text
+     */
+    setFromText(text) {
+        if (!text || typeof text != "string") {return;}
+
+        // in Gruppen aufsplitten
+        const groupText = text.split("↔"); // Gruppen Trennzeichen ASCII 29
+
+        // Alle Gruppen durchgehen
+        for (let i = 0; i < groupText.length; i++) {
+            // Name auslesen
+            const pos1 = groupText[i].indexOf(":");
+            const groupName = groupText[i].substring(0, pos1);
+            const groupValue = groupText[i].substring(pos1 +1);
+
+            switch (groupName) {
+                case "infos":
+                    this.#infoList.setFromText(groupValue);
+                    break;
+                case "appinfos":
+                    this.#appinfoList.setFromText(groupValue);
+                    break;
+                case "types":
+                    this.#dataTypeList.setFromText(groupValue);
+                    break;
+                case "properties":
+                    this.#propItemList.setFromText(groupValue);
+                    break;
+                case "enums":
+                    this.#enumItemList.setFromText(groupValue);
+                    break;
+                case "refs":
+                    this.#refItemList.setFromText(groupValue);
+                    break;
+                case "uniques":
+                    this.#uniqueItemList.setFromText(groupValue);
+                    break;
+            
+                default:
+                    break;
+            }
+        }
+    }
+
 
     /**
      * Erzeugt ein neues Schema
@@ -828,22 +873,25 @@ export function getSchemaTypeHTML(schema, typeName) {
     return html;
 }
 
-const infoSchema = new Schema("infoSchema");
+// ===========================
+//   InfoSchema
+// --------------
+
+export const infoSchema = new Schema("infoSchema");
 
 infoSchema.addProperty("InfoText", "GSID");
 infoSchema.addProperty("InfoText", "refID");
-infoSchema.addProperty("InfoText", "refType", {itemType: "refType", defaultValue: "DataType"});
+infoSchema.addProperty("InfoText", "refType", {itemType: "refTypeEnum", defaultValue: "DataType"});
 infoSchema.addProperty("InfoText", "lang", {defaultValue: "de"});
 infoSchema.addProperty("InfoText", "date");
 infoSchema.addProperty("InfoText", "text");
 
-infoSchema.addEnumItem("refType", "schema");
-infoSchema.addEnumItem("refType", "DataType");
-infoSchema.addEnumItem("refType", "PropItem");
-infoSchema.addEnumItem("refType", "EnumItem");
-infoSchema.addEnumItem("refType", "UniqueItem");
-infoSchema.addEnumItem("refType", "RefItem");
-
+infoSchema.addEnumItem("refTypeEnum", "schema");
+infoSchema.addEnumItem("refTypeEnum", "DataType");
+infoSchema.addEnumItem("refTypeEnum", "PropItem");
+infoSchema.addEnumItem("refTypeEnum", "EnumItem");
+infoSchema.addEnumItem("refTypeEnum", "UniqueItem");
+infoSchema.addEnumItem("refTypeEnum", "RefItem");
 
 infoSchema.addProperty("RefItem", "GSID");
 infoSchema.addProperty("RefItem", "dataType_name");
@@ -851,15 +899,73 @@ infoSchema.addProperty("RefItem", "name");
 infoSchema.addProperty("RefItem", "props", {max: -1});
 infoSchema.addProperty("RefItem", "refObj");
 infoSchema.addProperty("RefItem", "refProps", {max: -1});
-infoSchema.addProperty("RefItem", "onUpdate", {itemType: "onUpdate", defaultValue: "UPDATE"});
-infoSchema.addProperty("RefItem", "onDelete", {itemType: "onDelete", defaultValue: "DELETE"});
+infoSchema.addProperty("RefItem", "onUpdate", {itemType: "onUpdateEnum", defaultValue: "UPDATE"});
+infoSchema.addProperty("RefItem", "onDelete", {itemType: "onDeleteEnum", defaultValue: "DELETE"});
 
-infoSchema.addEnumItem("onUpdate", "NO");
-infoSchema.addEnumItem("onUpdate", "UPDATE");
-infoSchema.addEnumItem("onUpdate", "NULL");
-infoSchema.addEnumItem("onUpdate", "DEFAULT");
+infoSchema.addEnumItem("onUpdateEnum", "NO");
+infoSchema.addEnumItem("onUpdateEnum", "UPDATE");
+infoSchema.addEnumItem("onUpdateEnum", "NULL");
+infoSchema.addEnumItem("onUpdateEnum", "DEFAULT");
 
-infoSchema.addEnumItem("onDelete", "NO");
-infoSchema.addEnumItem("onDelete", "DELETE");
-infoSchema.addEnumItem("onDelete", "NULL");
-infoSchema.addEnumItem("onDelete", "DEFAULT");
+infoSchema.addEnumItem("onDeleteEnum", "NO");
+infoSchema.addEnumItem("onDeleteEnum", "DELETE");
+infoSchema.addEnumItem("onDeleteEnum", "NULL");
+infoSchema.addEnumItem("onDeleteEnum", "DEFAULT");
+
+infoSchema.addProperty("UniqueItem", "GSID");
+infoSchema.addProperty("UniqueItem", "dataType_name");
+infoSchema.addProperty("UniqueItem", "name");
+infoSchema.addProperty("UniqueItem", "props", {max: -1});
+
+infoSchema.addProperty("EnumItem", "GSID");
+infoSchema.addProperty("EnumItem", "dataType_name");
+infoSchema.addProperty("EnumItem", "name");
+infoSchema.addProperty("EnumItem", "value", {itemType: "stringnumber"});
+
+infoSchema.addDataType("stringnumber", {art: "multi", base: ["string", "number"]});
+
+infoSchema.addProperty("PropItem", "GSID");
+infoSchema.addProperty("PropItem", "dataType_name");
+infoSchema.addProperty("PropItem", "name");
+infoSchema.addProperty("PropItem", "itemType", {defaultValue: "string"});
+infoSchema.addProperty("PropItem", "min", {itemType: "number", defaultValue: 1});
+infoSchema.addProperty("PropItem", "max", {itemType: "number", defaultValue: 1});
+infoSchema.addProperty("PropItem", "defaultValue", {itemType: "any", min: 0});
+infoSchema.addProperty("PropItem", "fix", {itemType: "any", min: 0});
+infoSchema.addProperty("PropItem", "use", {itemType: "any", min: 0});
+
+infoSchema.addDataType("DataType", {id: "name"});
+infoSchema.addProperty("DataType", "name");
+infoSchema.addProperty("DataType", "schemaPath");
+infoSchema.addProperty("DataType", "art", {itemType: "artEnum"});
+infoSchema.addProperty("DataType", "base");
+infoSchema.addProperty("DataType", "length", {itemType: "number", min: 0});
+infoSchema.addProperty("DataType", "minLength", {itemType: "number", min: 0});
+infoSchema.addProperty("DataType", "maxLength", {itemType: "number", min: 0});
+infoSchema.addProperty("DataType", "pattern", {min: 0});
+infoSchema.addProperty("DataType", "whitespace", {min: 0});
+infoSchema.addProperty("DataType", "casing", {itemType: "casingEnum", min: 0});
+infoSchema.addProperty("DataType", "decimals", {itemType: "number", min: 0});
+infoSchema.addProperty("DataType", "minInclusive", {itemType: "stringnumber", min: 0});
+infoSchema.addProperty("DataType", "minExclusive", {itemType: "stringnumber", min: 0});
+infoSchema.addProperty("DataType", "maxExclusive", {itemType: "stringnumber", min: 0});
+infoSchema.addProperty("DataType", "maxInclusive", {itemType: "stringnumber", min: 0});
+infoSchema.addProperty("DataType", "id", {max: -1, defaultValue: "GSID"});
+
+infoSchema.addEnumItem("artEnum", "string");
+infoSchema.addEnumItem("artEnum", "number");
+infoSchema.addEnumItem("artEnum", "boolean");
+infoSchema.addEnumItem("artEnum", "object");
+infoSchema.addEnumItem("artEnum", "enum");
+infoSchema.addEnumItem("artEnum", "group");
+infoSchema.addEnumItem("artEnum", "choice");
+infoSchema.addEnumItem("artEnum", "multi");
+
+infoSchema.addEnumItem("casingEnum", "camelCase");
+infoSchema.addEnumItem("casingEnum", "PascalCase");
+infoSchema.addEnumItem("casingEnum", "snake_case");
+infoSchema.addEnumItem("casingEnum", "lower");
+infoSchema.addEnumItem("casingEnum", "upper");
+
+// ==============================
+
