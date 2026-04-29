@@ -609,6 +609,11 @@ export class Schema {
         }
     }
 
+    
+    /**
+     * Liefert das Schema als Schematext String zurück. 
+     * @returns {string} Schema als Text mit mehrere CSV-Strings ASCII 29 getrennt
+     */
     toText() {
         let schemaString = "infos:"; // Gruppentrenner ASCII 29, und Zeilentrenner ASCII 30
         schemaString +=  this.#infoList.getAsText();
