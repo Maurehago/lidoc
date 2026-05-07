@@ -1,11 +1,11 @@
 # LiDoc
 
-Der Listen und Document Generator, verwendet einen abgewandelten Markdown Syntax zum Anzeigen von Webseiten.
+Der Liste und Document Generator, verwendet einen abgewandelten Markdown Syntax zum Anzeigen von Webseiten.
 
-Als Stylesheet wird Flex.css eingesetzt.
+Als Style wird Flex.css eingesetzt.
 Das ermöglicht das einfache Verwenden von Spalten in einem Dokument.
 
-Für die Darstellung von Code wird das Javascript Framework "prism" Verwendet. [__prismjs.com__](https://prismjs.com/)
+Für die Darstellung von Code wird das Javascript Framework "**prism**" Verwendet. [__prismjs.com__](https://prismjs.com/)
 
 Die Generation von statischen Seiten ist noch nicht implementiert.
 

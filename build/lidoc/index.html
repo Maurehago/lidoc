@@ -1,0 +1,56 @@
+<h1>LiDoc</h1><p>Der Liste und Document Generator, verwendet einen abgewandelten Markdown Syntax zum Anzeigen von Webseiten.</p><p>Als Style wird Flex.css eingesetzt.</br>Das ermöglicht das einfache Verwenden von Spalten in einem Dokument.</p><p>Für die Darstellung von Code wird das Javascript Framework "<b>prism</b>" Verwendet. <a href='https://prismjs.com/'><u>prismjs.com</u></a></p><p>Die Generation von statischen Seiten ist noch nicht implementiert.</p><h2>Markdown Syntax Übersicht</h2><h3>Header</h3><p>Syntax:<pre><code class='language-md' ># Header 1
+## Header 2
+### Header 3
+#### Header 4
+##### Header 5
+###### Header 6
+</code></pre></p><h3>Fett und Unterstrichen</h3><p>Syntax:<pre><code class='language-md' >**Fett**
+__Unterstrichen__
+</code></pre></p><h3>Sortierte Liste</h3><p>Syntax:<pre><code class='language-md' >1. Erster Eintrag
+2. Zweiter Eintrag
+3. Dritter Eintrag
+</code></pre></p><h3>Unsortierte Liste</h3><p>Syntax:<pre><code class='language-md' >- Erster Eintrag
+- Zweiter Eintrag
+- Dritter Eintrag
+</code></pre></p><h3>Link</h3><p>Syntax:<pre><code class='language-md' >[Titel](https://www.example.com)
+</code></pre></p><h3>Bild</h3><p>Syntax:<pre><code class='language-md' >![alt Text](image.jpg)
+</code></pre></p><h3>Absatz</h3><ul><li>Text in einer oder mehren Zeilen wird in einem Absatz zusammengeführt.</li><li>Vor jeder neue Zeile wird ein Zeilenumbruch erstellt.</li><li>Eine leere Zeile beendet den Absatz.</li><li>Ein alleinstehendes "%" in einer Zeile erzeugt eine leere Zeile innerhalb eines Absatzes.</li></ul><p>Syntax:<pre><code class='language-md' >Das ist ein Absatz
+mit zweiter Zeile
+
+Das ist ein neuer Absatz.
+%
+mit einer Leerzeile.
+</code></pre></p><h3>HTML-Tag Attribute</h3><p>In Eckigen Klammen können HTML-Attribute angegeben werden.</p><p>Wenn das Attribut am Ende der Zeile angegeben wird, so gilt dieses für das Element dieser Zeile.</br>Zum Beispiel für den Absatz, Spalte oder Listenelement.</p><p>Wird das Attribut vor einer Zeile angegeben, gilt es für den ganzen Block.</br>Zum Beispiel Für die Tabelle, oder die Liste.</p><p>Beispiel für Liste<pre><code class='language-txt' >[ id="liste1" style="background-color:yellow;"]
+- Eintrag 1
+- Eintrag 2 [ style="color: red;"]
+- Eintrag 3
+</code></pre></p><ul  id="liste1" style="background-color:yellow;"><li>Eintrag 1</li><li  style="color: red;">Eintrag 2</li><li>Eintrag 3</li></ul><h3>Spalten</h3><p>Die Darstellung in Spalten startet mit einer Zeile "---". Die Spalten werden mit "---" getrennt und beendet.</br>Nach der leten Spalte muss eine Leerzeile stehen.</p><p>Die Angabe zwischen Eckigen Klammern "[ ]" bestimmt die Attribute der einzelnen Spalten(nach "---").</p><p>Beispiel:</p><f-row  pa-v><f-item  color-s w-fit><p>Spalte1</p></f-item><f-item  color-s2 w-fit><p>Spalte2</p></f-item><f-item  color-s w-fit><p>Spalte3</p></f-item></f-row><p>Syntax:<pre><code class='language-txt' >--- [ color-s w-fit]
+Spalte1
+--- [ color-s2 w-fit]
+Spalte2
+--- [ color-s w-fit]
+Spalte3
+---
+
+</code></pre></p><h3>Tabelle</h3><p>Eine Tabellen-Zeile beginnt mit einem Pipe "|". Bei Angabe von "|*" wird bestimmt das eine "th" Spalte statt einer "td" Spalte verwendet wird.</br>Die Angabe "[ table-stripes table-border]" vor den Tabellen Zeilen gibt die Attribute für die Tabelle an.</br>Eine Leerzeile nach der Letzten Tabellen-Zeile schließt die Tabelle ab.</p><p>Beispiel:</p><table  table-stripes table-border ma-auto><tr><th> Wert</th><th> Beschreibung</th><tr><td>10</td><td>die Zahl 10</td><tr><td>20</td><td>die Zahl 20</td><tr><td>300</td><td>die Zahl 300</td></table><p>Syntax:<pre><code class='language-txt' >[ table-stripes table-border]
+|* Wert |* Beschreibung |
+| 10 | die Zahl 10 |
+| 20 | die Zahl 20 |
+| 300 | die Zahl 300 |
+
+</code></pre></p><h3>Code</h3><p>Syntax Hervorhebung wird über die Libary "prism" erzeugt.</br>Dabei wird der Code zwischen zwei Zeilen mit jeweils drei Grabakzent (```) eingeschlossen. Und bei der Beginnenden Zeile kann noch die Syntax-Sprache mit angegeben werden.</p><p>Beispiel:<pre><code class='language-js' >let x = 5 + 7;
+console.log(x);
+</code></pre></p><p>Syntax:<pre><code class='language-txt' >&#96;&#96;&#96;js
+let x = 5 + 7;
+console.log(x);
+&#96;&#96;&#96;
+</code></pre></p><h3>Abschnitt</h3><p>Es können Inhalte auch in verschiedenen HTML-Elementen angezeigt werden.</br>Das erfolgt durch auftrennen in verschiedene Abschnitte.</br>Ein Abschnitt wechselt mit einer Zeile mit mindestesten drei Istgleich-Zeichen "===".</br>Wird hinter den Zeichen ein Name angegeben, so entspricht es der ID des HTML-Elements. Wenn kein Name wird immer "content" als ID angenommen.</p><p>Beispiel:<pre><code class='language-txt' >=== info
+# Titel Info
+Das steht im HTML-Element mit der ID "info"
+
+========
+
+# Titel Content
+Das steht im HTML-Element mit der ID "content"
+
+</code></pre></p></br>
