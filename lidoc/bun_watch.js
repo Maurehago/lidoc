@@ -73,7 +73,7 @@ async function syncFile(relativePath) {
         const parsed = parseMd(content).html.get("content") || ""; // { ...content, builtAt: Date.now() }; // Parsing-Logik
         await write(destPath, parsed);
     }
-    else {
+    else if (await !isDirectory(srcPath)) {
         // Bilder und andere Dateien direkt kopieren
         await write(destPath, file(srcPath));
     }
@@ -201,30 +201,31 @@ const server = serve({
         /** @type {string} */
         let path = url.pathname;
 
-        // Wenn Hashtag
-        if (url.hash) {
-            let filePath = join(buildPath, url.hash);
-            if (await isDirectory(filePath)) {
-                filePath = join(filePath, "/index.html");
-            } else if (!path.includes(".")) {
-                filePath += ".html";
-            }
+        // // Wenn Hashtag
+        // if (url.hash) {
+        //     let filePath = join(buildPath, url.hash);
+        //     if (await isDirectory(filePath)) {
+        //         filePath = join(filePath, "/index.html");
+        //     } else if (!path.includes(".")) {
+        //         filePath += ".html";
+        //     }
             
-            console.log("filePath:", filePath);
-            const buildFile = Bun.file(filePath);
-            if (await buildFile.exists()) {
-                return new Response(buildFile);
-            }
-             return new Response("Nicht gefunden", { status: 404 });
-        }
+        //     console.log("filePath:", filePath);
+        //     const buildFile = Bun.file(filePath);
+        //     if (await buildFile.exists()) {
+        //         return new Response(buildFile);
+        //     }
+        //      return new Response("Nicht gefunden", { status: 404 });
+        // }
 
+        console.log("Path:", path);
         let serverFile = path;
         if (serverFile == "/") {
             serverFile = "./index.html";
             const file = Bun.file(serverFile);
             if (await file.exists()) {
                 // Wenn es HTML ist, Reload-Script injizieren
-                if (path.endsWith(".html")) {
+                if (serverFile.endsWith(".html")) {
                     let text = await file.text();
                     text += `
               <script>
@@ -238,13 +239,12 @@ const server = serve({
             }
         }
         
-        console.log("Path:", path);
         
         const file = Bun.file("./" + serverFile);
         if (await file.exists()) {
             return new Response(file);         
         }
-        return new Response("Nicht gefunden", { status: 404 });
+        return new Response("", { status: 404 });
     },
     websocket: {
         open(ws) { ws.subscribe("reload-topic"); },

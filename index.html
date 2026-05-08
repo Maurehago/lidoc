@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Home</title>
+    <title>LiDoc Test</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="" />
     <link rel="icon" href="/img/icon.png">
@@ -16,9 +16,17 @@
 
 <body>
     <f-col style="min-height: 100vh;">
-        <f-item id="header" color-p no-print data-lidoc="/#_header.md">Header</f-item>
-        <f-item id="body" w-fit data-lidoc="/_body.md">Body</f-item>
-        <f-item id="footer" color-p no-print data-lidoc="/#_footer.md">Footer</f-item>
+        <f-item id="header" color-p no-print pos-sticky pos-t-l data-lidoc="_header">Header</f-item>
+        <f-item id="body" w-fit>
+            <f-row w-max ma-auto>
+                <f-item>
+                    <nav id="nav" pos-sticky ma-r-m style="top: 40px; min-height: 90vh; max-height: 99vh;overflow: auto;"
+                        data-lidoc="_nav"></nav>
+                </f-item>
+                <f-item id="content" w-fit data-lidoc="index"></f-item>
+            </f-row>
+        </f-item>
+        <f-item id="footer" color-p no-print data-lidoc="_footer">Footer</f-item>
     </f-col>
 </body>
 

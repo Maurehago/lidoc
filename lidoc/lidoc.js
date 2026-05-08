@@ -23,6 +23,7 @@ import { parseMd } from "./parsemd.js";
  * Konfiguration von Lidoc
  * @typedef {object} Config
  * @property {string} docPath    default: "/doc/" - Basis Pfad in dem die Markdown Dokumente liegen. Muss mit einem "/" enden!
+ * @property {string} buildPath    default: "/build/" - Basis Pfad in dem die HTML Dokumente liegen. Muss mit einem "/" enden!
  */
 
 /**
@@ -40,11 +41,14 @@ import { parseMd } from "./parsemd.js";
 /** @type {HTMLElement} */
 let contentElm = document.getElementById("content") || document.body;
 
+/** @type {HTMLElement} */
+let navElm = document.getElementById("nav");
 
 
 /** @type {Config} */
 const config = {
     docPath: "/doc/"
+    , buildPath: "/build/"
 };
 
 /** Liste aller [sub-list] Elemente. Der Key ist "hash" vom vorangestelltem Link(a) 
@@ -79,12 +83,13 @@ export function setConfig(obj) {
 
 /**
  * Prüft die URL auf einen Markdown Datei Namen
- * @param {string} siteUrl - relatife URL zu der Markdown Seite
+ * @param {string} siteUrl - relative URL zu der Markdown Seite
  * @returns {string}
  */
 function checkSiteUrl(siteUrl) {
     if (!siteUrl) {
-        siteUrl = "./index.md";
+        //siteUrl = "./index.md";
+        siteUrl = "index.html";
     }
     
     if (siteUrl.startsWith("#")) {
@@ -93,15 +98,18 @@ function checkSiteUrl(siteUrl) {
     } 
     
     if (siteUrl.endsWith("/")) {
-        siteUrl += "index.md";
+        //siteUrl += "index.md";
+        siteUrl += "index.html";
     }
     
-    if (siteUrl.endsWith(".html")) {
-        siteUrl = siteUrl.replace(".html", ".md");
-    }
+    //if (siteUrl.endsWith(".html")) {
+    //    siteUrl = siteUrl.replace(".html", ".md");
+    //}
     
-    if (!siteUrl.endsWith(".md")) {
-        siteUrl += ".md";
+    //if (!siteUrl.endsWith(".md")) {
+    if (!siteUrl.endsWith(".html")) {
+        //siteUrl += ".md";
+        siteUrl += ".html";
     }
     return siteUrl;
 }
@@ -127,7 +135,7 @@ async function fetchText(url) {
         const text = await res.text();
         return text;
     } else {
-        return "# 404 not found";
+        return "";
     }
 }
 
@@ -215,20 +223,34 @@ async function loadModule(module) {
  * Läd und Parsed Content aus einer Markdown Datei
  * Und Zeigt den Inhalt im Element an.
  * @param {string} url - Pfad zur MD Datei die geladen wird
+ * @param {HTMLElement} [elm] - OPTIONAL HTMLElement in den der Conten geschrieben wird
  * @returns {Promise<void>}
  */
-export async function showContent(url) {
+export async function showContent(url, elm) {
     if (!url) { return; }
-    if (!url.endsWith(".md")) { return; }
+    //if (!url.endsWith(".md")) { return; }
+    if (!url.endsWith(".html")) { return; }
+
+    // Navigation
+    if (navElm instanceof HTMLElement) {
+        let latstPos = url.lastIndexOf("/");
+        let navPath = url.substring(0, latstPos);
+        // todo: hier weiter mit Navigation
+    }
+
+
 
     // console.log("siteURL:", url);
 
     // Markdown als Text holen
-    const mdString = await fetchText(url);
+    //const mdString = await fetchText(url);
+    
+    // HTML String holen
+    const htmlString = await fetchText(config.buildPath + url);
     //console.log("mdString:", mdString);
 
     // Markdown in SeitenData parsen
-    const siteData = parseMd(mdString);
+    //const siteData = parseMd(mdString);
 
     //console.log("siteData:", siteData);
 
@@ -237,21 +259,27 @@ export async function showContent(url) {
     // todo: Template mit Inhalt zusammenführen
 
     // HTML im Body anzeigen
-    const keys = [...siteData.html.keys()];
-    for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        const value = siteData.html.get(key) || "";
-        const cElm = document.getElementById(key);
-        if (cElm instanceof HTMLElement && value) {
-            cElm.innerHTML = "";
-            cElm.insertAdjacentHTML("afterbegin", value);
-        } else if (key == "content" && !cElm) {
-            if (contentElm instanceof HTMLElement) {
-                contentElm.innerHTML = "";
-                contentElm.insertAdjacentHTML("afterbegin", value);
-            }
-        }
+    if (!elm) {elm = contentElm}
+    if (elm instanceof HTMLElement) {
+        elm.innerHTML = "";
+        elm.insertAdjacentHTML("afterbegin", htmlString);
     }
+
+    // const keys = [...siteData.html.keys()];
+    // for (let i = 0; i < keys.length; i++) {
+    //     const key = keys[i];
+    //     const value = siteData.html.get(key) || "";
+    //     const cElm = document.getElementById(key);
+    //     if (cElm instanceof HTMLElement && value) {
+    //         cElm.innerHTML = "";
+    //         cElm.insertAdjacentHTML("afterbegin", value);
+    //     } else if (key == "content" && !cElm) {
+    //         if (contentElm instanceof HTMLElement) {
+    //             contentElm.innerHTML = "";
+    //             contentElm.insertAdjacentHTML("afterbegin", value);
+    //         }
+    //     }
+    // }
 
     // siteData.html.forEach((value, key) => {
     //     if (key == "content") {
@@ -266,7 +294,7 @@ export async function showContent(url) {
     //     }
     // });
     
-    await loadModule(siteData.data.module);
+    //await loadModule(siteData.data.module);
 } // showContent
 
 
@@ -311,12 +339,12 @@ for (let i = 0; i < lidocElmList.length; i ++) {
         if (window.location.hash) {
             url = checkSiteUrl(window.location.hash);
         }
-        await showContent(url);
-    } else if (elm.tagName == "NAV") {
-        await showContent(url);
+        await showContent(url, contentElm);
+    } else if (elm.id == "nav") {
+        await showContent(url, elm);
         setSublist();
     } else {
-        showContent(url); // kein await notwengig, kann gleichzeitig geladen werden
+        showContent(url, elm); // kein await notwengig, kann gleichzeitig geladen werden
     }
 }
 
