@@ -16,17 +16,14 @@
 
 <body>
     <f-col style="min-height: 100vh;">
-        <f-item id="header" color-p no-print pos-sticky pos-t-l data-lidoc="_header">Header</f-item>
-        <f-item id="body" w-fit>
-            <f-row w-max ma-auto>
-                <f-item>
-                    <nav id="nav" pos-sticky ma-r-m style="top: 40px; min-height: 90vh; max-height: 99vh;overflow: auto;"
-                        data-lidoc="_nav"></nav>
-                </f-item>
-                <f-item id="content" w-fit data-lidoc="index"></f-item>
-            </f-row>
+        <f-item color-p pos-sticky pos-t-l data-lidoc="/_header"></f-item>
+        <f-item w-fit f-row>
+            <f-item color-p2 hide-empty hide-lt-l ma-r-m style="min-width: 280px;max-width: 280px;z-index: 3;">
+                <nav pos-t-l pos-sticky pa-t-m data-lidoc="_nav" style="max-height: 99vh;overflow: auto;"></nav>
+            </f-item>
+            <f-item w-fit data-lidoc="_content"></f-item>
         </f-item>
-        <f-item id="footer" color-p no-print data-lidoc="_footer">Footer</f-item>
+        <f-item color-p pos-sticky pos-t-l data-lidoc="/_footer"></f-item>
     </f-col>
 </body>
 

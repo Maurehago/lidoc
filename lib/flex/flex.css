@@ -328,6 +328,13 @@ nav ol,nav ul {
   padding-left: 8px;
 }
 
+nav:empty,nav:has(:only-child:empty), 
+[hide-empty]:empty,[hide-empty]:has(:only-child:empty),
+.hide-empty:empty,.hide-empty:has(:only-child:empty){
+  display: none;
+}
+
+
 .toggler {
   display: none;
   /*left: -9999px;
