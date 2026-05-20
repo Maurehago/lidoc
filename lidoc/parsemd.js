@@ -10,6 +10,7 @@
 
 /**
  * @typedef {object} ParseOptions
+ * @property {string} [basePath] - Basis Pfade für URL's. Wenn der Pfad mit "#" beginnt, wird die URL nicht geändert.
  * @property {string} [rowTag] - TagName für die Zeilen
  * @property {string} [colTag] - TagName für sie Spalten
  */
@@ -24,6 +25,9 @@
 
 
 
+
+
+
 /**
  * Erzeugt aus dem Inhalt einer Markdown Datei
  * eine Seiten Information, mit geparstem html
@@ -33,10 +37,47 @@
  */
 export function parseMd(mdString, options) {
     // ====================
-    //   Tag namen
+    //   Optionen Lesen
     // ------------------
+    let basePath = options?.basePath || "./";
+    if (!basePath.endsWith("/")) {basePath += "/";}
     const rowTag = options?.rowTag || "f-row";
     const colTag = options?.colTag || "f-item";
+
+    /**
+     * Erstellt anhand vom Pfad die richtige URL
+     * @param {string} url - Url zum prüfen
+     * @returns {string} augebesserte URL
+     */
+    function parseURL(url) {
+        // "test.jpg" / "test/test.jpg"
+        // "/test.jpg" / "/test/test.jpg"
+        
+        // "#test.jpg" - darf nicht geändert werden
+        if (url.startsWith("#")) {return url;}
+
+        // "http://" / "https://" - Keine Änderungen
+        if (url.indexOf("://") > 0) { return url; }
+        
+        // "../test.jpg" / "../../test.jpg"
+        // darf nicht vorkommen
+        while (url.startsWith("../")) {
+            url = url.substring(3);
+        }
+        
+        // "//test.jpg" / "./test.jpg"
+        if (url.startsWith("//")) {
+            // fom Server-Root weggeghen - kein Basispfad
+            return url.substring(1);
+        } else if (url.startsWith("./")) {
+            url = url.substring(2);
+        } else if (url.startsWith("/")) {
+            url = url.substring(1);
+        }
+
+        return basePath + url;
+    }
+
 
     // Regular Expression
 
@@ -185,7 +226,7 @@ export function parseMd(mdString, options) {
                 // Bild
                 const part1 = newText.substring(0, bildPos1);
                 const part2 = newText.substring(bildPos1 + 2, linkPos2);
-                const part3 = newText.substring(linkPos2 + 2, endPos);
+                const part3 = parseURL(newText.substring(linkPos2 + 2, endPos)); // Basis Pfad ausbessern wenn "//" angegeben dann geht das in das ROOT vom Webserver
                 const part4 = newText.substring(endPos + 1);
 
                 // BildLink
@@ -197,7 +238,7 @@ export function parseMd(mdString, options) {
                 // Link
                 const part1 = newText.substring(0, linkPos1);
                 const part2 = newText.substring(linkPos1 + 1, linkPos2);
-                const part3 = newText.substring(linkPos2 + 2, endPos);
+                const part3 = parseURL(newText.substring(linkPos2 + 2, endPos));
                 const part4 = newText.substring(endPos + 1);
 
                 // Link

@@ -12,10 +12,12 @@
     <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
 
     <script src="/lib/prism/prism.js"></script>
+    <!-- <script src="/lib/prism/prism_foxpro.js"></script> <!-- OPTIONAL für Foxpro Code -->
 </head>
 
 <body>
     <f-col style="min-height: 100vh;">
+        <!-- Header Pfad ausbessern wenn erforderlich -->
         <f-item color-p pos-sticky pos-t-l data-lidoc="/_header"></f-item>
         <f-item w-fit f-row>
             <f-item color-p2 hide-empty hide-lt-l ma-r-m style="min-width: 280px;max-width: 280px;z-index: 3;">
@@ -23,10 +25,22 @@
             </f-item>
             <f-item w-fit data-lidoc="_content"></f-item>
         </f-item>
+        <!-- Footer Pfad ausbessern wenn erforderlich -->
         <f-item color-p pos-sticky pos-t-l data-lidoc="/_footer"></f-item>
     </f-col>
 </body>
 
-<script type="module" src="/lidoc/lidoc.js"></script>
+<script type="module">
+    // @ts-check
+
+    /** Hier Pad zu "lidoc.js" ausbessern  **/
+    import { setConfig, showSite } from "/lidoc/lidoc.js";
+
+    /** Hier Pfad zum Dokument Ordner ausbessern */
+    setConfig({buildPath: "/build/"});
+
+    /** Zeigt die SeitenInhalte an */
+    showSite();
+</script>
 
 </html>

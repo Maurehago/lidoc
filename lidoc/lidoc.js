@@ -1,29 +1,27 @@
 // ====================
 //   lidoc APP
-// 2024-09-14
+// 2026-05-20
 // ====================
-
 // Zeigt Markdown Seiten in einem HTML an
-
 // @ts-check
 
 // ==================
 //   Imports
 // -----------
-import { parseMd } from "./parsemd.js";
+// import { parseMd } from "./parsemd.js";
 // import  Prism from "../prism/prism.js"
 
 // ==================
 //   Types
 // -----------
 
-//** @typedef {import("lib.dom.d.ts").HTMLElement} HTMLElement */
+////** @typedef {import("lib.dom.d.ts").HTMLElement} HTMLElement */
 
 /**
  * Konfiguration von Lidoc
  * @typedef {object} Config
- * @property {string} docPath    default: "/doc/" - Basis Pfad in dem die Markdown Dokumente liegen. Muss mit einem "/" enden!
- * @property {string} buildPath    default: "/build/" - Basis Pfad in dem die HTML Dokumente liegen. Muss mit einem "/" enden!
+ * @property {string} [docPath]    default: "/doc/" - Basis Pfad in dem die Markdown Dokumente liegen. Muss mit einem "/" enden!
+ * @property {string} [buildPath]    default: "/build/" - Basis Pfad in dem die HTML Dokumente liegen. Muss mit einem "/" enden!
  */
 
 /**
@@ -72,14 +70,14 @@ let subList = [];
  * Gibt die Konfiguration aus
  * @returns {Config}
  */
-export function getConfig() {
+function getConfig() {
     return config;
 }
 
 /**
  * Nimmt Konfigurationen in einem Objekt entgegen
  * und schreibt diese in das Configurationsobjekt
- * @param {object} obj 
+ * @param {Config} obj 
  */
 export function setConfig(obj) {
     if (!obj || typeof obj != "object") { return; }
@@ -117,57 +115,21 @@ function checkSiteUrl(siteUrl) {
     return siteUrl;
 }
 
-/**
- * Analysiert die HTML Seite auf [data-lidoc] Elemente
- * @param {string} siteUrl - Url von Hash
- * @param {string} startPath - Pfad ab dem die Reletiven urls starten
- */
-async function parseSite(siteUrl, startPath) {
-    lidocElmList = document.querySelectorAll("[data-lidoc]");
-
-    // Alle [data-lidoc] Elemente durchgehen
-    for (let i = 0; i < lidocElmList.length; i++) {
-        const elm = lidocElmList[i];
-        let url = elm.dataset.lidoc || "";
-        
-        // Wenn Content -> soll Hash Url laden
-        if (url == "_content") {
-            // content Element merken
-            contentElm = elm;
-            await showContent(checkSiteUrl(siteUrl), contentElm);
-        } else {
-            // URL auflösen
-            if (!url.startsWith("/")) {
-                url = startPath + url;
-            }
-            url = checkSiteUrl(url);
-
-            // Daten von Url lesen
-            await showContent(url, elm);
-
-            // Wenn Navigation
-            if (elm.tagName == "NAV") {
-                // Menüliste setzen
-                setSublist();
-            }
-        }
-    }
-}
 
 
 
-/**
- * Hash von URL lesen, um Seiteninhalte nachladen zu können
- * @returns {string} - URL der Markdownseite
- */
-export function getHashUrl() {
-    let siteUrl = window.location.hash;
-    let parts = siteUrl.split("/");
-    if (parts.length > 1 && parts[0] != lastPath) {
-        //parseSite(siteUrl);
-    }
-    return checkSiteUrl(siteUrl);
-}
+// /**
+//  * Hash von URL lesen, um Seiteninhalte nachladen zu können
+//  * @returns {string} - URL der Markdownseite
+//  */
+// export function getHashUrl() {
+//     let siteUrl = window.location.hash;
+//     let parts = siteUrl.split("/");
+//     if (parts.length > 1 && parts[0] != lastPath) {
+//         //parseSite(siteUrl);
+//     }
+//     return checkSiteUrl(siteUrl);
+// }
 
 /**
  * Text aus Datei vom Server
@@ -193,8 +155,6 @@ export function setSublist() {
     const linkList = document.querySelectorAll("nav a");
     if (!linkList) { return; }
 
-    // console.log("linkList:", linkList);
-
     // bestehende Liste leeren
     subList = [];
 
@@ -203,7 +163,6 @@ export function setSublist() {
         const linkUrl = link.hash;
         const subListElm = link.nextElementSibling;
 
-        //console.log("subListObj:", linkUrl, subListElm);
         // Wenn Hash und Element
         if (linkUrl) {  //  && subListElm
             subList.push({ hash: linkUrl, linkElm: link, subElm: subListElm });
@@ -213,9 +172,8 @@ export function setSublist() {
 } // setSubList
 
 
-// Navigation prüfen
 /**
- * 
+ * Navigation prüfen
  */
 function checkNav() {
     // Alle [sub-list] Elemente durchgehen
@@ -265,83 +223,63 @@ async function loadModule(module) {
 
 
 /**
- * Läd und Parsed Content aus einer Markdown Datei
- * Und Zeigt den Inhalt im Element an.
- * @param {string} url - Pfad zur MD Datei die geladen wird
- * @param {HTMLElement} [elm] - OPTIONAL HTMLElement in den der Conten geschrieben wird
+ * Holt die gewünschte HTML-Datei(url) vom Server und zeigt diese im angegebenen Element an.
+ * @param {string} url - Pfad zur Datei die geladen wird
+ * @param {HTMLElement} [elm] - OPTIONAL HTMLElement wo der Inhalt rein geschrieben wird
  * @returns {Promise<void>}
  */
 export async function showContent(url, elm) {
     if (!url) { return; }
-    //if (!url.endsWith(".md")) { return; }
     if (!url.endsWith(".html")) { return; }
-
-    // Navigation
-    if (navElm instanceof HTMLElement) {
-        let latstPos = url.lastIndexOf("/");
-        let navPath = url.substring(0, latstPos);
-        // todo: hier weiter mit Navigation
-    }
-
-
-
-    // console.log("siteURL:", url);
-
-    // Markdown als Text holen
-    //const mdString = await fetchText(url);
 
     // HTML String holen
     const htmlString = await fetchText(config.buildPath + url);
-    //console.log("mdString:", mdString);
 
-    // Markdown in SeitenData parsen
-    //const siteData = parseMd(mdString);
-
-    //console.log("siteData:", siteData);
-
-    // todo: Links mit HashTag ausbessern
-
-    // todo: Template mit Inhalt zusammenführen
-
-    // HTML im Body anzeigen
+    // HTML anzeigen wenn gefunden, sonst wird nichts verändert
     if (!elm) { elm = contentElm }
     if (elm instanceof HTMLElement && htmlString != undefined) {
         elm.innerHTML = "";
         elm.insertAdjacentHTML("afterbegin", htmlString);
     }
-
-    // const keys = [...siteData.html.keys()];
-    // for (let i = 0; i < keys.length; i++) {
-    //     const key = keys[i];
-    //     const value = siteData.html.get(key) || "";
-    //     const cElm = document.getElementById(key);
-    //     if (cElm instanceof HTMLElement && value) {
-    //         cElm.innerHTML = "";
-    //         cElm.insertAdjacentHTML("afterbegin", value);
-    //     } else if (key == "content" && !cElm) {
-    //         if (contentElm instanceof HTMLElement) {
-    //             contentElm.innerHTML = "";
-    //             contentElm.insertAdjacentHTML("afterbegin", value);
-    //         }
-    //     }
-    // }
-
-    // siteData.html.forEach((value, key) => {
-    //     if (key == "content") {
-    //         elm.innerHTML = "";
-    //         elm.insertAdjacentHTML("afterbegin", value);
-    //         return;
-    //     }
-    //     const cElm = document.getElementById(key);
-    //     if (cElm instanceof HTMLElement) {
-    //         cElm.innerHTML = "";
-    //         cElm.insertAdjacentHTML("afterbegin", value);
-    //     }
-    // });
-
-    //await loadModule(siteData.data.module);
 } // showContent
 
+
+/**
+ * Analysiert die HTML Seite auf [data-lidoc] Elemente
+ * @param {string} siteUrl - Url von Hash
+ * @param {string} startPath - Pfad ab dem die Reletiven urls starten
+ */
+async function parseSite(siteUrl, startPath) {
+    lidocElmList = document.querySelectorAll("[data-lidoc]");
+
+    // Alle [data-lidoc] Elemente durchgehen
+    for (let i = 0; i < lidocElmList.length; i++) {
+        const elm = lidocElmList[i];
+        let url = elm.dataset.lidoc || "";
+        
+        // Wenn Content -> soll Hash Url laden
+        if (url == "_content") {
+            // content Element merken
+            contentElm = elm;
+            await showContent(checkSiteUrl(siteUrl), contentElm);
+        } else {
+            // URL auflösen
+            if (!url.startsWith("/")) {
+                url = startPath + url;
+            }
+            url = checkSiteUrl(url);
+
+            // Daten von Url lesen
+            await showContent(url, elm);
+
+            // Wenn Navigation
+            if (elm.tagName == "NAV") {
+                // Menüliste setzen
+                setSublist();
+            }
+        }
+    }
+}
 
 
 /**
@@ -391,48 +329,8 @@ export async function showSite() {
 //  Defaults
 // ---------------
 
-// Alle Lidoc elemente lesen
-//lidocElmList = document.querySelectorAll("[data-lidoc]");
 
-// let isContent = false;
-// for (let i = 0; i < lidocElmList.length; i++) {
-//     const elm = lidocElmList[i];
-//     let url = elm.dataset.lidoc || "";
-//     url = checkSiteUrl(url);
-
-//     // ID auf "content" prüfen
-//     if (elm.id == "content") {
-//         contentElm = elm;
-//         isContent = true;
-//         // prüfen auf hash. Hash überschreibt die angegebene Url bei Content
-//         if (window.location.hash) {
-//             url = checkSiteUrl(window.location.hash);
-//         }
-//         await showContent(url, contentElm);
-//     } else if (elm.id == "nav") {
-//         await showContent(url, elm);
-//         setSublist();
-//     } else {
-//         showContent(url, elm); // kein await notwengig, kann gleichzeitig geladen werden
-//     }
-// }
-
-// if (!isContent) {
-//     // wenn noch kein Content geladen
-//     await showSite();
-// }
-
-// // Navigation prüfen
-// checkNav();
-
-// // Syntax Highlighter
-// // @ts-ignore
-// if (window?.Prism) {
-//     // @ts-ignore
-//     window.Prism.highlightAll();
-// }
-
-showSite();
+// showSite();
 
 
 // =======================

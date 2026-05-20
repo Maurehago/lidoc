@@ -70,7 +70,10 @@ async function syncFile(relativePath) {
 
     if (relativePath.endsWith(".md")) { // Beispiel für "spezielle Endung"
         const content = await file(srcPath).text(); // Inhalt der Datei
-        const parsed = parseMd(content).html.get("content") || ""; // { ...content, builtAt: Date.now() }; // Parsing-Logik
+        const siteInfo = parseMd(content, {basePath: buildPath});
+        // todo: Links Ausbessern (wenn nicht relative Pfade)
+        // todo: Tagliste erstellen
+        const parsed = siteInfo.html.get("content") || ""; // { ...content, builtAt: Date.now() }; // Parsing-Logik
         await write(destPath, parsed);
     }
     else if (await !isDirectory(srcPath)) {
@@ -201,23 +204,6 @@ const server = serve({
         /** @type {string} */
         let path = url.pathname;
 
-        // // Wenn Hashtag
-        // if (url.hash) {
-        //     let filePath = join(buildPath, url.hash);
-        //     if (await isDirectory(filePath)) {
-        //         filePath = join(filePath, "/index.html");
-        //     } else if (!path.includes(".")) {
-        //         filePath += ".html";
-        //     }
-            
-        //     console.log("filePath:", filePath);
-        //     const buildFile = Bun.file(filePath);
-        //     if (await buildFile.exists()) {
-        //         return new Response(buildFile);
-        //     }
-        //      return new Response("Nicht gefunden", { status: 404 });
-        // }
-
         console.log("Path:", path);
         let serverFile = path;
         if (serverFile == "/") {
@@ -260,3 +246,6 @@ console.log(`Server läuft auf ${server.url}`);
 
 if (isClear) { await cleanBuildDir(); }
 if (isBuild) { await processAll(); }
+
+// todo: Navigation erstellen lassen - von allen ersten Unterordnern oder nur bestimmten Unterordner
+// todo: Tagliste erstellen - eventuell Kategorie(oberster Ordner) und Tags - Suche oder Linkliste für Tags
