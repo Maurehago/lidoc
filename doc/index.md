@@ -1,4 +1,4 @@
-# LiDoc 2
+# LiDoc
 Listen und Dokument Generator
 
 ## Content

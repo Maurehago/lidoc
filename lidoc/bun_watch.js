@@ -70,15 +70,21 @@ async function syncFile(relativePath) {
 
     if (relativePath.endsWith(".md")) { // Beispiel für "spezielle Endung"
         const content = await file(srcPath).text(); // Inhalt der Datei
-        const siteInfo = parseMd(content, {basePath: buildPath});
+        const siteInfo = parseMd(content, { basePath: buildPath });
         // todo: Links Ausbessern (wenn nicht relative Pfade)
         // todo: Tagliste erstellen
         const parsed = siteInfo.html.get("content") || ""; // { ...content, builtAt: Date.now() }; // Parsing-Logik
         await write(destPath, parsed);
-    }
-    else if (await !isDirectory(srcPath)) {
-        // Bilder und andere Dateien direkt kopieren
-        await write(destPath, file(srcPath));
+    } else {
+        // Auf Directory prüfen
+        const is_dir = await isDirectory(srcPath);
+        if (!is_dir) {
+            // Bilder und andere Dateien direkt kopieren
+            await write(destPath, file(srcPath));
+            console.log("File:", srcPath, "->", destPath);
+        } else {
+            console.log("is Dir:", srcPath);
+        }
     }
 
     // Browser informieren, dass eine Datei aktualisiert wurde
@@ -106,14 +112,14 @@ let isBuild = false; // Build Modus
 let isClear = false; // Lösch Modus
 
 for (let i = 0; i < args.length; i++) {
-    if (args[i] == "build") {
+    if (args[i] == "--build" || args[i] == "-b") {
         // Build modus
         isBuild = true;
-    } else if (args[i] == "clear") {
+    } else if (args[i] == "--clear" || args[i] == "-c") {
         // Datein vorher löschen
         isClear = true;
-    } else if (lastArg == "port") {
-        serverPort = parseInt(lastArg);
+    } else if (lastArg == "--port" || lastArg == "-p") {
+        serverPort = parseInt(args[i]);
     }
 
     // letzten Parameter merken
@@ -224,11 +230,11 @@ const server = serve({
                 return new Response(file);
             }
         }
-        
-        
+
+
         const file = Bun.file("./" + serverFile);
         if (await file.exists()) {
-            return new Response(file);         
+            return new Response(file);
         }
         return new Response("", { status: 404 });
     },

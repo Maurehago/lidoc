@@ -19,10 +19,13 @@
     <f-col style="min-height: 100vh;">
         <!-- Header Pfad ausbessern wenn erforderlich -->
         <f-item color-p pos-sticky pos-t-l data-lidoc="/_header"></f-item>
+        <!-- Content Bereich mit 2 Spalten-->
         <f-item w-fit f-row>
+            <!-- Navigations Spalte (wird ausgebelendet wenn leer), data-lidoc muss "_nav" sein -->
             <f-item color-p2 hide-empty hide-lt-l ma-r-m style="min-width: 280px;max-width: 280px;z-index: 3;">
                 <nav pos-t-l pos-sticky pa-t-m data-lidoc="_nav" style="max-height: 99vh;overflow: auto;"></nav>
             </f-item>
+            <!-- Content Spalte, data-lidoc muss "_content" sein -->
             <f-item w-fit data-lidoc="_content"></f-item>
         </f-item>
         <!-- Footer Pfad ausbessern wenn erforderlich -->
@@ -30,6 +33,7 @@
     </f-col>
 </body>
 
+<!-- Skript als Modul, wird ausgeführt wenn die Seite komplett geladen -->
 <script type="module">
     // @ts-check
 
