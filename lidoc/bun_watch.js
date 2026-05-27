@@ -73,7 +73,41 @@ async function syncFile(relativePath) {
         const siteInfo = parseMd(content, { basePath: buildPath });
         // todo: Links Ausbessern (wenn nicht relative Pfade)
         // todo: Tagliste erstellen
-        const parsed = siteInfo.html.get("content") || ""; // { ...content, builtAt: Date.now() }; // Parsing-Logik
+        let parsed = siteInfo.html.get("content") || ""; // { ...content, builtAt: Date.now() }; // Parsing-Logik
+        // todo: Script Module 
+
+        // // 1. HTML vom Server laden und in ein Element einfügen (z.B. in ein div mit der ID 'ziel-element')
+        // fetch('server-teil.html')
+        //   .then(response => response.text())
+        //   .then(html => {
+        //     document.getElementById('ziel-element').innerHTML = html;
+
+        //     // 2. Dynamischen script type="module" Tag erstellen
+        //     const script = document.createElement('script');
+        //     script.type = 'module';
+            
+        //     // 3. Den Import und den Funktionsaufruf definieren
+        //     script.innerHTML = `
+        //       import { init } from './spezielle-datei.js';
+        //       init();
+        //     `;
+
+        //     // 4. Das Skript dem DOM hinzufügen (z.B. im head oder direkt am Ende des Body)
+        //     document.head.appendChild(script);
+        //   })
+        //   .catch(error => console.error('Fehler beim Laden:', error));
+
+
+
+        /** @type {string} */
+        const module = siteInfo.data.module || "";
+        if (module) {
+            // Skript hinzufügen
+            parsed += `<script type="module">
+    import { init } from "${module}";
+    init();
+</script>`;
+        }
         await write(destPath, parsed);
     } else {
         // Auf Directory prüfen

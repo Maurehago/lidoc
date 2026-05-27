@@ -1,4 +1,14 @@
-# LiDoc
+---
+cat: lidoc
+
+tags:
+- lidoc
+
+module: lidoc/test.js
+
+---
+
+# LiDoc mit module
 Listen und Dokument Generator
 
 ## Content
