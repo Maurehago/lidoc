@@ -1,11 +1,8 @@
 ---
 cat: lidoc
-
 tags:
 - lidoc
-
 module: lidoc/test.js
-
 ---
 
 # LiDoc mit module

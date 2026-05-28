@@ -201,22 +201,22 @@ function checkNav() {
 /**
  * Läd erforderliche Javascript Module für die Seite.  
  * Es können nur Module mit absoluten Pfad (beginnend mit "/") geladen werden.
- * @param {Array<string>} module - Liste mit Modul Namen
+ * @param {string} module - Liste mit Modul Namen
  * @returns {Promise<void>}
  */
 async function loadModule(module) {
-    if (!module || !Array.isArray(module)) { return; }
+    if (!module || typeof module != "string") { return; }
 
-    // alle module durchgehen
-    for (let i = 0; i < module.length; i++) {
-        const modulName = module[i];
-        if (!modulName.startsWith("/")) { continue; }
-        let m = await import(modulName);
+    try {
+        // Modul laden
+        let m = await import(config.buildPath + module);
 
         // init Funktion aufrufen wenn vorhanden
         if (typeof m?.init == "function") {
             m.init();
         }
+    } catch (err) {
+        console.error(err);
     }
 }
 
@@ -240,6 +240,22 @@ export async function showContent(url, elm) {
     if (elm instanceof HTMLElement && htmlString != undefined) {
         elm.innerHTML = "";
         elm.insertAdjacentHTML("afterbegin", htmlString);
+
+        // module
+        const module = elm.querySelector("[data-module]");
+        if (module instanceof HTMLElement) { loadModule(module.dataset.module || ""); }
+
+        // Syntax Highlighter
+        // @ts-ignore
+        if (window?.Prism) {
+            // @ts-ignore
+            window.Prism.highlightAll();
+        }
+
+        // Navigation erstellen
+        if (elm.tagName == "NAV") {
+            setSublist();
+        }
     }
 } // showContent
 
@@ -256,12 +272,12 @@ async function parseSite(siteUrl, startPath) {
     for (let i = 0; i < lidocElmList.length; i++) {
         const elm = lidocElmList[i];
         let url = elm.dataset.lidoc || "";
-        
+
         // Wenn Content -> soll Hash Url laden
         if (url == "_content") {
             // content Element merken
             contentElm = elm;
-            await showContent(checkSiteUrl(siteUrl), contentElm);
+            showContent(checkSiteUrl(siteUrl), contentElm).then(() => checkNav());
         } else {
             // URL auflösen
             if (!url.startsWith("/")) {
@@ -270,13 +286,7 @@ async function parseSite(siteUrl, startPath) {
             url = checkSiteUrl(url);
 
             // Daten von Url lesen
-            await showContent(url, elm);
-
-            // Wenn Navigation
-            if (elm.tagName == "NAV") {
-                // Menüliste setzen
-                setSublist();
-            }
+            showContent(url, elm).then(() => checkNav());
         }
     }
 }
@@ -287,41 +297,46 @@ async function parseSite(siteUrl, startPath) {
  * @returns {Promise<void>}
  */
 export async function showSite() {
+    // URL lesen
+    //let url = new URL(window.location.href.substring(1));
+
     // Hash lesen
     let siteUrl = window.location.hash;
-    
+    //let scrollTo = url.searchParams.get("scroll"); // Für Scrollen zu benötigt
+
+
     // Pfad aufsplitten
     let parts = siteUrl.split("/");
-    
+
     // Prüfen ob der erste Teil mit dem letzten Startpfad zusammenpasst
     if (parts[0] != lastPath) {
-        const startPath = parts[0].substring(parts[0].indexOf("#") +1) + "/";
-        
+        const startPath = parts[0].substring(parts[0].indexOf("#") + 1) + "/";
+
         // Inhalte der ganzen Seite prüfen (incl. Header, Footer und Nav)
         await parseSite(siteUrl, startPath);
         lastPath = parts[0];
     } else {
         if (!lastPath) {
             // Inhalte der ganzen Seite prüfen (incl. Header, Footer und Nav)
-            await parseSite(siteUrl, "/");
+            parseSite(siteUrl, "/");
             lastPath = "/";
         } else {
             // nur Content ausbessern
-            await showContent(checkSiteUrl(siteUrl));
+            showContent(checkSiteUrl(siteUrl)).then(() => checkNav());
         }
     }
 
     // test:
     console.log("lastPath:", lastPath);
 
-    checkNav();
+    //checkNav();
 
     // Syntax Highlighter
     // @ts-ignore
-    if (window?.Prism) {
-        // @ts-ignore
-        window.Prism.highlightAll();
-    }
+    // if (window?.Prism) {
+    //     // @ts-ignore
+    //     window.Prism.highlightAll();
+    // }
 } // showSite
 
 

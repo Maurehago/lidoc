@@ -60,22 +60,27 @@ async function cleanBuildDir() {
 /**
  * Parsed und kopiert die Quell Dateien
  * @param {string} relativePath - relativer PfadName
- */
+*/
 async function syncFile(relativePath) {
     const srcPath = join(docPath, relativePath);
     const destPath = join(buildPath, relativePath.replace(".md", ".html"));
-
+    
     // Sicherstellen, dass Unterordner existiert
     await mkdir(dirname(destPath), { recursive: true });
-
+    
     if (relativePath.endsWith(".md")) { // Beispiel für "spezielle Endung"
         const content = await file(srcPath).text(); // Inhalt der Datei
         const siteInfo = parseMd(content, { basePath: buildPath });
-        // todo: Links Ausbessern (wenn nicht relative Pfade)
-        // todo: Tagliste erstellen
         let parsed = siteInfo.html.get("content") || ""; // { ...content, builtAt: Date.now() }; // Parsing-Logik
-        // todo: Script Module 
 
+        // Script Module 
+        if (siteInfo.data.module) {
+            // Module Name hinzufügen
+            parsed += `<div hidden data-module="${siteInfo.data.module}"></div>`;
+        }
+        // todo: Absolute Links Ausbessern (wenn nicht relative Pfade)
+        // todo: Tagliste erstellen
+        
         // // 1. HTML vom Server laden und in ein Element einfügen (z.B. in ein div mit der ID 'ziel-element')
         // fetch('server-teil.html')
         //   .then(response => response.text())
@@ -97,17 +102,6 @@ async function syncFile(relativePath) {
         //   })
         //   .catch(error => console.error('Fehler beim Laden:', error));
 
-
-
-        /** @type {string} */
-        const module = siteInfo.data.module || "";
-        if (module) {
-            // Skript hinzufügen
-            parsed += `<script type="module">
-    import { init } from "${module}";
-    init();
-</script>`;
-        }
         await write(destPath, parsed);
     } else {
         // Auf Directory prüfen

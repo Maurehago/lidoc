@@ -7,7 +7,9 @@ Das ermöglicht das einfache Verwenden von Spalten in einem Dokument.
 
 Für die Darstellung von Code wird das Javascript Framework "**prism**" Verwendet. [__prismjs.com__](https://prismjs.com/)
 
-Die Generation von statischen Seiten ist noch nicht implementiert.
+
+
+Die Generation von komplett statischen Seiten ist noch nicht vorgesehen.
 
 ## Markdown Syntax Übersicht
 
