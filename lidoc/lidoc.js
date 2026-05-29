@@ -199,8 +199,8 @@ function checkNav() {
 
 
 /**
- * Läd erforderliche Javascript Module für die Seite.  
- * Es können nur Module mit absoluten Pfad (beginnend mit "/") geladen werden.
+ * Läd ein erforderliches Javascript Modul für die Seite.  
+ * Es werden nur Module innerhalb des Build-Pfades geladen.
  * @param {string} module - Liste mit Modul Namen
  * @returns {Promise<void>}
  */
