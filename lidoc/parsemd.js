@@ -354,6 +354,14 @@ export function parseMd(mdString, options) {
 
         // Ab hier ist keine Leerzeile
 
+        // potenzielle XSS-Schwachstellen filtern
+        if (!isCode) {
+            if (trimLine.toLowerCase().indexOf("<script") >= 0) {return;}
+            if (trimLine.toLowerCase().indexOf("<object") >= 0) {return;}
+            if (trimLine.toLowerCase().indexOf("<embed") >= 0) {return;}
+            if (trimLine.toLowerCase().indexOf("<link") >= 0) {return;}
+            if (trimLine.toLowerCase().indexOf("<iframe") >= 0) {return;}
+        }
         
         // Wenn Tag Attribute
         if (trimLine.endsWith("]")) {
@@ -468,7 +476,7 @@ export function parseMd(mdString, options) {
             // Zeile Ende
             htmlString + "</tr>";
             return;
-        } // tabelle "|"
+        } // Tabelle "|"
 
 
         // Wenn Überschriften
