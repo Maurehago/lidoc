@@ -140,7 +140,7 @@ export class DataTable {
     constructor(tableName, dataArray, modelClass, idColumnName = "gsid") {
         this.tableName = tableName;
         this.columns = dataArray[0] || [];
-        this.rows = dataArray.slice(1);
+        this.rows = dataArray;
         this.idColumnName = idColumnName;
         //** @type {T} */
         this.modelClass = modelClass; // Hier merken wir uns die Daten Modell Klasse
@@ -149,7 +149,7 @@ export class DataTable {
         this.rowMap = new Map();
 
         const idIdx = this.columnIndex[idColumnName];
-        for (let i = 0; i < this.rows.length; i++) {
+        for (let i = 1; i < this.rows.length; i++) {
             this.rowMap.set(this.rows[i][idIdx], i);
         }
 
@@ -226,93 +226,6 @@ export class DataTable {
         return stronglyTypedView;
     }
 }
-
-
-export class DataTable {
-    /**
-     * @param {string} tableName 
-     * @param {Array<Array<any>>} originalDataArray - Das ECHTE Rohdaten-Array vom Server/JSON
-     * @param {any} modelClass 
-     * @param {string} idColumnName 
-     */
-    constructor(tableName, originalDataArray, modelClass, idColumnName = "id") {
-        this.tableName = tableName;
-        
-        // WICHTIG: Wir speichern die DIREKTE Referenz auf das originale Haupt-Array!
-        this.originalData = originalDataArray || [];
-        
-        // Die Spalten stehen immer in der allerersten Zeile
-        this.columns = this.originalData[0] || [];
-        
-        this.idColumnName = idColumnName;
-        this.modelClass = modelClass;
-        
-        // Spalten-Index-Mapping erstellen
-        this.columnIndex = Object.fromEntries(this.columns.map((col, idx) => [col, idx]));
-        this.rowMap = new Map();
-        this._instanzCache = new Map();
-
-        // Wir indizieren die Zeilen ab Index 1 (weil Index 0 die Header sind!)
-        // i entspricht hier exakt dem echten Index im originalen Array
-        for (let i = 1; i < this.originalData.length; i++) {
-            const idIdx = this.columnIndex[idColumnName];
-            const id = this.originalData[i][idIdx];
-            this.rowMap.set(id, i); 
-        }
-    }
-
-    /** Helper, um bequem nur über die reinen Datenzeilen zu loopen (z.B. für Listen) */
-    get rows() {
-        // Gibt eine Live-Sicht auf die Datenzeilen ohne die Header-Zeile zurück
-        return this.originalData.slice(1);
-    }
-
-    getById(id) {
-        if (this._instanzCache.has(id)) return this._instanzCache.get(id);
-
-        if (!this.rowMap.has(id)) return null;
-        
-        // Hole den ECHTEN Zeilen-Index des originalen Arrays
-        const originalRowIndex = this.rowMap.get(id);
-        const rawRow = this.originalData[originalRowIndex];
-
-        const emptyInstance = new this.modelClass();
-        const stronglyTypedView = bindRow(emptyInstance, rawRow, this.columnIndex);
-        
-        this._instanzCache.set(id, stronglyTypedView);
-        return stronglyTypedView;
-    }
-
-    insert(initialData = {}) {
-        const newId = crypto.randomUUID();
-        const newRowArray = new Array(this.columns.length).fill(null);
-        
-        const idIdx = this.columnIndex[this.idColumnName];
-        newRowArray[idIdx] = newId;
-
-        const emptyInstance = new this.modelClass();
-        const stronglyTypedView = bindRow(emptyInstance, newRowArray, this.columnIndex);
-        stronglyTypedView._isNew = true;
-
-        Object.keys(initialData).forEach(key => {
-            if (key in this.columnIndex) {
-                stronglyTypedView[key] = initialData[key];
-            }
-        });
-
-        // WICHTIG: Wir pushen direkt in das ECHTE ORIGINAL-ARRAY!
-        this.originalData.push(newRowArray);
-        
-        // Der neue Index ist das aktuelle Ende des originalen Arrays
-        const newRowIndex = this.originalData.length - 1;
-        this.rowMap.set(newId, newRowIndex);
-
-        this._instanzCache.set(newId, stronglyTypedView);
-        return stronglyTypedView;
-    }
-}
-
-
 
 
 // Umsetzung
