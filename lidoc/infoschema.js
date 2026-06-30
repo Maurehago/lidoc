@@ -6,8 +6,8 @@
 // Basis Typen: string, number, boolean, object, enum
 // Datum Typen: date, time, datetime, range
 
-export * from "./infodata.js";
-import { DataMap, getGSID } from "./infodata.js";
+export * from "./infotable.js";
+import { DataTable, DataRow, getGSID } from "./infotable.js";
 
 /**
  * Optionen für DataType
@@ -51,13 +51,16 @@ export const PropItemOptions = {};
 const SchemaList = new Map();
 
 
+const InfoTextData = [["gsid", "refID", "refType", "lang", "date", "text"]];
+const AppInfoData = [["gsid", "refID", "refType", "lang", "date", "text"]];
+
 
 // ==============================
 //   Klassen
 // -----------
 
-class InfoText {
-    GSID = "";
+class InfoText extends DataRow {
+    gsid = "";
 
     /** @type {string} Zuordnung Referenz */
     refID = "";
@@ -75,13 +78,14 @@ class InfoText {
     text = "";
 
     constructor() {
-        this.GSID = getGSID();
+        super();
+        this.gsid = getGSID();
     }
 }
 
 
-class RefItem {
-    GSID = "";
+class RefItem extends DataRow{
+    gsid = "";
 
     /** @type {string} Name/GSID des DatenTypes */
     dataType_name = "";
@@ -105,14 +109,15 @@ class RefItem {
     onDelete = "DELETE";
 
     constructor() {
-        this.GSID = getGSID();
+        super();
+        this.gsid = getGSID();
     }
 }
 
 
 
-class UniqueItem {
-    GSID = "";
+class UniqueItem extends DataRow {
+    gsid = "";
 
     /** @type {string} Name/GSID des DatenTypes */
     dataType_name = "";
@@ -124,13 +129,14 @@ class UniqueItem {
     props = [];
 
     constructor() {
-        this.GSID = getGSID();
+        super();
+        this.gsid = getGSID();
     }
 }
 
 
-class EnumItem {
-    GSID = "";
+class EnumItem extends DataRow{
+    gsid = "";
     
     /** @type {string} Datentyp Name/GSID */
     dataType_name = "";
@@ -141,14 +147,15 @@ class EnumItem {
     value = "";
 
     constructor() {
-        this.GSID = getGSID();
+        super();
+        this.gsid = getGSID();
     }
 }
 
 
 
-class PropItem {
-    GSID = "";
+class PropItem extends DataRow {
+    gsid = "";
 
     /** @type {string} Name/GSID des Datentyp-Objektes */
     dataType_name = "";
@@ -173,13 +180,14 @@ class PropItem {
     use = "";
 
     constructor() {
-        this.GSID = getGSID();
+        super();
+        this.gsid = getGSID();
     }
 }
 
 
 // DataType:
-class DataType {
+class DataType extends DataRow {
     /** @type {string} Name des Datentypes */
     name = "";
 
@@ -225,11 +233,13 @@ class DataType {
     // Properties aus der Property Liste mit GSID
 
     /** @type {string|Array<string>} Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben */
-    id = "GSID";
+    id = "gsid";
 
     //--- Referenzen aus der refID Liste mit GSID */
 
     //--- Unique aus der uniqueID Liste mit GSID */
+
+    constructor() {super();}
 }
 
 
@@ -242,29 +252,29 @@ export class Schema {
         return this.#name;
     }
 
-    /** @type {DataMap<InfoText>}  Informationen zum Schema*/
-    #infoList = new DataMap(InfoText);
+    /** Informationen zum Schema*/
+    #infoList = new DataTable("info", undefined, InfoText);
 
-    /** @type {DataMap<InfoText>} APP Informationen zum Schema*/
-    #appinfoList = new DataMap(InfoText);
+    /** APP Informationen zum Schema*/
+    #appinfoList = new DataTable("appinfo", undefined, InfoText);
 
     /** @type {Map<string,string>} Schema Attribute */
     attributes = new Map(); // Sind Daten und keine Typen!
 
-    /** @type {DataMap<DataType>} Schema Globale DatenTypen */
-    #dataTypeList = new DataMap(DataType, "name");
+    /** Schema Globale DatenTypen */
+    #dataTypeList = new DataTable("datatype", undefined, DataType, "name");
 
-    /** @type {DataMap<PropItem>} Schema Globale Propertys */
-    #propItemList = new DataMap(PropItem);
+    /** Schema Globale Propertys */
+    #propItemList = new DataTable("propitem", undefined, PropItem);
 
-    /** @type {DataMap<EnumItem>} Schema Globale Enums */
-    #enumItemList = new DataMap(EnumItem);
+    /** Schema Globale Enums */
+    #enumItemList = new DataTable("enumitem", undefined, EnumItem);
 
-    /** @type {DataMap<RefItem>} Schema Globale Referenzen */
-    #refItemList = new DataMap(RefItem);
+    /** Schema Globale Referenzen */
+    #refItemList = new DataTable("refitem", undefined, RefItem);
 
-    /** @type {DataMap<UniqueItem>} Unique Liste */
-    #uniqueItemList = new DataMap(UniqueItem);
+    /** Unique Liste */
+    #uniqueItemList = new DataTable("uniqueitem", undefined, UniqueItem);
 
 
     /**

@@ -3,6 +3,41 @@
 // ============================
 // @ts-check
 
+
+/** 
+ * Callback Funktion die für alle Datensätze ausgeführt wird.  
+ * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
+ * @template T
+ * @callback CallbackFunction
+ * @param {Array<any>} row - Datensatz Zeile
+ * @param {number} [rowIndex] - Position in der Liste nach Index
+ * @param {DataTable<T>} [datatable] - Referenz auf die DatenTabelle
+ * @returns {any} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste wenn "break" wird abgebrochen.
+ */
+
+
+/** 
+ * Callback Funktion die für eine Spalte einer Datenzeile.  
+ * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
+ * @callback ColFilterFunction
+ * @param {any} value - Wert der Datenspalte
+ * @param {number} [colIndex] - Index der Spalte im Datensatz
+ * @param {Array<any>} [rawRow] - Datenzeile
+ * @returns {boolean|undefined} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste.
+ */
+
+
+/** 
+ * Callback Funktion die für alle Datensätze ausgeführt wird.  
+ * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
+ * @template T
+ * @callback GroupFunction
+ * @param {Array<number>} row - Datensatz Zeile
+ * @param {DataTable<T>} [datatable] - Referenz auf die DatenTabelle
+ * @returns {any} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste wenn "break" wird abgebrochen.
+ */
+
+
 // ===================================
 //   Funktionen
 // -------------
@@ -43,16 +78,21 @@ export function isClass(obj) {
 
 /**
  * Bindet eine KlassenInstanz an einen Datensatz (Array mit Werten)
+ * @template T
  * @param {Object<string,any>} instance - Klassen Instanz Objekt
  * @param {Array<any>} rowArray - DatenZeile
- * @param {Object<string,number>} columnIndex - Spalten Index Objekt
+ * @param {number} rowIndex - DatenZeile
+ * @param {DataTable<T>} list - Spalten Index Objekt
  * @returns {any} mit Settern und Gettern verbessertes Instanz-Objekt
  */
-export function bindRow(instance, rowArray, columnIndex) {
+export function bindRow(instance, rowArray, rowIndex, list) {
     instance._row = rowArray;
-    instance._index = columnIndex;
+    instance._rowIndex = rowIndex;
+    instance._columnIndex = list.columnIndex;
     instance._changes = new Set(); // Set mit Spaltennamen, dessen Werte geändert worden sind
     instance._isNew = false; // Standardmäßig existiert der Datensatz schon in der DB
+    instance._isDeleted = false; // Wenn Datensatz als gelöscht markiert ist
+    instance._list = list;
 
     /**
      * Fragt ab ob dieser Datensatz bearbeitet worden ist
@@ -69,7 +109,9 @@ export function bindRow(instance, rowArray, columnIndex) {
         this._changes.clear(); // Nach dem Server-Sync einfach die Änderungs-Flags löschen
     };
 
-    Object.keys(columnIndex).forEach(colName => {
+    // Alle bekannten Spalten durchgehen
+    for (let i = 0; i < list.columnIndex.length; i++) {
+        const colName = list.columnIndex[i];
         Object.defineProperty(instance, colName, {
             get() {
                 // Liest IMMER direkt aus dem echten, flachen Array
@@ -82,16 +124,23 @@ export function bindRow(instance, rowArray, columnIndex) {
                     this._row[this._index[colName]] = val;
                     // Markiere die Spalte als "changed" Bearbeitet
                     this._changes.add(colName);
+                    this._list._changed.add(this._rowIndex);
                 }
             },
             configurable: true,
             enumerable: true
         });
-    });
+    };
 
     // Hilfsmethode, um alle Felder auszugeben, die nicht 'null' sind (für den Insert-Payload)
     instance.getPopulatedFields = function () {
-        return Object.keys(this._index).filter(colName => this[colName] !== null);
+        const colList = [];
+        for (let i = 0; i < instance._index; i++) {
+            if (instance[instance._index[i]] !== null) {
+                colList.push(instance._index[i]);
+            }
+        }
+        return colList;
     };
 
     return instance;
@@ -143,13 +192,19 @@ export class DataTable {
     /**
      * Eine InMemmory Datentabelle
      * @param {string} tableName - Name der Tabelle
-     * @param {Array<Array<any>>} dataArray - DatenZeilen. Erste Zeile enthält Spaltennamen
+     * @param {Array<Array<any>>|undefined} dataArray - DatenZeilen. Erste Zeile enthält Spaltennamen
      * @param {T} modelClass - Daten Modell Klasse
      * @param {string} idColumnName - Name der ID-DatenSpalte. Default: "gsid"
      */
     constructor(tableName, dataArray, modelClass, idColumnName = "gsid") {
         /** @type {string} */
         this.tableName = tableName;
+
+        if (!dataArray) {
+            //@ts-ignore
+            dataArray = [[...Object.keys(modelClass)]];
+        }
+
         /** @type {Array<string>} */
         this.columns = dataArray[0] || [];
         /** @type {Array<Array<any>>} */
@@ -166,13 +221,20 @@ export class DataTable {
 
         const idIdx = this.columnIndex[idColumnName];
         for (let i = 1; i < this.rows.length; i++) {
-            this.rowMap.set(this.rows[i][idIdx], i);
+            this.rowMap.set(this.rows[i][idIdx] + "", i);
         }
 
         this._instanzCache = new Map();
         /** @type {Map<string,Array<number>>} */
         this._indexList = new Map();
+
+        /** @type {Set<number>} */
+        this._changed = new Set();
+
+        /** @type {Set<number>} */
+        this._deleted = new Set();
     }
+
 
     /**
      * Liefert die ID eines Objektes zurück
@@ -191,52 +253,113 @@ export class DataTable {
 
 
     /**
-     * Liefert eine DatenModellKlasse Instanz zurück 
-     * @param {string} id - eindeutige ID des Datensatzes
-     * @returns {InstanceType<T>|null} DatenModell instanz
+     * Liefter die SpaltenIndexes der Angegeben Spalten in einer Liste zurück.
+     * @param {Array<string>|string} colNames - Liste mit Spaltennamen
+     * @returns {Array<number>} Liste min Spalten Indexes
      */
-    getById(id) {
-        if (this._instanzCache.has(id)) return this._instanzCache.get(id);
+    getColIndex(colNames) {
+        /** @type {Array<number>} */
+        const colIndexList =[];
+        if (Array.isArray(colNames)) {
+            for (let i = 0; i < colNames.length; i++) {
+                colIndexList.push(this.columnIndex[colNames[i]]);
+            }
+            return colIndexList;
+        } else {
+            return [this.columnIndex[colNames]];
+        }
+    }
 
-        if (!this.rowMap.has(id)) return null;
-        const rowIndex = this.rowMap.get(id);
-        if (rowIndex == undefined) {return null;}
+
+    /**
+     * Liefert eine DatenModellKlasse Instanz zurück 
+     * @param {string|number} id - eindeutige ID oder PositionsIndex des Datensatzes
+     * @returns {InstanceType<T>|undefined} DatenModell instanz
+     */
+    getAsObject(id) {
+        let rowIndex = -1;
+        let rowId = "";
+        if (typeof id === "string") {
+            rowId = id;
+            rowIndex = this.rowMap.get(id) || -1;
+        } else {
+            rowIndex = id;
+        }
+
+        // nicht Vorhanden oder gelöscht
+        if (rowIndex < 0 || this._deleted.has(rowIndex)) { return; }
+
         const rawRow = this.rows[rowIndex];
+        if (!rowId) {
+            rowId = this.getID(rawRow);
+        }
 
-        // leere Instanz der Daten Model Klasse erstellen
+        // Wenn bereits im cache -> zurückliefern
+        if (this._instanzCache.has(rowId)) return this._instanzCache.get(rowId);
+
+        // neue leere Instanz der Daten Model Klasse erstellen
         // @ts-ignore
         const emptyInstance = new this.modelClass();
 
         // Daten Array mit der Daten-Modell Instanz verknüpfen
-        const stronglyTypedView = bindRow(emptyInstance, rawRow, this.columnIndex);
+        const stronglyTypedView = bindRow(emptyInstance, rawRow, rowIndex, this);
 
         // Instanz im Chache merken
         this._instanzCache.set(id, stronglyTypedView);
         return stronglyTypedView;
     }
 
+
+    /**
+     * Liefert den Wert einer Spalte von der angegebenen Zeilenposition zurück
+     * @param {number|string} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @returns {any}
+     */
+    getCellValue(row, col) {
+        let rowIndex = -1;
+        if (typeof row == "string") {
+            rowIndex = this.rowMap.get(row) || -1;
+        } else {
+            rowIndex = row;
+        }
+        
+        // wenn gelöscht -> abbrechen
+        if (this._deleted.has(rowIndex)) {return;}
+
+        // Datenzeile lesen
+        const rawRow = this.rows[rowIndex];
+
+        if (typeof col == "string") {
+            return rawRow[this.columnIndex[col]];
+        } else {
+            return rawRow[col];
+        }
+    }
+
+
     /**
      * Liefert eine Liste aller IDs vom angegeben Index oder allen Datensätzen zurück.  
      * Existiert der Index nicht, wird eine leere Liste zurück gegeben.
-     * @param {string|Array<number>} [index] - Indexname
+     * @param {string|Array<number>} [indexName] - Indexname oder Liste mit PositionsNummern
      * @returns {Array<number>} Index-Liste der Datzensätze
      */
-    getIndexList(index) {
-        if (!index) {
+    getIndexList(indexName) {
+        if (!indexName) {
             return [...this.rows.keys()];
         } else {
-            if (Array.isArray(index)) { return index; }
-            return this._indexList.get(index) || [];
+            if (Array.isArray(indexName)) { return indexName; }
+            return this._indexList.get(indexName) || [];
         }
     }
 
     /**
      * Prüft ob ein bestimmter index in der Liste vorhanden ist
-     * @param {string} index - Index Name
+     * @param {string} indexName - Index Name
      * @returns {boolean} "true" wenn Index mit dem Namen vorhanden
      */
-    hasIndexList(index) {
-        return this._indexList.has(index);
+    hasIndexList(indexName) {
+        return this._indexList.has(indexName);
     }
 
 
@@ -244,11 +367,24 @@ export class DataTable {
     /**
      * Erstellt einen neuen, stark typisierten Datensatz im System
      * @param {Object<string,any>} [initialData] - Optionale Startwerte, z.B. { name: "Interessent" }
+     * @param {boolean} [overwrite] - Obptional bestehenden Datensatz überschreiben. Default: true 
      * @returns {InstanceType<T>} Eine instanziierte, stark typisierte Modell-Klasse (z.B. ein Customer)
      */
-    insert(initialData = {}) {
+    insert(initialData = {}, overwrite = true) {
         // eindeutige GSID erstellen
         const newId = initialData[this.idColumnName] || getGSID();
+
+        // Prüfen ob schon vorhanden
+        if (this.rowMap.has(newId)) {
+            const view = this.getAsObject(newId);
+            if (view && overwrite) {
+                // neue Werte zuweisen
+                Object.assign(view, initialData);
+                return view;
+            }
+        }
+
+        // ab hier ID nicht vorhnden oder gelöscht
 
         // leeres Array, das exakt so lang ist wie die Spaltenanzahl
         // und mit 'null' (bzw. Standardwerten) befüllen
@@ -262,21 +398,20 @@ export class DataTable {
         // @ts-ignore
         const emptyInstance = new this.modelClass();
 
+        // das neue Array direkt in die Rohdaten-Liste der Tabelle einfügen
+        const rowIndex = this.rows.push(newRowArray) -1;
+
         // Instanz mit dem Array verknüpfen
-        const stronglyTypedView = bindRow(emptyInstance, newRowArray, this.columnIndex);
+        const stronglyTypedView = bindRow(emptyInstance, newRowArray, rowIndex, this);
 
         // Datensatz als "neu erstellt" markieren
         stronglyTypedView._isNew = true;
 
         // übergebene Standardwerte über die Setter zuweisen
-        Object.keys(initialData).forEach(key => {
-            if (key in this.columnIndex) {
-                stronglyTypedView[key] = initialData[key];
-            }
-        });
+        Object.assign(stronglyTypedView, initialData);
 
-        // das neue Array direkt in die Rohdaten-Liste der Tabelle einfügen
-        this.rows.push(newRowArray);
+        // ID Sicherhaltshalber neu setzen -> falls noch nicht vorhanden oder Überschrieben worden ist
+        stronglyTypedView[this.idColumnName] = newId;
 
         // Index-Mapping erstellen für spätere getById-Abfragen
         this.rowMap.set(newId, this.rows.length - 1);
@@ -287,35 +422,54 @@ export class DataTable {
         return stronglyTypedView;
     }
 
+
     /**
      * Setzt ein objekt in die Liste. Die ID wird aus den Einstellungen und dem Objekt-Eigenschaften gelesen.
      * @param {Object<string,any>} obj - Obekt das in die Liste aufgenommen wird.
-     * @returns {InstanceType<T>|null} Eine instanziierte, stark typisierte Modell-Klasse (z.B. ein Customer)
+     * @returns {InstanceType<T>|undefined} Eine instanziierte, stark typisierte Modell-Klasse (z.B. ein Customer)
      */
     setObject(obj) {
         const id = this.getID(obj);
 
         // Wenn keine ID dann kann nicht eingefügt werden
-        if (id == undefined) {return null;}
+        if (id == undefined) {return;}
 
         // Prüfen ob bereits in der Liste
         if (this.rowMap.has(id)) {
-            const view = this.getById(id);
-            if (!view) {return null;}
-
-            // übergebene Standardwerte über die Setter zuweisen
-            Object.keys(obj).forEach(key => {
-                if (key in this.columnIndex && key != this.idColumnName) {
-                    //@ts-ignore
-                    view[key] = obj[key];
-                }
-            });
+            const view = this.getAsObject(id);
+            if (!view) {return;}
+            
+            // neue Werte zuweisen
+            Object.assign(view, obj);
             return view;
         } else {
             // Daten neu einfügen
             return this.insert(obj);
         }
     }
+
+
+    /**
+     * Markiert einen oder mehrere Datensätze aus der Liste als gelöscht
+     * @param {string|number|Array<string|number>} id - ID oder ZeilenIndex oder Liste mit Ids oder ZeilenIndexes
+     */
+    delete(id) {
+        // Wenn liste mit ID's
+        if (Array.isArray(id)) {
+            for (let i = 0; i < id.length; i++) {
+                this.delete(id);
+            }
+            return;
+        }
+
+        // Wenn id String, ist ID-Wert
+        if (typeof id == "string") {
+            this._deleted.add(this.rowMap.get(id) || -1);
+        } else {
+            this._deleted.add(id);
+        }
+    }
+
 
     /**
      * Sortiert die Daten nach angegebenen Spalten. Groß-Kleinschreibung bei Texten wird ignoriert.  
@@ -326,7 +480,7 @@ export class DataTable {
      * @param {Array<string>} sortCols - Liste mit Spalten nach denen Sortiert wird oder eine Sortierungsfunktion (|CallbackSortFunction<T>)
      * @param {string|Array<number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird.
      * @param {string} [newIndexName] - Index Name der nach dem Sortieren gesetzt wird.
-     * @returns {Array<number>} sortierte Liste mit sortiertem Datenzeilen Index
+     * @returns {Array<number>} sortierte Liste mit sortiertem Datenzeilen-Positionen
      * @example
      * const sortList = dataList.sortRows(["name", "hausnummer DESC"], "sortListe");
      */
@@ -380,6 +534,11 @@ export class DataTable {
 
             // Sortieren
             rowList.sort((a, b) => {
+
+                // Kopfzeile immer als erstes
+                if (a === 0) return -1; // 'a' ist die Kopfzeile, bleibt oben
+                if (b === 0) return 1;  // 'b' ist die Kopfzeile, bleibt oben
+
                 const aRow = this.rows[a] || [];
                 const bRow = this.rows[b] || [];
 
@@ -452,6 +611,224 @@ export class DataTable {
         }
         return rowList;
     } // sort
+
+
+    /**
+     * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
+     * @param {CallbackFunction<T>} fu - Funktion die pro Datensatz ausgeführt wird.
+     * @param {string} [index] - optionaler Index Name oder Liste von ID's der als Datenquelle verwendet wird
+     * @param {any} [breakValue] - Optionaler Wert, wenn dieser von der Funktion zurückgegeben wird, wird Abgebrochen und dieser Wert zurückgegeben
+     * @returns {void}
+     */
+    forEach(fu, index, breakValue) {
+        if (typeof fu != "function") { return; }
+        
+        // Daten zum Filtern
+        const rowIndexList = this.getIndexList(index);
+
+        // alle durchgehen
+        for (let i = 0; i < rowIndexList.length; i++) {
+            const rowIndex = rowIndexList[i];
+            if (rowIndex == 0 || this._deleted.has(rowIndex)) {continue;}
+            
+            // Funktion ausführen
+            const backValue = fu(this.rows[rowIndex], rowIndex, this);
+            if (backValue != undefined && backValue == breakValue) { 
+                return backValue;
+            };
+        }
+    }
+
+
+    /**
+     * Führt die Angegebene Funktion, pro Gruppierung nach den Angegebenen Spalten, aus.
+     * @param {GroupFunction<T>} fu - Funktion die für jede Gruppierung aufgerufen wird.
+     * @param {string|Array<string>} colList - Liste der Spalten nach denen Gruppiert wird.
+     * @param {string|Array<number>} [index] - Optionaler Index der für die Gruppierung verwendet wird.
+     * @param {any} [breakValue] - Optionaler Wert der die Ausführung abbricht.
+     * @returns {void}
+     */
+    forGroup(fu, colList, index, breakValue) {
+        if (typeof fu != "function") { return; }
+        
+        // Daten zum Filtern
+        const rowIndexList = this.getIndexList(index);
+        const colIndexList = this.getColIndex(colList);
+        
+        /** @type {Map<string,Array<number>>} */
+        const groupIndex = new Map(); // merkt sich den Index der Gruppe
+
+        /**
+         * Liefert den Gruppenwert der Datenzeile
+         * @param {Array<any>} row - Datenzeile
+         * @returns {string} GruppenWert
+         */
+        let getGroupValue = function(row) {
+            let value = "";
+            for (let i = 0; i < colIndexList.length; i++) {
+                value += row[colIndexList[i]];
+            }
+            return value;
+        }
+
+        // alle Datenzeilen durchgehen
+        for (let i = 0; i < rowIndexList.length; i++) {
+            const rowIndex = rowIndexList[i];
+
+            // erste Datenzeile(Feldnamen) und gelöschte Datenzeilen überspringen
+            if (rowIndex == 0 || this._deleted.has(rowIndex)) {continue;}
+
+            const groupValue = getGroupValue(this.rows[rowIndex]);
+
+            // Wenn es Gruppenwert schon gibt
+            if (groupIndex.has(groupValue)) {
+                // Index hinzufügen
+                groupIndex.get(groupValue)?.push(rowIndex);
+            } else {
+                // neuen Index anlegen
+                groupIndex.set(groupValue, [rowIndex]);
+            }
+        } // for jeder Datensatz
+
+        // Alle Gruppen Arrays
+        const groupList = [...groupIndex.keys()];
+
+        // alle Gruppierten Listen durchgehen
+        for (let i = 0; i < groupList.length; i++) {
+            // funktion ausführen
+            const backValue = fu(groupIndex.get(groupList[i]) || [], this);
+            if (breakValue != undefined && breakValue == backValue) {return;}
+        }
+    }
+
+
+    /**
+     * Sucht in der Liste nach angegebener Quest und liefert den Datensatz Index der gefundenen Datenzeile zurück
+     * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
+     * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
+     * @returns {number|-1} Datensatz Zeilen-Index oder -1 wenn nicht gefunden.
+     */
+    find(quest, index) {
+        const indexList = this.getIndexList(index);
+
+        /** @type {CallbackFunction<T>} */
+        let fu;
+
+        // Wenn Quest eine Funktion
+        if (typeof quest == "function") {
+            //@ts-ignore
+            fu = quest;
+        } else if (typeof quest == "object") {
+            const keys = Object.keys(quest);
+            const colIndexList = this.getColIndex(keys);
+    
+            /**
+             * Sucht nach allen Spalten
+             * @param {Array<any>} row - Datenzeile
+             * @returns {boolean}
+             */
+            fu = function find(row) {
+                for (let i = 0; i < keys.length; i++) {
+                    const rowValue = row[colIndexList[i]];
+                    const questValue = quest[keys[i]];
+
+                    if (typeof questValue == "function") {
+                        // Wert gegen Funktion prüfen (Wert, Spaltenindex, Dateizeile)
+                        if (!questValue(rowValue, colIndexList[i], row)) { return false; }
+                    } else if (rowValue != questValue) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        } else {
+            return -1;
+        }
+
+
+        for (let i = 0; i < indexList.length; i++) {
+            const rowIndex = indexList[i];
+
+            // erste datenZeile(FeldNamen) und gelöschte auslassen
+            if (rowIndex == 0  || this._deleted.has(rowIndex)) {continue;}
+            if (fu(this.rows[rowIndex], rowIndex, this)) {
+                return rowIndex;
+            }
+        }
+
+        // nicht gefunden
+        return -1;
+    }
+
+
+    /**
+     * Sucht ein Objekt aus der Liste das mit dem übergebenen Objekt übereinstimmt und gibt das erte gefundene Objekt zurück.
+     * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
+     * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
+     * @param {string} [newIndex] - Optional Name unter der der Filterindex abgelegt wird. 
+     * @returns {Array<number>} Liste mit Datensatz Zeilen-Indexes oder Leere Liste wenn nicht gefunden.
+     */
+    findAll(quest, index, newIndex) {
+        const indexList = this.getIndexList(index);
+        
+        /** @type {Array<number>} */
+        const newIndexList = [];
+
+        /** @type {CallbackFunction<T>} */
+        let fu;
+
+        // Wenn Quest eine Funktion
+        if (typeof quest == "function") {
+            //@ts-ignore
+            fu = quest;
+        } else if (typeof quest == "object") {
+            const keys = Object.keys(quest);
+            const colIndexList = this.getColIndex(keys);
+    
+            /**
+             * Sucht nach allen Spalten
+             * @param {Array<any>} row - Datenzeile
+             * @returns {boolean}
+             */
+            fu = function find(row) {
+                for (let i = 0; i < keys.length; i++) {
+                    const rowValue = row[colIndexList[i]];
+                    const questValue = quest[keys[i]];
+
+                    if (typeof questValue == "function") {
+                        // Wert gegen Funktion prüfen (Wert, Spaltenindex, Dateizeile)
+                        if (!questValue(rowValue, colIndexList[i], row)) { return false; }
+                    } else if (rowValue != questValue) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        } else {
+            return newIndexList;
+        }
+
+        // Alle Zeilen durchgehen
+        for (let i = 0; i < indexList.length; i++) {
+            const rowIndex = indexList[i];
+
+            // erste datenZeile(FeldNamen) und gelöschte auslassen
+            if (rowIndex == 0  || this._deleted.has(rowIndex)) {continue;}
+            if (fu(this.rows[rowIndex], rowIndex, this)) {
+                newIndexList.push(rowIndex);
+            }
+        }
+
+        if (newIndex) {
+            // Index merken
+            this._indexList.set(newIndex, newIndexList);
+        }
+
+        // gefundene Indexes
+        return newIndexList;
+    }
+
+
 }
 
 
