@@ -192,29 +192,24 @@ export class DataTable {
     /**
      * Eine InMemmory Datentabelle
      * @param {string} tableName - Name der Tabelle
-     * @param {Array<Array<any>>|undefined} dataArray - DatenZeilen. Erste Zeile enthält Spaltennamen
-     * @param {T} modelClass - Daten Modell Klasse
-     * @param {string} idColumnName - Name der ID-DatenSpalte. Default: "gsid"
+     * @param {Array<Array<any>>} dataArray - DatenZeilen. Erste Zeile enthält Spaltennamen
+     * @param {string} [idColumnName] - Name der ID-DatenSpalte. Default: "gsid"
      */
-    constructor(tableName, dataArray, modelClass, idColumnName = "gsid") {
+    constructor(tableName, dataArray, idColumnName = "gsid") {
         /** @type {string} */
         this.tableName = tableName;
-
-        if (!dataArray) {
-            //@ts-ignore
-            dataArray = [[...Object.keys(modelClass)]];
-        }
-
         /** @type {Array<string>} */
         this.columns = dataArray[0] || [];
         /** @type {Array<Array<any>>} */
         this.rows = dataArray;
         /** @type {string} */
         this.idColumnName = idColumnName;
-        //** @type {T} */
-        this.modelClass = modelClass; // Hier merken wir uns die Daten Modell Klasse
 
-        this.columnIndex = Object.fromEntries(this.columns.map((col, idx) => [col, idx]));
+        /** @type {Object<string,number>} */
+        this.columnIndex = {}; // Object.fromEntries(this.columns.map((col, idx) => [col, idx]));
+        for (let i = 0; i < this.columns.length; i++) {
+            this.columnIndex[this.columns[i]] = i;
+        }
         
         /** @type {Map<string,number>} */
         this.rowMap = new Map();
@@ -247,7 +242,7 @@ export class DataTable {
             const idIdx = this.columnIndex[this.idColumnName];
             return obj[idIdx];
         } else {
-            return obj[this.idColumnName];
+            return obj[this.idColumnName] || undefined;
         }
     }
 
@@ -272,69 +267,30 @@ export class DataTable {
 
 
     /**
-     * Liefert eine DatenModellKlasse Instanz zurück 
-     * @param {string|number} id - eindeutige ID oder PositionsIndex des Datensatzes
-     * @returns {InstanceType<T>|undefined} DatenModell instanz
+     * Prüft ob ein Datensatz mit abgefragter ID bereits in der List ist
+     * @param {string} id - ID die gesucht wird
+     * @returns {boolean} 
      */
-    getAsObject(id) {
-        let rowIndex = -1;
-        let rowId = "";
-        if (typeof id === "string") {
-            rowId = id;
-            rowIndex = this.rowMap.get(id) || -1;
-        } else {
-            rowIndex = id;
-        }
-
-        // nicht Vorhanden oder gelöscht
-        if (rowIndex < 0 || this._deleted.has(rowIndex)) { return; }
-
-        const rawRow = this.rows[rowIndex];
-        if (!rowId) {
-            rowId = this.getID(rawRow);
-        }
-
-        // Wenn bereits im cache -> zurückliefern
-        if (this._instanzCache.has(rowId)) return this._instanzCache.get(rowId);
-
-        // neue leere Instanz der Daten Model Klasse erstellen
-        // @ts-ignore
-        const emptyInstance = new this.modelClass();
-
-        // Daten Array mit der Daten-Modell Instanz verknüpfen
-        const stronglyTypedView = bindRow(emptyInstance, rawRow, rowIndex, this);
-
-        // Instanz im Chache merken
-        this._instanzCache.set(id, stronglyTypedView);
-        return stronglyTypedView;
+    has(id) {
+        return this.rowMap.has(id);
     }
 
 
     /**
-     * Liefert den Wert einer Spalte von der angegebenen Zeilenposition zurück
-     * @param {number|string} row - Zeilennummer oder ID
-     * @param {string|number} col - Spaltenname oder Spalten Position
-     * @returns {any}
+     * Lieftert die Datensatz Position in der Liste zurück oder -1 wenn nicht gefunden.
+     * @param {string|number} id - ID oder Datensatzindex
+     * @returns {number} Datensatz Position oder -1 wenn nicht gefunden
      */
-    getCellValue(row, col) {
-        let rowIndex = -1;
-        if (typeof row == "string") {
-            rowIndex = this.rowMap.get(row) || -1;
-        } else {
-            rowIndex = row;
-        }
+    getRowIndex(id) {
+        // Wenn ID des Datensatzen
+        if (typeof id == "string") {
+            return this.rowMap.get(id) || -1;
+        } 
         
         // wenn gelöscht -> abbrechen
-        if (this._deleted.has(rowIndex)) {return;}
+        if (id <= 0 || this._deleted.has(id)) {return -1;}
 
-        // Datenzeile lesen
-        const rawRow = this.rows[rowIndex];
-
-        if (typeof col == "string") {
-            return rawRow[this.columnIndex[col]];
-        } else {
-            return rawRow[col];
-        }
+        return id;
     }
 
 
@@ -363,89 +319,149 @@ export class DataTable {
     }
 
 
-
     /**
-     * Erstellt einen neuen, stark typisierten Datensatz im System
-     * @param {Object<string,any>} [initialData] - Optionale Startwerte, z.B. { name: "Interessent" }
-     * @param {boolean} [overwrite] - Obptional bestehenden Datensatz überschreiben. Default: true 
-     * @returns {InstanceType<T>} Eine instanziierte, stark typisierte Modell-Klasse (z.B. ein Customer)
+     * Liefert eine Datenzeile zurück die nicht die Kopfzeile ist, und auch noch nicht gelöst worden ist.
+     * @param {string|number} id - ID oder Datenzeilen Position
+     * @returns {Array<any>|undefined}
      */
-    insert(initialData = {}, overwrite = true) {
-        // eindeutige GSID erstellen
-        const newId = initialData[this.idColumnName] || getGSID();
-
-        // Prüfen ob schon vorhanden
-        if (this.rowMap.has(newId)) {
-            const view = this.getAsObject(newId);
-            if (view && overwrite) {
-                // neue Werte zuweisen
-                Object.assign(view, initialData);
-                return view;
-            }
-        }
-
-        // ab hier ID nicht vorhnden oder gelöscht
-
-        // leeres Array, das exakt so lang ist wie die Spaltenanzahl
-        // und mit 'null' (bzw. Standardwerten) befüllen
-        const newRowArray = new Array(this.columns.length).fill(null);
-
-        // ID in richtige Spalte setzen
-        const idIdx = this.columnIndex[this.idColumnName];
-        newRowArray[idIdx] = newId;
-
-        // neue Instanz der hinterlegten Modell-Klasse
-        // @ts-ignore
-        const emptyInstance = new this.modelClass();
-
-        // das neue Array direkt in die Rohdaten-Liste der Tabelle einfügen
-        const rowIndex = this.rows.push(newRowArray) -1;
-
-        // Instanz mit dem Array verknüpfen
-        const stronglyTypedView = bindRow(emptyInstance, newRowArray, rowIndex, this);
-
-        // Datensatz als "neu erstellt" markieren
-        stronglyTypedView._isNew = true;
-
-        // übergebene Standardwerte über die Setter zuweisen
-        Object.assign(stronglyTypedView, initialData);
-
-        // ID Sicherhaltshalber neu setzen -> falls noch nicht vorhanden oder Überschrieben worden ist
-        stronglyTypedView[this.idColumnName] = newId;
-
-        // Index-Mapping erstellen für spätere getById-Abfragen
-        this.rowMap.set(newId, this.rows.length - 1);
-
-        // Im Instanz-Cache merken, damit das System weiß, wer aktiv editiert wird
-        this._instanzCache.set(newId, stronglyTypedView);
-
-        return stronglyTypedView;
+    getRow(id) {
+        const rowIndex = this.getRowIndex(id);
+        
+        // wenn gelöscht -> abbrechen
+        if (rowIndex <= 0) {return;}
+        
+        return this.rows[rowIndex];        
     }
 
 
     /**
-     * Setzt ein objekt in die Liste. Die ID wird aus den Einstellungen und dem Objekt-Eigenschaften gelesen.
-     * @param {Object<string,any>} obj - Obekt das in die Liste aufgenommen wird.
-     * @returns {InstanceType<T>|undefined} Eine instanziierte, stark typisierte Modell-Klasse (z.B. ein Customer)
+     * Erzeugt eine neue Datenzeile die noch nicht in der Liste angelegt wird. 
+     * @param {string} [id] - Optional neue ID. Wenn nicht angegeben wird eine GSID generiert
+     * @returns {Partial<T>}
      */
-    setObject(obj) {
-        const id = this.getID(obj);
+    newObject(id) {
+        /** @type {Partial<T>} */
+        const obj = {};
+        //@ts-ignore
+        obj[this.idColumnName] = id || getGSID();
+        return obj;
+    }
+
+
+    /**
+     * Liefert einen Datensatz als Objekt zurück
+     * @param {string|number} id - ID oder DatenSatz Position 
+     * @returns {Partial<T>|undefined} Datensatz als Objekt
+     */
+    getObject(id) {
+        const rawRow = this.getRow(id);
+        if (!rawRow) {return;}
+
+        /** @type {Partial<T>} */
+        const obj = {};
+        for (let i = 0; i < this.columns.length; i++) {
+            //@ts-ignore
+            obj[this.columns[i]] = rawRow[i];
+        }
+
+        return obj;
+    }
+
+
+    /**
+     * Liefert eine Liste mit Datensatzobjekten zurück
+     * @param {string|Array<string|number>|undefined} index - Index-Name oder Liste mit ID oder Datensatz position
+     * @returns {Array<Partial<T>>} Liste mit Datensatz-Objekten
+     */
+    getObjectList(index) {
+        /** @type {Array<Partial<T>>} */
+        let objList = [];
+        
+        if (!index || typeof index == "string") {
+            index = this.getIndexList(index);
+        }
+
+        // Wenn Array
+        if (Array.isArray(index)) {
+            for (let i = 0; i < index.length; i++) {
+                const obj = this.getObject(index[i]);
+                if (obj) {
+                    objList.push(obj);
+                }
+            }
+        }
+
+        return objList;
+    }
+
+
+    /**
+     * Liefert den Wert einer Spalte von der angegebenen Zeilenposition zurück
+     * @param {number|string} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @returns {any}
+     */
+    getCellValue(row, col) {
+        // Datenzeile lesen
+        const rawRow = this.getRow(row);
+        if (!rawRow) {return;}
+
+        if (typeof col == "string") {
+            return rawRow[this.columnIndex[col]];
+        } else {
+            return rawRow[col];
+        }
+    }
+
+
+    /**
+     * Setzt ein Objekt in die Liste. Die ID wird aus den Einstellungen und dem Objekt-Eigenschaften gelesen.
+     * @param {Partial<T>} obj - Objekt mit Daten das in die Liste aufgenommen wird.
+     * @param {boolean} [createNew] - Optional ob ein neues Objekt angelegt wird wenn nicht vorhanden. Default: true
+     * @returns {Partial<T>|undefined} Objekt vom Typ der Datenliste (z.B. ein Customer)
+     */
+    setObject(obj, createNew = true) {
+        let id = this.getID(obj);
 
         // Wenn keine ID dann kann nicht eingefügt werden
-        if (id == undefined) {return;}
-
-        // Prüfen ob bereits in der Liste
-        if (this.rowMap.has(id)) {
-            const view = this.getAsObject(id);
-            if (!view) {return;}
+        if (id == undefined) {
+            if (createNew == false) {return;}
             
-            // neue Werte zuweisen
-            Object.assign(view, obj);
-            return view;
-        } else {
-            // Daten neu einfügen
-            return this.insert(obj);
+            // neue ID selbst vergeben
+            id = getGSID();
+            //@ts-ignore
+            obj[this.idColumnName] = id;
         }
+
+        /** @type {Array<string>} neue Spalten */
+        const newColNames = [...Object.keys(obj)];
+        const colIds = this.getColIndex(newColNames);
+        
+        /** @type {Array<any>} */
+        let rawRow = [];
+        
+        let rowIndex = this.rowMap.get(id);
+        
+        // Wenn kein rowindex
+        if (rowIndex == undefined) {
+            if (createNew == false) {return;}
+            rawRow = new Array(this.columns.length);
+            rowIndex = this.rows.push(rawRow) -1;
+            this.rowMap.set(id, rowIndex);
+            this._changed.add(rowIndex);
+        } else if (rowIndex > 0) {
+            rawRow = this.rows[rowIndex];
+        } else {
+            return;
+        }
+
+        // Werte zuweisen
+        for (let i = 0; i < newColNames.length; i++) {
+            //@ts-ignore
+            rawRow[colIds[i]] = obj[newColNames[i]];
+        }
+
+        return this.getObject(rowIndex)
     }
 
 
@@ -462,11 +478,11 @@ export class DataTable {
             return;
         }
 
-        // Wenn id String, ist ID-Wert
-        if (typeof id == "string") {
-            this._deleted.add(this.rowMap.get(id) || -1);
-        } else {
-            this._deleted.add(id);
+        // Zeilenindex lesen
+        const rowIndex = this.getRowIndex(id);
+        if (rowIndex) {
+            // zeile als gelöscht markieren
+            this._deleted.add(rowIndex);
         }
     }
 
@@ -851,29 +867,38 @@ const rohDaten = [
     ["C-1", "Max", "Wien"]
 ];
 
-class Customer extends DataRow {
-    /** Eindeutige ID */
-    gsid = "";
-    name = "";
-    city = "";
-    /** Test @type {Map<string,string>} */
-    test = new Map();
-    constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
-}
+// class Customer extends DataRow {
+//     /** Eindeutige ID */
+//     gsid = "";
+//     name = "";
+//     city = "";
+//     /** Test @type {Map<string,string>} */
+//     test = new Map();
+//     constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
+// }
 
-const kundenTabelle = new DataTable("customers", rohDaten, Customer, "gsid");
+/**
+ * @typedef {Object} Customer
+ * @property {string} gsid
+ * @property {string} name
+ * @property {string} city
+ */
+let CustomerCols = ["gsid", "name", "city"];
 
+/** @type {DataTable<Customer>} */
+const kundenTabelle = new DataTable("customers", rohDaten, "gsid");
 
 // --- NEUEN DATENSATZ ANLEGEN ---
 // VS Code vervollständigt dir hier alles und prüft die Typen!
-const neuerKunde = kundenTabelle.insert({ city: "Salzburg" });
+const neuerKunde = kundenTabelle.newObject();
+neuerKunde.city = "Salzburg";
 
 // Werte zuweisen (schreibt LIVE ins 'rohDaten'-Array!)
 neuerKunde.name = "Sabine";
 
 console.log(neuerKunde.gsid);  // Autogenerierte GSID (z.B. "f81d4fae-...")
-console.log(neuerKunde._isNew); // true (Wichtig für den Server-Sync als INSERT)
-console.log(neuerKunde.test.get("aa")); 
+
+kundenTabelle.setObject(neuerKunde);
 
 // Überprüfung der globalen Rohdaten:
 console.log(rohDaten);

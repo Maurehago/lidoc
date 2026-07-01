@@ -9,32 +9,76 @@
 export * from "./infotable.js";
 import { DataTable, DataRow, getGSID } from "./infotable.js";
 
+
 /**
- * Optionen für DataType
- * @typedef {object} DataTypeOptions
- * @property {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"|"multi"} [art] - BasisTyp - default "string"
+ * @typedef {Object} DataType
+ * @property {string} name - Name des Datentypes
+ * @property {string} schemaPath - Pfad innerhalb des Schemas
+ * @property {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"|"multi"} art - BasisTyp - default "string"
  * @property {string|Array<string>} [base] - BasisTyp(abgeleitet von) der Eigenschaft.
- * @property {number} [length] - Exakte Länge eines Strings oder Anzahl Zeichen bei Nummern
- * @property {number} [minLength] - Minimale Länge eines Strings
- * @property {number} [maxLength] - Maximale Länge eines Strings
- * @property {string} [pattern] - Regular Expression
- * @property {string} [whitespace] - Wie wird mit Leerzeichen umgegangen
- * @property {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"} [casing] - Schreibweise für String. Wenn nicht angegeben dann ist es egal.
- * @property {number} [decimals] - Anzahl der Dezimalstellen
- * @property {string|number} [minInclusive] - Minimaler Wert inclusive
- * @property {string|number} [minExclusive] - Minimaler Wert größer als
- * @property {string|number} [maxExclusive] - Maximaler Wert kleiner als
- * @property {string|number} [maxInclusive] - Maximaler Wert inclusive
+ * @property {number|undefined} [length] - exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
+ * @property {number|undefined} [minLength] - Minimale Anzahl Zeichen (für string)
+ * @property {number|undefined} [maxLength] - Maximale Anzahl Zeichen (für string)
+ * @property {string|undefined} [pattern] - Regular Expression (für string)
+ * @property {string|undefined} [whitespace] - wie wird mit Leerzeichen umgegangen (für string)
+ * @property {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"|undefined} [casing] - (für string)
+ * @property {number|undefined} [decimals] - Anzahl der Dezimalstellen (für number)
+ * @property {number|string|undefined} [minInclusive] - Minimum Wert inclusive angegebenen Wert (für number, date, time, datetime, range)
+ * @property {number|string|undefined} [minExclusive] - Minimum Wert größer angegebenen Wert (für number, date, time, datetime, range)
+ * @property {number|string|undefined} [maxExclusive] - Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
+ * @property {number|string|undefined} [maxInclusive] - Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
  * @property {string|Array<string>} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben
  */
+const DataTypeFields = [
+"name" // Name des Datentypes
+, "schemaPath" // Pfad innerhalb des Schemas
+, "art" // BasisTyp - default "string"
+, "base" // BasisTyp(abgeleitet von) der Eigenschaft.
+, "length" // exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
+, "minLength" // Minimale Anzahl Zeichen (für string)
+, "maxLength" // Maximale Anzahl Zeichen (für string)
+, "pattern" // Regular Expression (für string)
+, "whitespace" // wie wird mit Leerzeichen umgegangen (für string)
+, "casing" // (für string)
+, "decimals" // Anzahl der Dezimalstellen (für number)
+, "minInclusive" //  Minimum Wert inclusive angegebenen Wert (für number, date, time, datetime, range)
+, "minExclusive" // Minimum Wert größer angegebenen Wert (für number, date, time, datetime, range)
+, "maxExclusive" // Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
+, "maxInclusive" // Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
+, "id" // Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben
+];
 
-/** @type {DataTypeOptions} */
-export const DataTypeOptions = {};
+
+
+// /**
+//  * Optionen für DataType
+//  * @typedef {object} DataTypeOptions
+//  * @property {string} [name] - Eindeutiger Name des Datentypes 
+//  * @property {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"|"multi"} [art] - BasisTyp - default "string"
+//  * @property {string|Array<string>} [base] - BasisTyp(abgeleitet von) der Eigenschaft.
+//  * @property {number} [length] - Exakte Länge eines Strings oder Anzahl Zeichen bei Nummern
+//  * @property {number} [minLength] - Minimale Länge eines Strings
+//  * @property {number} [maxLength] - Maximale Länge eines Strings
+//  * @property {string} [pattern] - Regular Expression
+//  * @property {string} [whitespace] - Wie wird mit Leerzeichen umgegangen
+//  * @property {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"} [casing] - Schreibweise für String. Wenn nicht angegeben dann ist es egal.
+//  * @property {number} [decimals] - Anzahl der Dezimalstellen
+//  * @property {string|number} [minInclusive] - Minimaler Wert inclusive
+//  * @property {string|number} [minExclusive] - Minimaler Wert größer als
+//  * @property {string|number} [maxExclusive] - Maximaler Wert kleiner als
+//  * @property {string|number} [maxInclusive] - Maximaler Wert inclusive
+//  * @property {string|Array<string>} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben
+//  */
+
+// /** @type {DataTypeOptions} */
+// export const DataTypeOptions = {};
 
 
 /**
  * Optionen für PropItem
  * @typedef {object} PropItemOptions
+ * @property {string} [gsid] - Eindeutige ID
+ * @property {string} [dataType_name] - Name des Datentypes
  * @property {string} [itemType] - TypName - default "string"
  * @property {number} [min] - Minimales Vorkommen, 0: optional
  * @property {number} [max] - Maximales Vorkommen, 0: darf nicht vorkommen, -1: darf unendlich vorkommen
@@ -154,7 +198,7 @@ class EnumItem extends DataRow{
 
 
 
-class PropItem extends DataRow {
+export class PropItem extends DataRow {
     gsid = "";
 
     /** @type {string} Name/GSID des Datentyp-Objektes */
@@ -186,61 +230,61 @@ class PropItem extends DataRow {
 }
 
 
-// DataType:
-class DataType extends DataRow {
-    /** @type {string} Name des Datentypes */
-    name = "";
+// // DataType:
+// class DataType extends DataRow {
+//     /** @type {string} Name des Datentypes */
+//     name = "";
 
-    /** @type {string} Pfad innerhalb des Schemas */
-    schemaPath = "";
+//     /** @type {string} Pfad innerhalb des Schemas */
+//     schemaPath = "";
 
-    /** @type {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"|"multi"} BasisTyp - default "string" */
-    art = "string";
+//     /** @type {"string"|"number"|"boolean"|"object"|"enum"|"group"|"choice"|"multi"} BasisTyp - default "string" */
+//     art = "string";
 
-    /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. */
-    base = "";
+//     /** @type {string|Array<string>} BasisTyp(abgeleitet von) der Eigenschaft. */
+//     base = "";
 
-    // --- String Eigenschaften ---
-    /** @type {number|undefined} exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?) */
-    length;
-    /** @type {number|undefined} Minimale Anzahl Zeichen (für string) */
-    minLength;
-    /** @type {number|undefined} Maximale Anzahl Zeichen (für string) */
-    maxLength;
-    /** @type {string|undefined} Regular Expression (für string) */
-    pattern;
-    /** @type {string|undefined} wie wird mit Leerzeichen umgegangen (für string) */
-    whitespace;
-    /** @type {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"|undefined} (für string) */
-    casing;
+//     // --- String Eigenschaften ---
+//     /** @type {number|undefined} exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?) */
+//     length;
+//     /** @type {number|undefined} Minimale Anzahl Zeichen (für string) */
+//     minLength;
+//     /** @type {number|undefined} Maximale Anzahl Zeichen (für string) */
+//     maxLength;
+//     /** @type {string|undefined} Regular Expression (für string) */
+//     pattern;
+//     /** @type {string|undefined} wie wird mit Leerzeichen umgegangen (für string) */
+//     whitespace;
+//     /** @type {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"|undefined} (für string) */
+//     casing;
 
-    // --- Number Eigenschaften ---
-    /** @type {number|undefined} Anzahl der Dezimalstellen (für number) */
-    decimals;
-    /** @type {number|string|undefined} Minimum Wert inclusive angegebenen Wert (für number, date, time, datetime, range) */
-    minInclusive;
-    /** @type {number|string|undefined} Minimum Wert größer angegebenen Wert (für number, date, time, datetime, range) */
-    minExclusive;
-    /** @type {number|string|undefined} Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range) */
-    maxExclusive;
-    /** @type {number|string|undefined} Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range) */
-    maxInclusive;
+//     // --- Number Eigenschaften ---
+//     /** @type {number|undefined} Anzahl der Dezimalstellen (für number) */
+//     decimals;
+//     /** @type {number|string|undefined} Minimum Wert inclusive angegebenen Wert (für number, date, time, datetime, range) */
+//     minInclusive;
+//     /** @type {number|string|undefined} Minimum Wert größer angegebenen Wert (für number, date, time, datetime, range) */
+//     minExclusive;
+//     /** @type {number|string|undefined} Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range) */
+//     maxExclusive;
+//     /** @type {number|string|undefined} Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range) */
+//     maxInclusive;
 
-    // --- Enum Eigenschaft ---
-    // Enum Items aus der Enum Item Liste mit Datentyp GSID
+//     // --- Enum Eigenschaft ---
+//     // Enum Items aus der Enum Item Liste mit Datentyp GSID
 
-    // --- Objekt Eigenschaften ---
-    // Properties aus der Property Liste mit GSID
+//     // --- Objekt Eigenschaften ---
+//     // Properties aus der Property Liste mit GSID
 
-    /** @type {string|Array<string>} Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben */
-    id = "gsid";
+//     /** @type {string|Array<string>} Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben */
+//     id = "gsid";
 
-    //--- Referenzen aus der refID Liste mit GSID */
+//     //--- Referenzen aus der refID Liste mit GSID */
 
-    //--- Unique aus der uniqueID Liste mit GSID */
+//     //--- Unique aus der uniqueID Liste mit GSID */
 
-    constructor() {super();}
-}
+//     constructor() {super();}
+// }
 
 
 
@@ -261,8 +305,8 @@ export class Schema {
     /** @type {Map<string,string>} Schema Attribute */
     attributes = new Map(); // Sind Daten und keine Typen!
 
-    /** Schema Globale DatenTypen */
-    #dataTypeList = new DataTable("datatype", undefined, DataType, "name");
+    /**  @type {DataTable<DataType>} Schema Globale DatenTypen */
+    dataTypeList = new DataTable("datatype", [DataTypeFields], "name");
 
     /** Schema Globale Propertys */
     #propItemList = new DataTable("propitem", undefined, PropItem);
@@ -280,14 +324,16 @@ export class Schema {
     /**
      * Fügt ein neues Datentyp Objekt hinzu
      * @param {string} typeName - Name des DatenTyps
-     * @param {DataTypeOptions} [options] - Optional Optionen für den Datentyp
+     * @param {Partial<DataType>} [options] - Optional Optionen für den Datentyp
      * @returns {string} Name des Datentypes
      */
     addDataType(typeName, options) {
-        const dataType = new DataType();
-        Object.assign(dataType, options);
-        dataType.name = typeName;
-        this.#dataTypeList.set(typeName, dataType);
+        if (options) {
+            options.name = typeName
+        } else {
+            options = {name: typeName};
+        }
+        const dataType = this.dataTypeList.setObject(options);
         return typeName;
     }
 
@@ -300,11 +346,11 @@ export class Schema {
      * @returns {string} GSID der Eigenschaft
      */
     addProperty(typeName, propertyName, options) {
-        let dataType = this.#dataTypeList.get(typeName);
+        let dataType = this.#dataTypeList.getAsObject(typeName);
         if (!dataType) {
             dataType = new DataType();
             dataType.name = typeName;
-            this.#dataTypeList.set(typeName, dataType);
+            this.#dataTypeList.insert(dataType);
         }
         dataType.art = "object";
 
