@@ -3,7 +3,7 @@
 // =======================
 // @ts-check
 
-import { Schema, DataTypeOptions, PropItemOptions , getGSID } from "./infoschema.js";
+import { Schema, getGSID } from "./infoschema.js";
 
 // ============================
 //   Typen
@@ -85,8 +85,7 @@ function checkElement(elm, typeName, propID, choice) {
     //   Property Optionen
     // ---------------------
 
-    /** @type {PropItemOptions} */
-    let options = {min, max};
+    let options = XSD.propItemList.newObject();
     if (typeof elmDefault != "undefined") { 
         options.defaultValue = elmDefault;
     }
@@ -183,7 +182,7 @@ function checkElement(elm, typeName, propID, choice) {
 
             // Wenn Name dann neue Gruppe(Type) Erstellen
             if (elmName) {
-                XSD.addDataType(elmName, {art: "group"});
+                XSD.dataTypeList.setObject({name: elmName, art: "group"});
                 newTypeName = elmName;
                 newPropID = undefined;
             } else if (elmRef) {
@@ -225,14 +224,14 @@ function checkElement(elm, typeName, propID, choice) {
 
             // Wenn Name -> Neuer ObjektTyp
             if (elmName) {
-                XSD.addDataType(elmName);
+                XSD.dataTypeList.setObject({name: elmName});
                 newTypeName = elmName;
                 newPropID = undefined;
             } else if (propID) {
                 // Property Typ auf auf neuen Typ setzen
                 newTypeName = getGSID();
                 newPropID = undefined;
-                XSD.setPropOptions(propID, {itemType: newTypeName});
+                XSD.propItemList.setObject({gsid: propID, itemType: newTypeName});
             }
 
             checkChildren = true;
@@ -276,7 +275,7 @@ function checkElement(elm, typeName, propID, choice) {
             // children: annotation(0,1),group|all|choice|sequence(0,1),attribute|attributeGroup(0,-1),anyAttribute(0,1)
 
             if (elmBase) { // base muss vorhanden sein
-                XSD.setDataTypeOptions(typeName, {base: elmBase});
+                XSD.dataTypeList.setCellValue(typeName, "base", elmBase);
             }
             checkChildren = true;
             break;
@@ -290,7 +289,7 @@ function checkElement(elm, typeName, propID, choice) {
             break;
         case "fractionDigits":
             if (elmValue) { // muss vorhanden sein
-                XSD.setDataTypeOptions(typeName, {decimals: parseInt(elmValue)});
+                XSD.dataTypeList.setValues(typeName, {decimals: parseInt(elmValue)});
             }
             checkChildren = false;
             break;
