@@ -438,6 +438,67 @@ export class DataTable {
         return true;
     }
 
+    /**
+     * Fügt einen wert in einer Datensatz-Spalte hinzu. Die Spalte muss ein Array sein oder wird in ein Array umgewandelt. 
+     * @param {number|string} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @param {any} value - Wert der gespeichert wird
+     * @returns {boolean} true wenn Änderung erfolgreich
+     */
+    addCellArrayValue(row, col, value) {
+        // DatensatzIndex lesen
+        const rowIndex = this.getRowIndex(row);
+        if (rowIndex <= 0 ) {return false;}
+
+        if (typeof col == "string") {
+            col = this.columnIndex[col]
+        }
+
+        const oldValue = this.rows[rowIndex][col];
+        if (Array.isArray(oldValue)) {
+            oldValue.push(value);
+        } else if (oldValue != undefined) {
+            this.rows[rowIndex][col] = [oldValue, value];    
+        } else {
+            this.rows[rowIndex][col] = [value];
+        }
+
+        // als Geändert markieren
+        this._changed.add(rowIndex);
+        return true;
+    }
+
+
+    /**
+     * Fügt einen wert in einer Datensatz-Spalte hinzu. Die Spalte muss ein Set sein oder wird in ein Set umgewandelt. 
+     * @param {number|string} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @param {any} value - Wert der gespeichert wird
+     * @returns {boolean} true wenn Änderung erfolgreich
+     */
+    addCellSetValue(row, col, value) {
+        // DatensatzIndex lesen
+        const rowIndex = this.getRowIndex(row);
+        if (rowIndex <= 0 ) {return false;}
+
+        if (typeof col == "string") {
+            col = this.columnIndex[col]
+        }
+
+        const oldValue = this.rows[rowIndex][col];
+        if (oldValue instanceof Set) {
+            oldValue.add(value);
+        } else if (oldValue != undefined) {
+            this.rows[rowIndex][col] = new Set([oldValue, value]);    
+        } else {
+            this.rows[rowIndex][col] = new Set([value]);
+        }
+
+        // als Geändert markieren
+        this._changed.add(rowIndex);
+        return true;
+    }
+
 
     /**
      * Setzt ein Objekt in die Liste. Die ID wird aus den Einstellungen und dem Objekt-Eigenschaften gelesen.
@@ -825,7 +886,7 @@ export class DataTable {
      * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
      * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
      * @param {string} [newIndex] - Optional Name unter der der Filterindex abgelegt wird. 
-     * @returns {Array<T>} Liste mit Datensatz Zeilen-Indexes oder Leere Liste wenn nicht gefunden.
+     * @returns {Array<T>} Liste mit Datensatz Zeilen oder Leere Liste wenn nicht gefunden.
      */
     findAll(quest, index, newIndex) {
         const indexList = this.getIndexList(index);
