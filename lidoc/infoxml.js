@@ -85,21 +85,24 @@ function checkElement(elm, typeName, propID, choice) {
     //   Property Optionen
     // ---------------------
 
-    let options = XSD.propItemList.newObject();
+    let options = XSD.newProperty();
+    if (!options.gsid) {options.gsid = getGSID();}
+    options.object_name = typeName;
+
     if (typeof elmDefault != "undefined") { 
-        options.defaultValue = elmDefault;
+        options.default = elmDefault;
     }
     if (typeof elmFixed != "undefined") {
         options.fix = elmFixed;
     }
-    if (typeof choice != "undefined") {
-        options.use = choice;
-    }
+    //if (typeof choice != "undefined") {
+    //    options.use = choice;
+    //}
     if (elmType) {
-        options.itemType = elmType;
+        options.type_name = elmType;
     }
     if (elmRef) {
-        options.itemType = elmRef;
+        options.type_name = elmRef;
     }
 
     // =================================
@@ -132,7 +135,10 @@ function checkElement(elm, typeName, propID, choice) {
             //newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, choice);
 
             options.min = elmUse == "required" ? 1 : 0;
-            newPropID = XSD.addProperty(typeName, "any", options);
+            options.type_name = "any";
+            newPropID = options.gsid;
+            XSD.addProperty(options);
+            XSD.addMoreProperties(typeName, newPropID);
             
             //baseType.moreProps = newProp;
             // newTypeName = XSD.setMoreProperty(baseTypeName, new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, choice)).name;
@@ -145,7 +151,10 @@ function checkElement(elm, typeName, propID, choice) {
             // newProp = new PropItem("any", "string", elmUse == "required" ? 1 : 0, max, elmDefault, elmFixed, choice);
             // baseType.moreAttributes = newProp;
             options.min = elmUse == "required" ? 1 : 0;
-            newPropID = XSD.addProperty(typeName, "@any", options);
+            options.type_name = "any";
+            newPropID = options.gsid;
+            XSD.addProperty(options);
+            XSD.addMoreAttributes(typeName, newPropID);
 
             checkChildren = true;
             break;
@@ -156,7 +165,8 @@ function checkElement(elm, typeName, propID, choice) {
             // children: -
 
             // todo: ReferenzTyp und ID bestimmen
-            XSD.addAppInfo("DataType", "schema", elm.innerHTML);
+            XSD.setInfo({type_name: typeName, text: elm.innerHTML}); // todo: Sprache (de)??
+            //XSD.addAppInfo("DataType", "schema", elm.innerHTML);
             checkChildren = false;
             break;
         case "attribute":
@@ -165,7 +175,10 @@ function checkElement(elm, typeName, propID, choice) {
             // attribute: default, fixed, form, id, name, ref, type, use, ...any (name und ref dürfen nicht gleichzeitig vorkommen)
             // children: annotation(0,1), simpleType(0,1)
 
-            newPropID = XSD.addProperty(typeName, "@" + (elmName || elmRef || ""), options);
+            options.name = "@" + (elmName || elmRef || "");
+            //newPropID = XSD.addProperty(typeName, "@" + (elmName || elmRef || ""), options);
+            newPropID = options.gsid;
+            XSD.addProperty(options);
 
             //newTypeName = elmName || elmRef || baseTypeName;
             //newProp = new PropItem(elmName || elmRef || getGSID(), elmType || elmRef, min, max, elmDefault, elmFixed, choice);
@@ -182,12 +195,14 @@ function checkElement(elm, typeName, propID, choice) {
 
             // Wenn Name dann neue Gruppe(Type) Erstellen
             if (elmName) {
-                XSD.dataTypeList.setObject({name: elmName, art: "group"});
+                XSD.setSchemaType({name: elmName, art: "group"});
                 newTypeName = elmName;
                 newPropID = undefined;
             } else if (elmRef) {
                 // Neues Attribute zur Liste setzen
-                newPropID = XSD.addProperty(typeName, "@" + elmRef, options);
+                options.name = "@" + elmRef;
+                newPropID = options.gsid;
+                XSD.addProperty(options);
             } else {
                 // sollte nicht vorkommen
             }
@@ -222,18 +237,23 @@ function checkElement(elm, typeName, propID, choice) {
             // attribute: id, name, abstract, mixed, block, final, ...any
             // children: annotation(0,1), simpleContent|complexContent|group|all|choice|sequence(0,1), attribute|attributeGroup(0,-1), anyAttribute(0,1)
 
-            // Wenn Name -> Neuer ObjektTyp
+            // Wenn Name -> Neuer Typnamen Merken
             if (elmName) {
-                XSD.dataTypeList.setObject({name: elmName});
                 newTypeName = elmName;
-                newPropID = undefined;
-            } else if (propID) {
-                // Property Typ auf auf neuen Typ setzen
+            } else {
+                // neuen TypNamen generieren
                 newTypeName = getGSID();
-                newPropID = undefined;
-                XSD.propItemList.setObject({gsid: propID, itemType: newTypeName});
             }
 
+            // neuen Typ anlegen
+            XSD.setSchemaType({name: newTypeName, art: "object"});
+
+            // Wenn Property -> neuen Typ der Property zuweisen
+            if (propID) {
+                XSD.setProperty({gsid: propID, object_name: typeName, type_name: newTypeName});
+            }
+            newPropID = undefined;
+            
             checkChildren = true;
             break;
         case "documentation":
@@ -243,12 +263,11 @@ function checkElement(elm, typeName, propID, choice) {
             // children: -
 
             // todo: prüfen auf EnumItem oder RefItem, und xml:lang prüfen
-            localData.info = elm.innerHTML; // für Referenz Objekte
-            if (propID) {
-                XSD.addInfo("PropItem", propID, elm.innerHTML);
-            } else {
-                XSD.addInfo("DataType", typeName, elm.innerHTML);
-            }
+            let text = elm.innerHTML;
+            let lang = elm.getAttribute("xml:lang") || "de";
+            localData.info = text; // für Referenz Objekte
+
+            XSD.setInfo({type_name: typeName, item_gsid: propID, lang, text});
             checkChildren = false;
             break;
         case "element":
@@ -258,15 +277,25 @@ function checkElement(elm, typeName, propID, choice) {
             // children: annotation(0,1), simpleType|complexType(0,1), unique|key|keyref(0,-1)
 
             // todo: weitere Attribute prüfen
-            newPropID = XSD.addProperty(typeName, elmName || elmRef || getGSID(), options);
+            options.name = elmName || elmRef || getGSID();
+            newPropID = options.gsid;
+
+            XSD.addProperty(options);
             checkChildren = true;
             break;
         case "enumeration":
             // Typ Einschränkung auf enum 
             if (typeof elmValue != "undefined") { // value muss vorhanden sein
-                XSD.addEnumItem(typeName, elmValue);
+                newPropID = elmValue; // für Dokumentation
+                if (propID) {
+                    XSD.setEnumItem(propID, elmValue);
+                } else if (typeName) {
+                    XSD.setEnumItem(typeName, elmValue);
+                } else {
+                    // sollte nicht vorkommen
+                }
             }
-            checkChildren = false;
+            checkChildren = true; // für Dokumentation
             break;
         case "extension":
             // Erweitert einen Simplen oder Komplexen Typ
@@ -275,7 +304,7 @@ function checkElement(elm, typeName, propID, choice) {
             // children: annotation(0,1),group|all|choice|sequence(0,1),attribute|attributeGroup(0,-1),anyAttribute(0,1)
 
             if (elmBase) { // base muss vorhanden sein
-                XSD.dataTypeList.setCellValue(typeName, "base", elmBase);
+                XSD.setSchemaType({name: typeName, base_name: elmBase});
             }
             checkChildren = true;
             break;
@@ -289,7 +318,7 @@ function checkElement(elm, typeName, propID, choice) {
             break;
         case "fractionDigits":
             if (elmValue) { // muss vorhanden sein
-                XSD.dataTypeList.setValues(typeName, {decimals: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, decimals: parseInt(elmValue)});
             }
             checkChildren = false;
             break;
@@ -301,17 +330,18 @@ function checkElement(elm, typeName, propID, choice) {
 
             // Wenn Name dann neue Gruppe(Type) Erstellen
             if (elmName) {
-                XSD.addDataType(elmName, {art: "group"});
+                XSD.setSchemaType({name: elmName, art: "group"});
                 newTypeName = elmName;
                 newPropID = undefined;
             } else if (elmRef) {
                 // Neues Property zur Liste setzen
-                options.itemType = elmRef;
-                newPropID = XSD.addProperty(typeName, elmRef, options);
+                options.type_name = elmRef;
+                newPropID = options.gsid;
+                XSD.addProperty(options);
             } else {
                 // sollte nicht vorkommen
                 newTypeName = getGSID();
-                XSD.addDataType(newTypeName, {art: "group"});
+                XSD.setSchemaType({name: newTypeName, art: "group"});
                 newPropID = undefined;
             }
 
@@ -361,37 +391,37 @@ function checkElement(elm, typeName, propID, choice) {
         case "maxLength":
             // Setzt die MaximalLänge eines Types
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {maxLength: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, max_length: parseInt(elmValue)});
             }
             break;
         case "minLength":
             // Setzt die MinimalLänge eines Types
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {minLength: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, min_length: parseInt(elmValue)});
             }
             break;
         case "maxExclusive":
             // Setzt den Maximalwert eines Types
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {maxExclusive: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, max_exclusive: parseInt(elmValue)});
             }
             break;
         case "minExclusive":
             // Setzt den Minimalwert eines Types
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {minExclusive: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, min_exclusive: parseInt(elmValue)});
             }
             break;
         case "maxInclusive":
             // Setzt den Maximalwert eines Types
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {maxInclusive: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, max_inclusive: parseInt(elmValue)});
             }
             break;
         case "minInclusive":
             // Setzt den Minimalwert eines Types
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {minInclusive: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, min_inclusive: parseInt(elmValue)});
             }
             break;
         case "notation":
@@ -404,7 +434,7 @@ function checkElement(elm, typeName, propID, choice) {
         case "pattern":
             // Setzt eine Regular Expression für den Typ
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {pattern: elmValue});
+                XSD.setDataType({name: typeName, pattern: elmValue});
             }
             break;
         case "redefine":
@@ -420,7 +450,20 @@ function checkElement(elm, typeName, propID, choice) {
             // attribute: id(0,1), base(1,1), ...any(0,-1)
             // children: ... ist je nach Parent unterschiedlich
             if (elmBase) {
-                XSD.setDataTypeOptions(typeName, {base: elmBase});
+                var resType = XSD.getDataType(typeName);
+                if (resType) {
+                    if (Array.isArray(resType.base_name)) {
+                        resType.base_name.push(elmBase);
+                    } else if (resType.base_name != undefined) {
+                        resType.base_name = [resType.base_name, elmBase];
+                    } else {
+                        resType.base_name = elmBase;
+                    }
+                    // im Schema ablegen
+                    XSD.setDataType(resType);
+                } else {
+                    XSD.setDataType({name: typeName, base_name: elmBase});
+                }
             }
             checkChildren = true;
             break;
@@ -460,23 +503,37 @@ function checkElement(elm, typeName, propID, choice) {
 
             // Wenn Attribute "name" - darf nur vorhanden sein wenn "simpleType" ein Kind von "schema" ist
             if (elmName) {
-                // Ist Kind vom Schema - Name ist erforderlich
-                XSD.addDataType(elmName);
                 newTypeName = elmName;
-                newPropID = undefined;
+                // Ist Kind vom Schema - Name ist erforderlich
+                if (typeName == "schema") {
+                    XSD.addProperty({object_name: typeName, name: elmName, type_name: newTypeName});
+                }
             } else {
-                // ist Kind von Spalte oder "union" - Name darf nicht angegeben werden
-                // ändert baseType
+                // neuen Typ anlegen
                 newTypeName = getGSID();
-                newPropID = undefined;
-                if(elm.parentElement?.localName == "union") {
-                    // Type der Property hinzufügen (Liste)
-                    XSD.addDataTypeBase(typeName, newTypeName);
-                } else if (propID) {
-                    // Typ für Property Setzen
-                    XSD.setPropOptions(propID, {itemType: newTypeName});
+            }
+            newPropID = undefined;
+            
+            // neuen Typ anlegen
+            XSD.setDataType({name: newTypeName})
+
+            // Wenn union
+            if (elm.parentElement?.localName == "union") {
+                // Hinzufügen
+                let simpleType = XSD.getDataType(typeName);
+                if (Array.isArray(simpleType?.base_name)) {
+                    simpleType.base_name.push(newTypeName);
+                } else if ()
+                    XSD.setProperty({gsid: propID, object_name: typeName, type_name: newTypeName});
+            } else {
+                // Typ setzen
+                if (propID) {
+                    XSD.setProperty({gsid: propID, object_name: typeName, type_name: newTypeName});
                 }
             }
+
+            // ist Kind von Spalte oder "union" - Name darf nicht angegeben werden
+            // ändert nichts
 
             // Kind Elemente prüfen
             checkChildren = true;
@@ -484,7 +541,7 @@ function checkElement(elm, typeName, propID, choice) {
         case "totalDigits":
             // Setzt die Anzahl Zeichen/Stellen
             if (elmValue) {
-                XSD.setDataTypeOptions(typeName, {length: parseInt(elmValue)});
+                XSD.setDataType({name: typeName, length: parseInt(elmValue)});
             }
             break;
         case "union":
@@ -494,12 +551,21 @@ function checkElement(elm, typeName, propID, choice) {
             // parent: simpleType
             // attribute: id(0,1), memberTypes(0,1), ...any(0,-1) 
             // children: annotation(0,1), simpleType(0,-1)
+
+            // Legt einen neuen Typ an
+            newTypeName = getGSID();
             let memberTypes = elm.getAttribute("memberTypes");
-            if (memberTypes ) {
-                XSD.addDataTypeBase(typeName, memberTypes.split(" "));
+            if (memberTypes) {
+                XSD.setDataType({name: newTypeName, art: "multi", base_name: memberTypes.split(" ")});
             } else {
-                XSD.setDataTypeOptions(typeName, {base: [], art: "multi"});
+                XSD.setDataType({name: newTypeName, art: "multi", base_name: []});
             }
+
+            // Property: Typ ausbessern
+            if (propID) {
+                XSD.setProperty({gsid: propID, object_name: typeName, type_name: newTypeName});
+            }
+
             checkChildren = true;
             break;
         case "unique":
@@ -585,7 +651,7 @@ export function parseXSD(xsdString) {
     // Schema Attribute
     const attributes = [...schema.attributes];
     for (let i = 0; i < attributes.length; i++) {
-        XSD.attributes.set(attributes[i].name, attributes[i].value);
+        XSD.addProperty({object_name: "schema", name: "@" + attributes[i].name, fix: attributes[i].value});
     }
 
     // Schema Typ
