@@ -22,12 +22,10 @@ const EnumTypUnique = "name";
 
 
 /**
- * Datentyp
- * @typedef {Object} DataType
+ * SimpleType
+ * @typedef {Object} SimpleType
  * @property {string} name - Name des Datentypes
- * property {string} schema_path - Pfad innerhalb des Schemas
- * @property {"string"|"number"|"bigint"|"boolean"|"multi"} art - Default: "string" - BasisTyp
- * @property {string|Array<string>|undefined} [base_name] - BasisTyp(abgeleitet von) der Eigenschaft.
+ * @property {"string"|"number"|"bigint"|"boolean"} art - Default: "string" - BasisTyp
  * @property {number|undefined} [length] - exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
  * @property {number|undefined} [min_length] - Minimale Anzahl Zeichen (für string)
  * @property {number|undefined} [max_length] - Maximale Anzahl Zeichen (für string)
@@ -40,11 +38,9 @@ const EnumTypUnique = "name";
  * @property {number|string|undefined} [max_exclusive] - Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
  * @property {number|string|undefined} [max_inclusive] - Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
  */
-const DataTypeFields = [
+const SimpleTypeFields = [
     "name" // Name des Datentypes
-    , "schemaPath" // Pfad innerhalb des Schemas
     , "art" // BasisTyp - default "string"
-    , "base_name" // BasisTyp(abgeleitet von) der Eigenschaft.
     , "length" // exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
     , "min_length" // Minimale Anzahl Zeichen (für string)
     , "max_length" // Maximale Anzahl Zeichen (für string)
@@ -57,7 +53,7 @@ const DataTypeFields = [
     , "max_exclusive" // Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
     , "max_inclusive" // Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
 ];
-const DataTypeUnique = "name";
+const SimpleTypeUnique = "name";
 
 
 /**
@@ -82,41 +78,42 @@ const RefTypeUnique = "gsid";
  * @property {string} gsid - Eindeutige ID des Uniques
  * @property {string} name - Name des Uniques
  * @property {string} object_name - Name des ObjectType
- * @property {Array<string>} props - Eigenschaftsnamen(Properties) die zusammen eine Eindeutigkeit ergeben
+ * @property {Array<string>} object_props - Eigenschaftsnamen(Properties) die zusammen eine Eindeutigkeit ergeben
  */
-const UniqueTypeFields = ["gsid", "name", "object_name", "props"];
+const UniqueTypeFields = ["gsid", "name", "object_name", "object_props"];
 const UniqueTypeUnique = "gsid";
 
 
 /**
- * PropType
- * @typedef {Object} PropType
+ * PropertyType
+ * @typedef {Object} PropertyType
  * @property {string} gsid - Eindeutiger Datensatz
  * @property {string} object_name - Name des ObjektTypes zu dem diese Eigenschaft gehört
  * @property {string} name - Eindeutiger Spalten/Eigenschaftsname
  * @property {number} pos - Feld/Spalten Position im Objekt ????
- * @property {string} [type_name] - Default: "string" - Name des Types der Eigenschaft
+ * @property {string} [prop_type] - Default: "string" - Name des Types der Eigenschaft
  * @property {number} [min] - Default: 1(erforderlich) - Minimales vorkommen der Spalte. 0: diese Spalte ist optional, -1: Spalte is Auswahlspalte 
  * @property {number} [max] - Default: 1(nur ein mal) -  größer 1: Ist eine Liste mit maximal n Eigenschaften, -1: ist eine unendliche Liste 
  * @property {any|undefined} [default] - Optional: Standardwert der Eigenschaft
  * @property {any|undefined} [fix] - Optional: Fixer Wert der Eigenschaft
 */ 
-const PropTypeFields = ["gsid", "object_name", "name", "pos", "type_name", "min", "max", "default", "fix"];
+const PropTypeFields = ["gsid", "object_name", "name", "pos", "prop_type", "min", "max", "default", "fix"];
 const PropTypeUnique = "gsid";
 
 
 /**
- * SchemaType
- * @typedef {Object} SchemaType 
+ * DataType
+ * @typedef {Object} DataType
  * @property {string} name - ID/Name des Types
- * @property {"string"|"number"|"bigint"|"boolean"|"enum"|"object"|"ref"|"unique"|"group"|"choice"|"multi"} art - Um welchen Art von Typ es sich handelt
+ * @property {"string"|"number"|"bigint"|"boolean"|"multi"|"enum"|"object"|"ref"|"unique"|"group"|"choice"} art - Um welchen Art von Typ es sich handelt
  * @property {string|undefined} [base_name] - Optional: Erweitert diesen "base" ObjektTypen
- * @property {string|Array<string>|undefined} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID des Objektes/Datensatzes ergeben
+ * @property {Set<string>|undefined} [simple_types] - Optional: Liste von Simplen Typen (ein oder Mehrere einschränkungen)
+ * @property {string|Array<string>|undefined} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID eines Objektes/Datensatzes(object) ergeben
  * @property {string|Array<string>|undefined} [more_attributes] - Name einer Property oder Liste mit Properties die den Typ weiterer Attribute im Objekt erlaubt
  * @property {string|Array<string>|undefined} [more_properties] - Name einer Property oder Liste mit Properties die den Typ weiterer Properties im Objekt erlaubt
  */
-const SchemaTypeFields = ["name", "art", "base_name", "id", "more_attributes", "more_properties"];
-const SchemaTypeUnique = "name";
+const DataTypeFields = ["name", "art", "base_name", "simple_types", "id", "more_attributes", "more_properties"];
+const DataTypeUnique = "name";
 
 
 /**
@@ -124,12 +121,12 @@ const SchemaTypeUnique = "name";
  * @typedef {Object} InfoText
  * @property {string} gsid - Datenzeile ID
  * @property {string|undefined} [type_name] - Optional - Name des Schematypes zu der dieser Infotext gehört
- * @property {string|undefined} [item_gsid] - Optional - GSID der Eigenschaft eines Objekttypen zu der dieser Infotext gehört. Bei Enum ist das der Eintrag im Enum.
+ * @property {string|undefined} [prop_gsid] - Optional - GSID der Eigenschaft eines Objekttypen zu der dieser Infotext gehört. Bei Enum ist das der Eintrag im Enum.
  * @property {string} [lang] - Default: "de" - Sprache
  * @property {string} [date] - Datum(ISO)
  * @property {string} text - InfoText
 */
-const InfoTextFields = ["gsid", "type_name", "item_gsid", "lang", "date", "text"];
+const InfoTextFields = ["gsid", "type_name", "prop_gsid", "lang", "date", "text"];
 const InfoTextUnique = "gsid";
 
 
@@ -140,6 +137,10 @@ const SchemaList = new Map();
 // ==============================
 //   Klassen
 // -----------
+
+// DataType.simple_types <--1:n-- DataTyp <--1:1--> SimpleType(ist zusätzlich auch als Datentyp angelegt)
+//         . <--1:n-- PropertyType.obect_type (Spalten bei einem DataType.art = "object"|"group") 
+//                                .prop_type <--1:1--> DataType (Typ der Spalte)
 
 
 // Schema Klasse
@@ -159,14 +160,14 @@ export class Schema {
     /** @type {DataTable<EnumType>} Liste mit Enum Objekten */
     #enumList = new DataTable("enums", [EnumTypeFields], EnumTypUnique);
 
-    /**  @type {DataTable<DataType>} Liste mit DatenTypen */
-    #dataTypeList = new DataTable("datatypes", [DataTypeFields], DataTypeUnique);
+    /**  @type {DataTable<SimpleType>} Liste mit DatenTypen */
+    #simpleTypeList = new DataTable("simpletypes", [SimpleTypeFields], SimpleTypeUnique);
     
-    /** @type {DataTable<PropType>} Liste mit Objekt PropTypen */
+    /** @type {DataTable<PropertyType>} Liste mit Objekt PropTypen */
     #propList = new DataTable("properties", [PropTypeFields], PropTypeUnique);
     
-    /** @type {DataTable<SchemaType>}  Liste aller Typen */
-    #schemaTypeList = new DataTable("schematypes", [SchemaTypeFields], SchemaTypeUnique);
+    /** @type {DataTable<DataType>}  Liste aller Typen */
+    #dataTypeList = new DataTable("datatypes", [DataTypeFields], DataTypeUnique);
     
     /** @type {DataTable<InfoText>} Liste mit InformationsTexten */
     #infoList = new DataTable("infos", [InfoTextFields], InfoTextUnique);
@@ -174,59 +175,6 @@ export class Schema {
 
     /**
      * Neues Leeres TypeObjekt
-     * @param {string} [id] - Optional neue ID
-     * @returns {Partial<SchemaType>}
-     */
-    newSchemaType(id) {
-        return this.#schemaTypeList.newObject(id);
-    }
-
-
-    /**
-     * Registriert einen Typ im Schema
-     * @param {Partial<SchemaType>} options - Setzt einen SchemaTyp
-     * @returns {boolean|undefined} true wenn erfolgreich
-     */
-    setSchemaType(options) {
-        if (!options.name) {options.name = getGSID();}
-        return this.#schemaTypeList.setObject(options);
-    }
-
-
-    /**
-     * Gibt einen registrierten Typ zurück
-     * @param {string} type_name - Name des Types
-     * @returns {SchemaType|undefined} Type oder Undefined wenn nicht gefunden
-     */
-    getSchemaType(type_name) {
-        return this.#schemaTypeList.getObject(type_name);
-    }
-
-
-    /**
-     * Fügt einen neuen "weitere" Eigenschaften zugelassen hinzu
-     * @param {string} type_name - Name des Types
-     * @param {string} property_id - ID(GSID) des ObjektItem "any"
-     * @returns {boolean}
-     */
-    addMoreProperties(type_name, property_id) {
-        return this.#schemaTypeList.addCellArrayValue(type_name, "moreProperties", property_id);
-    }
-
-
-    /**
-     * Fügt einen neuen "weitere" Attribute zugelassen hinzu
-     * @param {string} type_name - Name des Types
-     * @param {string} attribute_id - ID(GSID) des ObjektItem "any"
-     * @returns {boolean}
-     */
-    addMoreAttributes(type_name, attribute_id) {
-        return this.#schemaTypeList.addCellArrayValue(type_name, "moreAttributes", attribute_id);
-    }
-
-
-    /**
-     * Neues Leeres DataTypeObjekt
      * @param {string} [id] - Optional neue ID
      * @returns {Partial<DataType>}
      */
@@ -236,23 +184,18 @@ export class Schema {
 
 
     /**
-     * Registriert einen DatenTyp im Schema
+     * Registriert einen Typ im Schema
      * @param {Partial<DataType>} options - Setzt einen SchemaTyp
-     * @returns {boolean|undefined} true wenn erfolgreich
+     * @returns {string|undefined} ID wenn erfolgreich
      */
     setDataType(options) {
         if (!options.name) {options.name = getGSID();}
-
-        // SchemaTyp ausbessern/anlegen
-        this.#schemaTypeList.setObject({name: options.name, art: options.art});
-
-        // DatenTyp setzen
         return this.#dataTypeList.setObject(options);
     }
 
 
     /**
-     * Gibt einen registrierten DatenTyp zurück
+     * Gibt einen registrierten Typ zurück
      * @param {string} type_name - Name des Types
      * @returns {DataType|undefined} Type oder Undefined wenn nicht gefunden
      */
@@ -261,9 +204,74 @@ export class Schema {
     }
 
 
-    addDataTypeBase(type_name, base_name) {
-        
+    /**
+     * Fügt einen zusätzlichen SimpleTyp im Schema hinzu. (Existiert der SimpleType schon wird kein Neuer hinzugefügt)
+     * @param {string} type_name - Name(id) des Types
+     * @param {string} simple_type_name - Name(id) des hinzufügenden simplen Datentypes
+     * @returns {string|number|undefined} ID oder Datensatz Position wenn erfolgreich 
+     */
+    linkSimpleType(type_name, simple_type_name) {
+        return this.#dataTypeList.addCellSetValue(type_name, "simple_types", simple_type_name);
     }
+
+
+    /**
+     * Fügt einen neuen "weitere" Eigenschaften zulassen hinzu
+     * @param {string} type_name - Name des Types
+     * @param {string} property_id - ID(GSID) des ObjektItem "any"
+     * @returns {string|number|undefined} ID oder Datensatzposition wenn erfolgreich
+     */
+    addMoreProperties(type_name, property_id) {
+        return this.#dataTypeList.addCellArrayValue(type_name, "moreProperties", property_id);
+    }
+
+
+    /**
+     * Fügt einen neuen "weitere" Attribute zulassen hinzu
+     * @param {string} type_name - Name des Types
+     * @param {string} attribute_id - ID(GSID) des ObjektItem "any"
+     * @returns {string|number|undefined} ID wenn erfolgreich
+     */
+    addMoreAttributes(type_name, attribute_id) {
+        return this.#dataTypeList.addCellArrayValue(type_name, "moreAttributes", attribute_id);
+    }
+
+
+    /**
+     * Neues Leeres SimpleTypeObjekt
+     * @param {string} [id] - Optional neue ID
+     * @returns {Partial<SimpleType>}
+     */
+    newSimpleType(id) {
+        return this.#simpleTypeList.newObject(id);
+    }
+
+
+    /**
+     * Registriert einen simplen DatenTyp im Schema
+     * @param {Partial<SimpleType>} options - Setzt einen SchemaTyp
+     * @returns {string|undefined} ID wenn erfolgreich
+     */
+    setSimpleType(options) {
+        if (!options.name) {options.name = getGSID();}
+
+        // SchemaTyp ausbessern/anlegen
+        this.#dataTypeList.setObject({name: options.name, art: options.art || "string"});
+
+        // DatenTyp setzen
+        return this.#simpleTypeList.setObject(options);
+    }
+
+
+    /**
+     * Gibt einen registrierten SimpleTyp zurück
+     * @param {string} type_name - Name des Types
+     * @returns {SimpleType|undefined} Type oder Undefined wenn nicht gefunden
+     */
+    getSimpleType(type_name) {
+        return this.#simpleTypeList.getObject(type_name);
+    }
+
 
     /**
      * Neues Leeres InfoObjekt
@@ -278,7 +286,7 @@ export class Schema {
     /**
      * Registriert einen InfoText zu einem Typ
      * @param {Partial<InfoText>} options - Setzt einen Infotext zu einem Typ oder TypeItem
-     * @returns {boolean|undefined} true wenn erfolgreich
+     * @returns {string|undefined} ID wenn erfolgreich
      */
     setInfo(options) {
         return this.#infoList.setObject(options);
@@ -298,7 +306,7 @@ export class Schema {
     /**
      * Neues Leeres PropertyObjekt
      * @param {string} [id] - Optional neue ID
-     * @returns {Partial<PropType>}
+     * @returns {Partial<PropertyType>}
      */
     newProperty(id) {
         return this.#propList.newObject(id);
@@ -307,22 +315,27 @@ export class Schema {
 
     /**
      * Fügt eine neue Eigenschaft zu einem ObjektTyp hinzu
-     * @param {Partial<PropType>} options - Eigenschaften vom Neuen ItemTyp
+     * @param {string} object_name - Name des Objekt Datentypes
+     * @param {string} prop_name - name der Eigenschaft
+     * @param {Partial<PropertyType>} [options] - Eigenschaften vom Neuen ItemTyp
+     * @returns {string|undefined} ID des NEUEN Property
      */
-    addProperty(options) {
-        if (!options.object_name || !options.name) {return;}
+    addProperty(object_name, prop_name, options) {
+        if (!object_name || !prop_name) {return;}
+        
+        if (!options) { options = this.#propList.newObject(prop_name); }
 
-        // wenn noch kein Schematyp
-        if (!this.#schemaTypeList.has(options.object_name)) {
-            // Neuen Objekttyp anlegen
-            this.#schemaTypeList.setObject({name: options.object_name, art: "object"});
-        }
+        options.object_name = object_name;
+        options.name = prop_name;
+
+        // Objekttyp anlegen/setzen
+        this.#dataTypeList.setObject({name: object_name, art: "object"});
 
         // neue GSID - Erforderlich beim hinzufügen
         if (!options.gsid) {options.gsid = getGSID()};
 
         // Default werte prüfen
-        if (options.type_name == undefined) {options.type_name = "string";}
+        if (options.prop_type == undefined) {options.prop_type = "string";}
         if (options.min == undefined) {options.min = 1;}
         if (options.max == undefined) {options.max = 1;}
 
@@ -332,41 +345,33 @@ export class Schema {
 
 
     /**
-     * Setzt Werte für eine Eigenschaft 
-     * @param {Partial<PropType>} options - Setzt einen Infotext zu einem Typ oder TypeItem
-     * @returns {boolean|undefined} true wenn erfolgreich
+     * Ändert eine Bestehende Property. GSID muss in den optionen angegeben werden.  
+     * Es wird kein Objekttyp angelegt.
+     * @param {Partial<PropertyType>} options - Setzt einen Infotext zu einem Typ oder TypeItem
+     * @returns {string|undefined} ID wenn erfolgreich
      */
     setProperty(options) {
-        if (!options.object_name) {return;}
-
-        // wenn noch kein Schematyp
-        if (!this.#schemaTypeList.has(options.object_name)) {
-            // Neuen Objekttyp anlegen
-            this.#schemaTypeList.setObject({name: options.object_name, art: "object"});
-        }
-
-        // Eigenschaft anlegen
         return this.#propList.setObject(options);
     }
 
 
     /**
-     * Gibt eine Liste von Eigenschaften für ein Objet zurück
-     * @param {Partial<PropType>} quest - Abfrage für Properties eines Objektes
-     * @returns {Array<PropType>} Gefundene Eigenschaften 
+     * Gibt eine Eigenschaft für ein Objekt zurück
+     * @param {Partial<PropertyType>} quest - Abfrage für Properties eines Objektes
+     * @returns {PropertyType|undefined} erste gefundene Eigenschaft
      */
-    getProperties(quest) {
-        return this.#propList.findAll(quest);
+    getProperty(quest) {
+        return this.#propList.find(quest);
     }
 
 
     /**
-     * Gibt eine Eigenschaft für ein Objekt zurück
-     * @param {Partial<PropType>} quest - Abfrage für Properties eines Objektes
-     * @returns {PropType|undefined} erste gefundene Eigenschaft
+     * Gibt eine Liste von Eigenschaften für ein Object zurück
+     * @param {string} object_name - Name das Objektes
+     * @returns {Array<PropertyType>} Gefundene Eigenschaften 
      */
-    getProperty(quest) {
-        return this.#propList.find(quest);
+    getObjProperties(object_name) {
+        return this.#propList.findAll({object_name});
     }
 
 
@@ -383,13 +388,13 @@ export class Schema {
     /**
      * Registriert einen EnumTyp im Schema
      * @param {Partial<EnumType>} options - Setzt einen SchemaTyp
-     * @returns {boolean|undefined} true wenn erfolgreich
+     * @returns {string|undefined} Enum-Name wenn erfolgreich
      */
     setEnum(options) {
-        if (!options.name) {return;}
+        if (!options.name) {options.name = getGSID();}
 
         // SchemaTyp ausbessern/anlegen
-        this.#schemaTypeList.setObject({name: options.name, art: "enum"});
+        this.#dataTypeList.setObject({name: options.name, art: "enum"});
 
         // DatenTyp setzen
         return this.#enumList.setObject(options);
@@ -400,13 +405,10 @@ export class Schema {
      * Setzt einen Enum Eintrag für einen Typ
      * @param {string} enum_name - Enum Name
      * @param {any|Array<any>} value - Enum Wert oder Liste von Werten
-     * @returns {boolean|undefined} true wenn erfolgreich
+     * @returns {string|undefined} Enum Name wenn erfolgreich
      */
     setEnumItem(enum_name, value) {
         if (!enum_name) {return;}
-
-        // Schematyp ausbessern
-        this.#schemaTypeList.setObject({name: enum_name, art: "enum"});
 
         // Enum lesen
         let obj = this.#enumList.getObject(enum_name);
@@ -452,13 +454,13 @@ export class Schema {
     /**
      * Registriert einen Referenztyp in der Liste
      * @param {Partial<RefType>} options - Eigenschaften von einem Referenztyp
-     * @returns {boolean|undefined} true wenn erfolgreich
+     * @returns {string|undefined} ID wenn erfolgreich
      */
     setRef(options) {
-        if (!options.object_name) {return;}
+        if (!options.gsid) {options.gsid = getGSID();}
         
-        // SchemaTyp ausbessern
-        this.#schemaTypeList.setObject({name: options.object_name, art: "ref"});
+        // DatenTyp ausbessern
+        this.#dataTypeList.setObject({name: options.gsid, art: "ref"});
 
         return this.#refList.setObject(options);
     }
@@ -487,13 +489,13 @@ export class Schema {
     /**
      * Registriert einen UniqueTyp in der Liste
      * @param {Partial<UniqueType>} options - Eigenschaften von einem UniqueType
-     * @returns {boolean|undefined} true wenn erfolgreich
+     * @returns {string|undefined} true wenn erfolgreich
      */
     setUnique(options) {
-        if (!options.object_name) {return;}
+        if (!options.gsid) {options.gsid = getGSID();}
         
-        // SchemaTyp ausbessern
-        this.#schemaTypeList.setObject({name: options.object_name, art: "unique"});
+        // DatenTyp ausbessern
+        this.#dataTypeList.setObject({name: options.gsid, art: "unique"});
 
         return this.#uniqueList.setObject(options);
     }
@@ -514,7 +516,7 @@ export class Schema {
      * @returns {Array<string|number>} Liste mit DatenTyp Namen
      */
     getAllTypeNames() {
-        return [...this.#schemaTypeList.rowMap.keys()];
+        return [...this.#dataTypeList.rowMap.keys()];
     }
 
 
@@ -529,9 +531,9 @@ export class Schema {
             , refs: this.#refList.rows
             , uniqueitems: this.#uniqueList.rows
             , enums: this.#enumList.rows
-            , datatypes: this.#dataTypeList.rows
+            , simpletypes: this.#simpleTypeList.rows
             , properties: this.#propList.rows
-            , schematypes: this.#schemaTypeList.rows
+            , datatypes: this.#dataTypeList.rows
             , infos: this.#infoList.rows
         };
 
@@ -552,9 +554,9 @@ export class Schema {
         this.#refList = new DataTable("refs", obj.refs || [RefTypeFields], RefTypeUnique);
         this.#uniqueList = new DataTable("uniques", obj.uniques || [UniqueTypeFields], UniqueTypeUnique);
         this.#enumList = new DataTable("enums", obj.enums || [EnumTypeFields], EnumTypUnique);
-        this.#dataTypeList = new DataTable("datatypes", obj.datatypes || [DataTypeFields], DataTypeUnique);
+        this.#simpleTypeList = new DataTable("simpletypes", obj.simpletypes || [SimpleTypeFields], SimpleTypeUnique);
         this.#propList = new DataTable("properties", obj.items || [PropTypeFields], PropTypeUnique);
-        this.#schemaTypeList = new DataTable("schematypes", obj.types || [SchemaTypeFields], SchemaTypeUnique);
+        this.#dataTypeList = new DataTable("datatypes", obj.datatypes || [DataTypeFields], DataTypeUnique);
         this.#infoList = new DataTable("infos", obj.infos || [InfoTextFields], InfoTextUnique);
 
         return true;
@@ -781,23 +783,23 @@ export class Schema {
 export const infoSchema = new Schema("infoSchema");
 
 // Enums
-infoSchema.setEnum({name: "types", values: new Set([
+infoSchema.setEnum({name: "enu_types", values: new Set([
     "string"
     , "number"
     , "bigint"
     , "boolean"
+    , "multi"
     , "enum"
     , "object"
     , "ref"
     , "unique"
     , "group"
     , "choice"
-    , "multi"
 ])});
 
-infoSchema.setEnum({name: "art", values: new Set(["string", "number", "bigint", "boolean"])});
+infoSchema.setEnum({name: "enu_art", values: new Set(["string", "number", "bigint", "boolean"])});
 
-infoSchema.setEnum({name: "casing", values: new Set([
+infoSchema.setEnum({name: "enu_casing", values: new Set([
         "camelCase"
         , "PascalCase"
         , "snake_case"
@@ -806,91 +808,89 @@ infoSchema.setEnum({name: "casing", values: new Set([
     ])
 });
 
-infoSchema.setEnum({name: "string|number", values: new Set(["string", "number"])});
+infoSchema.setEnum({name: "enu_onupdate", values: new Set(["NO", "UPDATE", "NULL", "DEFAULT"])});
 
-infoSchema.setEnum({name: "onupdate", values: new Set(["NO", "UPDATE", "NULL", "DEFAULT"])});
+infoSchema.setEnum({name: "enu_ondelete", values: new Set(["NO", "DELETE", "NULL", "DEFAULT"])});
 
-infoSchema.setEnum({name: "ondelete", values: new Set(["NO", "DELETE", "NULL", "DEFAULT"])});
-
+// String_number Typ
+infoSchema.setDataType({name: "string_number", art: "multi", simple_types: new Set(["string", "number"])});
 
 // EnumType
-infoSchema.setType({name: "EnumType", art: "object", id: "name"});
-infoSchema.addProperty({object_name: "EnumType", name: "name"});
-infoSchema.addProperty({object_name: "EnumType", name: "values", type_name: "Set"});
-infoSchema.addProperty({object_name: "EnumType", name: "moreEnums", min: 0, max: -1});
+infoSchema.setDataType({name: "EnumType", art: "object", id: "name"});
+infoSchema.addProperty("EnumType", "name");
+infoSchema.addProperty("EnumType", "values", {prop_type: "set"});
+infoSchema.addProperty("EnumType", "moreEnums", {min: 0, max: -1});
 
 
 
-// DataType
-infoSchema.setType({name: "DataType", art: "object", id: "name"});
-infoSchema.addProperty({object_name: "DataType", name: "name"});
-//infoSchema.addProperty({object_name: "DataType", name: "schemaPath"});
-infoSchema.addProperty({object_name: "DataType", name: "art", type_name: "art", default: "string"});
-infoSchema.addProperty({object_name: "DataType", name: "base_name", min: 0, max: -1});
-infoSchema.addProperty({object_name: "DataType", name: "length", type_name: "int", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "min_length", type_name: "int", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "max_length", type_name: "int", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "pattern", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "whitespace", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "casing", type_name: "casing", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "decimals", type_name: "int", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "min_inclusive", type_name: "string|number", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "min_exclusive", type_name: "string|number", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "max_exclusive", type_name: "string|number", min: 0});
-infoSchema.addProperty({object_name: "DataType", name: "max_inclusive", type_name: "string|number", min: 0});
+// SimpleType
+infoSchema.setDataType({name: "SimpleType", art: "object", id: "name"});
+infoSchema.addProperty("SimpleType","name");
+infoSchema.addProperty("SimpleType", "art", {prop_type: "enu_art", default: "string"});
+infoSchema.addProperty("SimpleType", "length", {prop_type: "int", min: 0});
+infoSchema.addProperty("SimpleType", "min_length", {prop_type: "int", min: 0});
+infoSchema.addProperty("SimpleType", "max_length", {prop_type: "int", min: 0});
+infoSchema.addProperty("SimpleType", "pattern", {min: 0});
+infoSchema.addProperty("SimpleType", "whitespace", {min: 0});
+infoSchema.addProperty("SimpleType", "casing", {prop_type: "enu_casing", min: 0});
+infoSchema.addProperty("SimpleType", "decimals", {prop_type: "int", min: 0});
+infoSchema.addProperty("SimpleType", "min_inclusive", {prop_type: "string_number", min: 0});
+infoSchema.addProperty("SimpleType", "min_exclusive", {prop_type: "string_number", min: 0});
+infoSchema.addProperty("SimpleType", "max_exclusive", {prop_type: "string_number", min: 0});
+infoSchema.addProperty("SimpleType", "max_inclusive", {prop_type: "string_number", min: 0});
 
 
 // RefType
-infoSchema.setType({name: "RefType", art: "object", id: "gsid"});
-infoSchema.addProperty({object_name: "RefType", name: "gsid"});
-infoSchema.addProperty({object_name: "RefType", name: "name"});
-infoSchema.addProperty({object_name: "RefType", name: "object_name"});
-infoSchema.addProperty({object_name: "RefType", name: "object_props", max:-1});
-infoSchema.addProperty({object_name: "RefType", name: "ref_name"});
-infoSchema.addProperty({object_name: "RefType", name: "ref_props", max:-1});
-infoSchema.addProperty({object_name: "RefType", name: "on_update", type_name: "onupdate"});
-infoSchema.addProperty({object_name: "RefType", name: "on_delete", type_name: "ondelete"});
+infoSchema.setDataType({name: "RefType", art: "object", id: "gsid"});
+infoSchema.addProperty("RefType", "gsid");
+infoSchema.addProperty("RefType", "name");
+infoSchema.addProperty("RefType", "object_name");
+infoSchema.addProperty("RefType", "object_props", {max:-1});
+infoSchema.addProperty("RefType", "ref_name");
+infoSchema.addProperty("RefType", "ref_props", {max:-1});
+infoSchema.addProperty("RefType", "on_update", {prop_type: "onupdate"});
+infoSchema.addProperty("RefType", "on_delete", {prop_type: "ondelete"});
 
 
 // UniqueType
-infoSchema.setType({name: "UniqueType", art: "object", id: "gsid"});
-infoSchema.addProperty({object_name: "UniqueType", name: "gsid"});
-infoSchema.addProperty({object_name: "UniqueType", name: "name"});
-infoSchema.addProperty({object_name: "UniqueType", name: "object_name"});
-infoSchema.addProperty({object_name: "UniqueType", name: "props", max: -1});
+infoSchema.setDataType({name: "UniqueType", art: "object", id: "gsid"});
+infoSchema.addProperty("UniqueType", "gsid");
+infoSchema.addProperty("UniqueType", "name");
+infoSchema.addProperty("UniqueType", "object_name");
+infoSchema.addProperty("UniqueType", "props", {max: -1});
 
 
-// PropType
-infoSchema.setType({name: "PropType", art: "object", id: "gsid"});
-infoSchema.addProperty({object_name: "PropType", name: "gsid"});
-infoSchema.addProperty({object_name: "PropType", name: "object_name"});
-infoSchema.addProperty({object_name: "PropType", name: "name"});
-infoSchema.addProperty({object_name: "PropType", name: "pos", type_name: "number"});
-infoSchema.addProperty({object_name: "PropType", name: "type_name", default: "string", min: 0});
-infoSchema.addProperty({object_name: "PropType", name: "min", type_name: "int", default: 1, min: 0});
-infoSchema.addProperty({object_name: "PropType", name: "max", type_name: "int", default: 1, min: 0});
-infoSchema.addProperty({object_name: "PropType", name: "default", type_name: "any", min: 0});
-infoSchema.addProperty({object_name: "PropType", name: "fix", type_name: "any", min: 0});
+// PropertyType
+infoSchema.setDataType({name: "PropertyType", art: "object", id: "gsid"});
+infoSchema.addProperty("PropertyType", "gsid");
+infoSchema.addProperty("PropertyType", "object_name");
+infoSchema.addProperty("PropertyType", "name");
+infoSchema.addProperty("PropertyType", "pos", {prop_type: "number", min: 0});
+infoSchema.addProperty("PropertyType", "prop_type", {default: "string", min: 0});
+infoSchema.addProperty("PropertyType", "min", {prop_type: "int", default: 1, min: 0});
+infoSchema.addProperty("PropertyType", "max", {prop_type: "int", default: 1, min: 0});
+infoSchema.addProperty("PropertyType", "default", {prop_type: "any", min: 0});
+infoSchema.addProperty("PropertyType", "fix", {prop_type: "any", min: 0});
 
 
-// SchemaTyp
-infoSchema.setType({name: "SchemaType", art: "object", id: "name"});
-infoSchema.addProperty({object_name: "SchemaType", name: "name"});
-infoSchema.addProperty({object_name: "SchemaType", name: "art", type_name:"types"});
-infoSchema.addProperty({object_name: "SchemaType", name: "base_name", min: 0});
-infoSchema.addProperty({object_name: "SchemaType", name: "id", min: 0, max: -1});
-infoSchema.addProperty({object_name: "SchemaType", name: "more_attributes", min: 0, max: -1});
-infoSchema.addProperty({object_name: "SchemaType", name: "more_properties", min: 0, max: -1});
+// DataTyp
+infoSchema.setDataType({name: "DataType", art: "object", id: "name"});
+infoSchema.addProperty("DataType", "name");
+infoSchema.addProperty("DataType", "art", {prop_type: "enu_types"});
+infoSchema.addProperty("DataType", "base_name", {min: 0});
+infoSchema.addProperty("DataType", "id", {min: 0, max: -1});
+infoSchema.addProperty("DataType", "more_attributes", {min: 0, max: -1});
+infoSchema.addProperty("DataType", "more_properties", {min: 0, max: -1});
 
 
 // InfoText
-infoSchema.setType({name: "InfoText", art: "object", id: "gsid"});
-infoSchema.addProperty({object_name: "InfoText", name: "gsid"});
-infoSchema.addProperty({object_name: "InfoText", name: "type_name", min: 0});
-infoSchema.addProperty({object_name: "InfoText", name: "item_gsid", min: 0});
-infoSchema.addProperty({object_name: "InfoText", name: "lang", default: "de", min: 0});
-infoSchema.addProperty({object_name: "InfoText", name: "date", min: 0});
-infoSchema.addProperty({object_name: "InfoText", name: "text"});
+infoSchema.setDataType({name: "InfoText", art: "object", id: "gsid"});
+infoSchema.addProperty("InfoText", "gsid");
+infoSchema.addProperty("InfoText", "type_name", {min: 0});
+infoSchema.addProperty("InfoText", "prop_gsid", {min: 0});
+infoSchema.addProperty("InfoText", "lang", {default: "de", min: 0});
+infoSchema.addProperty("InfoText", "date", {min: 0});
+infoSchema.addProperty("InfoText", "text");
 
 
 // ==============================
