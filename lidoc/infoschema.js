@@ -96,7 +96,7 @@ const UniqueTypeUnique = "gsid";
  * @property {number} [max] - Default: 1(nur ein mal) -  größer 1: Ist eine Liste mit maximal n Eigenschaften, -1: ist eine unendliche Liste 
  * @property {any|undefined} [default] - Optional: Standardwert der Eigenschaft
  * @property {any|undefined} [fix] - Optional: Fixer Wert der Eigenschaft
-*/ 
+*/
 const PropTypeFields = ["gsid", "object_name", "name", "pos", "prop_type", "min", "max", "default", "fix"];
 const PropTypeUnique = "gsid";
 
@@ -162,15 +162,26 @@ export class Schema {
 
     /**  @type {DataTable<SimpleType>} Liste mit DatenTypen */
     #simpleTypeList = new DataTable("simpletypes", [SimpleTypeFields], SimpleTypeUnique);
-    
+
+
     /** @type {DataTable<PropertyType>} Liste mit Objekt PropTypen */
     #propList = new DataTable("properties", [PropTypeFields], PropTypeUnique);
-    
+
     /** @type {DataTable<DataType>}  Liste aller Typen */
     #dataTypeList = new DataTable("datatypes", [DataTypeFields], DataTypeUnique);
-    
+
     /** @type {DataTable<InfoText>} Liste mit InformationsTexten */
     #infoList = new DataTable("infos", [InfoTextFields], InfoTextUnique);
+
+
+    // Tabellen (ReadOnly) für Listen Funktionen
+    get dataTypes() { return this.#dataTypeList.readOnly(); }
+    get properties() { return this.#propList.readOnly(); }
+    get enums() { return this.#enumList.readOnly(); }
+    get simpleTypes() { return this.#simpleTypeList.readOnly(); }
+    get uniques() { return this.#uniqueList.readOnly(); }
+    get refs() { return this.#refList.readOnly(); }
+    get infos() { return this.#infoList.readOnly(); }
 
 
     /**
@@ -186,11 +197,11 @@ export class Schema {
     /**
      * Registriert einen Typ im Schema
      * @param {Partial<DataType>} options - Setzt einen SchemaTyp
-     * @returns {string|undefined} ID wenn erfolgreich
+     * @returns {string} ID wenn erfolgreich
      */
     setDataType(options) {
-        if (!options.name) {options.name = getGSID();}
-        return this.#dataTypeList.setObject(options);
+        if (!options.name) { options.name = getGSID(); }
+        return this.#dataTypeList.setObject(options) || options.name;
     }
 
 
@@ -207,7 +218,7 @@ export class Schema {
     /**
      * Fügt einen zusätzlichen SimpleTyp im Schema hinzu. (Existiert der SimpleType schon wird kein Neuer hinzugefügt)
      * @param {string} type_name - Name(id) des Types
-     * @param {string} simple_type_name - Name(id) des hinzufügenden simplen Datentypes
+     * @param {string|Array<string>} simple_type_name - Name(id) des hinzufügenden simplen Datentypes
      * @returns {string|number|undefined} ID oder Datensatz Position wenn erfolgreich 
      */
     linkSimpleType(type_name, simple_type_name) {
@@ -250,16 +261,16 @@ export class Schema {
     /**
      * Registriert einen simplen DatenTyp im Schema
      * @param {Partial<SimpleType>} options - Setzt einen SchemaTyp
-     * @returns {string|undefined} ID wenn erfolgreich
+     * @returns {string} ID wenn erfolgreich
      */
     setSimpleType(options) {
-        if (!options.name) {options.name = getGSID();}
+        if (!options.name) { options.name = getGSID(); }
 
         // SchemaTyp ausbessern/anlegen
-        this.#dataTypeList.setObject({name: options.name, art: options.art || "string"});
+        this.#dataTypeList.setObject({ name: options.name, art: options.art || "string" });
 
         // DatenTyp setzen
-        return this.#simpleTypeList.setObject(options);
+        return this.#simpleTypeList.setObject(options) || "";
     }
 
 
@@ -318,29 +329,29 @@ export class Schema {
      * @param {string} object_name - Name des Objekt Datentypes
      * @param {string} prop_name - name der Eigenschaft
      * @param {Partial<PropertyType>} [options] - Eigenschaften vom Neuen ItemTyp
-     * @returns {string|undefined} ID des NEUEN Property
+     * @returns {string} ID des NEUEN Property
      */
     addProperty(object_name, prop_name, options) {
-        if (!object_name || !prop_name) {return;}
-        
+        if (!object_name || !prop_name) { return ""; }
+
         if (!options) { options = this.#propList.newObject(prop_name); }
 
         options.object_name = object_name;
         options.name = prop_name;
 
         // Objekttyp anlegen/setzen
-        this.#dataTypeList.setObject({name: object_name, art: "object"});
+        this.#dataTypeList.setObject({ name: object_name, art: "object" });
 
         // neue GSID - Erforderlich beim hinzufügen
-        if (!options.gsid) {options.gsid = getGSID()};
+        if (!options.gsid) { options.gsid = getGSID() };
 
         // Default werte prüfen
-        if (options.prop_type == undefined) {options.prop_type = "string";}
-        if (options.min == undefined) {options.min = 1;}
-        if (options.max == undefined) {options.max = 1;}
+        if (options.prop_type == undefined) { options.prop_type = "string"; }
+        if (options.min == undefined) { options.min = 1; }
+        if (options.max == undefined) { options.max = 1; }
 
         // Eigenschaft anlegen
-        return this.#propList.setObject(options);
+        return this.#propList.setObject(options) || options.gsid;
     }
 
 
@@ -348,10 +359,10 @@ export class Schema {
      * Ändert eine Bestehende Property. GSID muss in den optionen angegeben werden.  
      * Es wird kein Objekttyp angelegt.
      * @param {Partial<PropertyType>} options - Setzt einen Infotext zu einem Typ oder TypeItem
-     * @returns {string|undefined} ID wenn erfolgreich
+     * @returns {string} ID wenn erfolgreich
      */
     setProperty(options) {
-        return this.#propList.setObject(options);
+        return this.#propList.setObject(options) || "";
     }
 
 
@@ -371,7 +382,7 @@ export class Schema {
      * @returns {Array<PropertyType>} Gefundene Eigenschaften 
      */
     getObjProperties(object_name) {
-        return this.#propList.findAll({object_name});
+        return this.#propList.findAll({ object_name });
     }
 
 
@@ -391,10 +402,10 @@ export class Schema {
      * @returns {string|undefined} Enum-Name wenn erfolgreich
      */
     setEnum(options) {
-        if (!options.name) {options.name = getGSID();}
+        if (!options.name) { options.name = getGSID(); }
 
         // SchemaTyp ausbessern/anlegen
-        this.#dataTypeList.setObject({name: options.name, art: "enum"});
+        this.#dataTypeList.setObject({ name: options.name, art: "enum" });
 
         // DatenTyp setzen
         return this.#enumList.setObject(options);
@@ -408,15 +419,15 @@ export class Schema {
      * @returns {string|undefined} Enum Name wenn erfolgreich
      */
     setEnumItem(enum_name, value) {
-        if (!enum_name) {return;}
+        if (!enum_name) { return; }
 
         // Enum lesen
         let obj = this.#enumList.getObject(enum_name);
 
         // Wen kein Enum Objekt
         if (!obj) {
-            obj = {name: enum_name, values: new Set()};
-        } 
+            obj = { name: enum_name, values: new Set() };
+        }
 
         if (Array.isArray(value)) {
             for (let i = 0; i < value.length; i++) {
@@ -457,10 +468,10 @@ export class Schema {
      * @returns {string|undefined} ID wenn erfolgreich
      */
     setRef(options) {
-        if (!options.gsid) {options.gsid = getGSID();}
-        
+        if (!options.gsid) { options.gsid = getGSID(); }
+
         // DatenTyp ausbessern
-        this.#dataTypeList.setObject({name: options.gsid, art: "ref"});
+        this.#dataTypeList.setObject({ name: options.gsid, art: "ref" });
 
         return this.#refList.setObject(options);
     }
@@ -492,10 +503,10 @@ export class Schema {
      * @returns {string|undefined} true wenn erfolgreich
      */
     setUnique(options) {
-        if (!options.gsid) {options.gsid = getGSID();}
-        
+        if (!options.gsid) { options.gsid = getGSID(); }
+
         // DatenTyp ausbessern
-        this.#dataTypeList.setObject({name: options.gsid, art: "unique"});
+        this.#dataTypeList.setObject({ name: options.gsid, art: "unique" });
 
         return this.#uniqueList.setObject(options);
     }
@@ -519,6 +530,25 @@ export class Schema {
         return [...this.#dataTypeList.rowMap.keys()];
     }
 
+
+    /**
+     * 
+     * @returns {Object<string,string|DataTable<any>>}
+     */
+    toSchemaObj() {
+        const obj = {
+            infotype: "infoSchema"
+            , name: this.#name
+            , refs: this.#refList
+            , uniqueitems: this.#uniqueList
+            , enums: this.#enumList
+            , simpletypes: this.#simpleTypeList
+            , properties: this.#propList
+            , datatypes: this.#dataTypeList
+            , infos: this.#infoList
+        };
+        return obj;
+    }
 
     /**
      * Liefert das Schema als JsonString zurück
@@ -549,7 +579,7 @@ export class Schema {
      */
     setFromObject(obj) {
         if (!obj || typeof obj != "object") { return; }
-        if (obj.infotype != "infoSchema") {return;}
+        if (obj.infotype != "infoSchema") { return; }
 
         this.#refList = new DataTable("refs", obj.refs || [RefTypeFields], RefTypeUnique);
         this.#uniqueList = new DataTable("uniques", obj.uniques || [UniqueTypeFields], UniqueTypeUnique);
@@ -595,186 +625,6 @@ export class Schema {
 }
 
 
-// ==========================
-//   Schema anzeigen
-// --------------------
-
-// /**
-//  * Liefert die Infotexte aufbereitet zurück
-//  * @param {Array<InfoText>} infos - Liste mit Infotexten
-//  */
-// function getInfoHTML(infos) {
-//     let html = "";
-//     for (let i = 0; i < infos.length; i++) {
-//         let info = infos[i].text.replaceAll("\n", "<br>");
-//         html += info;
-//     }
-//     return html;
-// }
-
-
-
-// /**
-//  * Lieftert einen HTML-String als Name, (min,max), type, info
-//  * @param {PropItem} item - Typ der Datenzeile
-//  * @returns {string} HTMLString
-//  */
-// function getNameTypeHTML(item) {
-//     let html = "";
-//     if (!(item instanceof PropItem)) { return html; }
-
-//     let typeType = item.PropType;
-//     if (Array.isArray(item.PropType)) {
-//         typeType = "";
-//         for (let i = 0; i < item.PropType.length; i++) {
-//             if (i > 0) { typeType += ","; }
-//             typeType += item.PropType[i];
-//         }
-//     }
-
-//     // Zeile zusammenbauen
-//     //html = `<li>${type.name}&nbsp;(${type.min},${type.max})&nbsp;{${typeType}}&nbsp;${getInfoHTML(type.info)}</li>`;
-//     html = `${item.name}&nbsp;(${item.min},${item.max})&nbsp;{${typeType}}`;
-//     return html;
-// }
-
-
-// /**
-//  * Lieftert einen HTML-String je TypeArt zurück
-//  * @param {Schema} schema - Schema das als basis genommen wird
-//  * @param {string|Array<string>} typeName - Typ der Datenzeile
-//  * @returns {string} HTMLString
-//  */
-// function getTypeHTML(schema, typeName) {
-//     if (!typeName) { return ""; }
-//     let html = "<ul>";
-//     let html1 = "";
-//     let html2 = "";
-
-//     if (Array.isArray(typeName)) {
-//         for (let i = 0; i < typeName.length; i++) {
-//             // typ prüfen
-//             html += getTypeHTML(schema, typeName[i]);
-//         }
-//         return html;
-//     }
-
-//     // Typnamen prüfen
-//     if (["string", "number", "boolean", "object", "enum", "GSID"].indexOf(typeName) >= 0) {
-//         return typeName;
-//     }
-
-//     const type = schema.getType(typeName);
-//     if (!type) {
-//         return `<p>Base: ${typeName}</p>`;
-//     }
-
-//     switch (type.art) {
-//         case "object":
-//             // Attribute
-//             const attrList = schema.getPropItems(typeName, "a");
-
-//             if (attrList.length > 0) {
-//                 //html += "<li><b>Attributes</b>(" + attrList.length + ")";
-//                 for (let i = 0; i < attrList.length; i++) {
-//                     let name = attrList[i].name;
-//                     if (attrList[i].min > 0) {
-//                         name = "<b>" + name + "</b>";
-//                     }
-//                     if (attrList[i].use) {
-//                         name = "[&nbsp;]&nbsp;" + name;
-//                     }
-//                     let defaultValue = typeof attrList[i].defaultValue == "undefined" ? "" : "&nbsp;default:" + attrList[i].defaultValue;
-//                     let fix = typeof attrList[i].fix == "undefined" ? "" : "&nbsp;fix:" + attrList[i].fix;
-//                     html += `<li><details><summary>${name}&nbsp;(${attrList[i].min},${attrList[i].max})&nbsp;${attrList[i].PropType}${defaultValue}${fix}</summary>`;
-//                     html += getTypeHTML(schema, attrList[i].PropType) + "</details></li>";
-//                 }
-//             }
-
-//             // Properties
-//             const propList = schema.getPropItems(typeName, "p");
-
-//             if (propList.length > 0) {
-//                 // html += "<li><b>Properies</b>(" + propList.length + ")";
-//                 for (let i = 0; i < propList.length; i++) {
-//                     let name = propList[i].name;
-//                     if (propList[i].min > 0) {
-//                         name = "<b>" + name + "</b>";
-//                     }
-//                     if (propList[i].use) {
-//                         name = "[&nbsp;]&nbsp;" + name;
-//                     }
-//                     let defaultValue = typeof propList[i].defaultValue == "undefined" ? "" : "&nbsp;default:" + propList[i].defaultValue;
-//                     let fix = typeof propList[i].fix == "undefined" ? "" : "&nbsp;fix:" + propList[i].fix;
-//                     html += `<li><details><summary>${name}&nbsp;(${propList[i].min},${propList[i].max})&nbsp;${propList[i].PropType}${defaultValue}${fix}</summary>`;
-//                     html += getTypeHTML(schema, propList[i].PropType) + "</details></li>";
-//                 }
-//             }
-//             break;
-
-//         case "enum":
-//             const enumList = schema.getEnumItems(typeName);
-//             if (enumList.length > 0) {
-//                 html += `<li><details><summary>ENUM:</summary><ul>`;
-//                 for (let i = 0; i < enumList.length; i++) {
-//                     html += `<li>${enumList[i].name}:&nbsp;${enumList[i].value}</li>`;
-//                 }
-//                 html += `</ul></details></li>`;
-//             }
-//             break;
-//         default:
-//             break;
-//     }
-
-//     // Typ.Typ prüfen
-//     html += getTypeHTML(schema, type.base);
-
-//     return html + "</ul>";
-// }
-
-
-// // Schema ab einem Einstiegspunkt anzeigen
-
-// /**
-//  * Liefert einen HTML-String vom angegebenen Schema und  SchemaTyp als Startpunkt zurück.
-//  * @param {Schema} schema - Schema das als basis genommen wird
-//  * @param {string} typeName - Name des Types/ Startpunkt
-//  * @returns {string|undefined} HTML-String oder "undefined" wenn Typ im Schema nicht gefunden wird
-//  */
-// export function getSchemaTypeHTML(schema, typeName) {
-//     if (!(schema instanceof Schema)) { return; }
-//     let html = "";
-
-//     // Schema Name
-//     html += `<h1>${schema.name}</h1>`;
-
-//     // Schema APPInfo
-//     const appInfoList = schema.getAppInfos("schema");
-//     if (appInfoList.length > 0) {
-//         html += "<h2>APP-Info></h2>" + getInfoHTML(appInfoList);
-//     }
-
-//     // Schema Info
-//     const infoList = schema.getInfos("schema");
-//     if (infoList.length > 0) {
-//         html += "<h2>Info</h2>" + getInfoHTML(infoList);
-//     }
-
-//     // Type auflösen
-//     // wenn kein Typ angegeben alle durchgehen
-//     if (!typeName) {
-//         const typeNameList = schema.getAllTypeNames();
-//         for (let i = 0; i < typeNameList.length; i++) {
-//             // todo: TypName 
-//             html += `<details><summary>${typeNameList[i]}</summary>`;
-//             html += getTypeHTML(schema, typeNameList[i] + "");
-//             html += `</details>`;
-//         }
-//     } else {
-//         html += getTypeHTML(schema, typeName);
-//     }
-//     return html;
-// }
 
 // ===========================
 //   InfoSchema
@@ -783,23 +633,26 @@ export class Schema {
 export const infoSchema = new Schema("infoSchema");
 
 // Enums
-infoSchema.setEnum({name: "enu_types", values: new Set([
-    "string"
-    , "number"
-    , "bigint"
-    , "boolean"
-    , "multi"
-    , "enum"
-    , "object"
-    , "ref"
-    , "unique"
-    , "group"
-    , "choice"
-])});
+infoSchema.setEnum({
+    name: "enu_types", values: new Set([
+        "string"
+        , "number"
+        , "bigint"
+        , "boolean"
+        , "multi"
+        , "enum"
+        , "object"
+        , "ref"
+        , "unique"
+        , "group"
+        , "choice"
+    ])
+});
 
-infoSchema.setEnum({name: "enu_art", values: new Set(["string", "number", "bigint", "boolean"])});
+infoSchema.setEnum({ name: "enu_art", values: new Set(["string", "number", "bigint", "boolean"]) });
 
-infoSchema.setEnum({name: "enu_casing", values: new Set([
+infoSchema.setEnum({
+    name: "enu_casing", values: new Set([
         "camelCase"
         , "PascalCase"
         , "snake_case"
@@ -808,90 +661,230 @@ infoSchema.setEnum({name: "enu_casing", values: new Set([
     ])
 });
 
-infoSchema.setEnum({name: "enu_onupdate", values: new Set(["NO", "UPDATE", "NULL", "DEFAULT"])});
+infoSchema.setEnum({ name: "enu_onupdate", values: new Set(["NO", "UPDATE", "NULL", "DEFAULT"]) });
 
-infoSchema.setEnum({name: "enu_ondelete", values: new Set(["NO", "DELETE", "NULL", "DEFAULT"])});
+infoSchema.setEnum({ name: "enu_ondelete", values: new Set(["NO", "DELETE", "NULL", "DEFAULT"]) });
 
 // String_number Typ
-infoSchema.setDataType({name: "string_number", art: "multi", simple_types: new Set(["string", "number"])});
+infoSchema.setDataType({ name: "string_number", art: "multi", simple_types: new Set(["string", "number"]) });
 
 // EnumType
-infoSchema.setDataType({name: "EnumType", art: "object", id: "name"});
+infoSchema.setDataType({ name: "EnumType", art: "object", id: "name" });
 infoSchema.addProperty("EnumType", "name");
-infoSchema.addProperty("EnumType", "values", {prop_type: "set"});
-infoSchema.addProperty("EnumType", "moreEnums", {min: 0, max: -1});
+infoSchema.addProperty("EnumType", "values", { prop_type: "set" });
+infoSchema.addProperty("EnumType", "moreEnums", { min: 0, max: -1 });
 
 
 
 // SimpleType
-infoSchema.setDataType({name: "SimpleType", art: "object", id: "name"});
-infoSchema.addProperty("SimpleType","name");
-infoSchema.addProperty("SimpleType", "art", {prop_type: "enu_art", default: "string"});
-infoSchema.addProperty("SimpleType", "length", {prop_type: "int", min: 0});
-infoSchema.addProperty("SimpleType", "min_length", {prop_type: "int", min: 0});
-infoSchema.addProperty("SimpleType", "max_length", {prop_type: "int", min: 0});
-infoSchema.addProperty("SimpleType", "pattern", {min: 0});
-infoSchema.addProperty("SimpleType", "whitespace", {min: 0});
-infoSchema.addProperty("SimpleType", "casing", {prop_type: "enu_casing", min: 0});
-infoSchema.addProperty("SimpleType", "decimals", {prop_type: "int", min: 0});
-infoSchema.addProperty("SimpleType", "min_inclusive", {prop_type: "string_number", min: 0});
-infoSchema.addProperty("SimpleType", "min_exclusive", {prop_type: "string_number", min: 0});
-infoSchema.addProperty("SimpleType", "max_exclusive", {prop_type: "string_number", min: 0});
-infoSchema.addProperty("SimpleType", "max_inclusive", {prop_type: "string_number", min: 0});
+infoSchema.setDataType({ name: "SimpleType", art: "object", id: "name" });
+infoSchema.addProperty("SimpleType", "name");
+infoSchema.addProperty("SimpleType", "art", { prop_type: "enu_art", default: "string" });
+infoSchema.addProperty("SimpleType", "length", { prop_type: "int", min: 0 });
+infoSchema.addProperty("SimpleType", "min_length", { prop_type: "int", min: 0 });
+infoSchema.addProperty("SimpleType", "max_length", { prop_type: "int", min: 0 });
+infoSchema.addProperty("SimpleType", "pattern", { min: 0 });
+infoSchema.addProperty("SimpleType", "whitespace", { min: 0 });
+infoSchema.addProperty("SimpleType", "casing", { prop_type: "enu_casing", min: 0 });
+infoSchema.addProperty("SimpleType", "decimals", { prop_type: "int", min: 0 });
+infoSchema.addProperty("SimpleType", "min_inclusive", { prop_type: "string_number", min: 0 });
+infoSchema.addProperty("SimpleType", "min_exclusive", { prop_type: "string_number", min: 0 });
+infoSchema.addProperty("SimpleType", "max_exclusive", { prop_type: "string_number", min: 0 });
+infoSchema.addProperty("SimpleType", "max_inclusive", { prop_type: "string_number", min: 0 });
 
 
 // RefType
-infoSchema.setDataType({name: "RefType", art: "object", id: "gsid"});
+infoSchema.setDataType({ name: "RefType", art: "object", id: "gsid" });
 infoSchema.addProperty("RefType", "gsid");
 infoSchema.addProperty("RefType", "name");
 infoSchema.addProperty("RefType", "object_name");
-infoSchema.addProperty("RefType", "object_props", {max:-1});
+infoSchema.addProperty("RefType", "object_props", { max: -1 });
 infoSchema.addProperty("RefType", "ref_name");
-infoSchema.addProperty("RefType", "ref_props", {max:-1});
-infoSchema.addProperty("RefType", "on_update", {prop_type: "onupdate"});
-infoSchema.addProperty("RefType", "on_delete", {prop_type: "ondelete"});
+infoSchema.addProperty("RefType", "ref_props", { max: -1 });
+infoSchema.addProperty("RefType", "on_update", { prop_type: "onupdate" });
+infoSchema.addProperty("RefType", "on_delete", { prop_type: "ondelete" });
 
 
 // UniqueType
-infoSchema.setDataType({name: "UniqueType", art: "object", id: "gsid"});
+infoSchema.setDataType({ name: "UniqueType", art: "object", id: "gsid" });
 infoSchema.addProperty("UniqueType", "gsid");
 infoSchema.addProperty("UniqueType", "name");
 infoSchema.addProperty("UniqueType", "object_name");
-infoSchema.addProperty("UniqueType", "props", {max: -1});
+infoSchema.addProperty("UniqueType", "props", { max: -1 });
 
 
 // PropertyType
-infoSchema.setDataType({name: "PropertyType", art: "object", id: "gsid"});
+infoSchema.setDataType({ name: "PropertyType", art: "object", id: "gsid" });
 infoSchema.addProperty("PropertyType", "gsid");
 infoSchema.addProperty("PropertyType", "object_name");
 infoSchema.addProperty("PropertyType", "name");
-infoSchema.addProperty("PropertyType", "pos", {prop_type: "number", min: 0});
-infoSchema.addProperty("PropertyType", "prop_type", {default: "string", min: 0});
-infoSchema.addProperty("PropertyType", "min", {prop_type: "int", default: 1, min: 0});
-infoSchema.addProperty("PropertyType", "max", {prop_type: "int", default: 1, min: 0});
-infoSchema.addProperty("PropertyType", "default", {prop_type: "any", min: 0});
-infoSchema.addProperty("PropertyType", "fix", {prop_type: "any", min: 0});
+infoSchema.addProperty("PropertyType", "pos", { prop_type: "number", min: 0 });
+infoSchema.addProperty("PropertyType", "prop_type", { default: "string", min: 0 });
+infoSchema.addProperty("PropertyType", "min", { prop_type: "int", default: 1, min: 0 });
+infoSchema.addProperty("PropertyType", "max", { prop_type: "int", default: 1, min: 0 });
+infoSchema.addProperty("PropertyType", "default", { prop_type: "any", min: 0 });
+infoSchema.addProperty("PropertyType", "fix", { prop_type: "any", min: 0 });
 
 
 // DataTyp
-infoSchema.setDataType({name: "DataType", art: "object", id: "name"});
+infoSchema.setDataType({ name: "DataType", art: "object", id: "name" });
 infoSchema.addProperty("DataType", "name");
-infoSchema.addProperty("DataType", "art", {prop_type: "enu_types"});
-infoSchema.addProperty("DataType", "base_name", {min: 0});
-infoSchema.addProperty("DataType", "id", {min: 0, max: -1});
-infoSchema.addProperty("DataType", "more_attributes", {min: 0, max: -1});
-infoSchema.addProperty("DataType", "more_properties", {min: 0, max: -1});
+infoSchema.addProperty("DataType", "art", { prop_type: "enu_types" });
+infoSchema.addProperty("DataType", "base_name", { min: 0 });
+infoSchema.addProperty("DataType", "id", { min: 0, max: -1 });
+infoSchema.addProperty("DataType", "more_attributes", { min: 0, max: -1 });
+infoSchema.addProperty("DataType", "more_properties", { min: 0, max: -1 });
 
 
 // InfoText
-infoSchema.setDataType({name: "InfoText", art: "object", id: "gsid"});
+infoSchema.setDataType({ name: "InfoText", art: "object", id: "gsid" });
 infoSchema.addProperty("InfoText", "gsid");
-infoSchema.addProperty("InfoText", "type_name", {min: 0});
-infoSchema.addProperty("InfoText", "prop_gsid", {min: 0});
-infoSchema.addProperty("InfoText", "lang", {default: "de", min: 0});
-infoSchema.addProperty("InfoText", "date", {min: 0});
+infoSchema.addProperty("InfoText", "type_name", { min: 0 });
+infoSchema.addProperty("InfoText", "prop_gsid", { min: 0 });
+infoSchema.addProperty("InfoText", "lang", { default: "de", min: 0 });
+infoSchema.addProperty("InfoText", "date", { min: 0 });
 infoSchema.addProperty("InfoText", "text");
 
+
+// ==========================
+//   Schema anzeigen
+// --------------------
+
+/**
+ * Liefert einen HTML-String für ein Schema zurück (JSDoc-Style)
+ * @param {Schema} schema - Info Schema Instanz
+ * @returns {string} Vollständiger HTML-String für die Dokumentation
+ */
+export function getSchemaHTML(schema) {
+
+    // --- HAUPTFUNKTION FÜR DIE ANZEIGE ---
+    function renderDocumentation() {
+        let html = "";
+
+        // 1. HAUPT-OBJEKTE RENDERN (Alle Datentypen, die die Art "object" haben)
+        // Hier nutzen wir Ihr praktisches Such-Objekt!
+        const hauptObjekte = schema.dataTypes.findAll({ art: "object" });
+
+        hauptObjekte.forEach(typ => {
+            html += createObjectCardHTML(typ);
+        });
+
+        // 2. GLOBALE HILFSTYPEN & ENUMS RENDERN
+        // Wir suchen alle Typen, deren Art NICHT "object" ist (über eine Spalten-Funktion im Such-Objekt)
+        const hilfsTypen = schema.dataTypes.findAll({
+            art: (/** @type {string} */value) => value !== "object"
+        });
+
+        if (hilfsTypen.length > 0) {
+            html += `<div class="footer-section">`;
+            html += `<h2>Globale Hilfstypen & Enums</h2>`;
+            hilfsTypen.forEach(typ => {
+                html += createObjectCardHTML(typ);
+            });
+            html += `</div>`;
+        }
+
+        return html;
+    }
+
+    // --- HILFSFUNKTION: Erstellt eine einzelne JSDoc-Karte ---
+    /**
+     * @param {DataType} typ 
+     * @returns {string} HTML-String der Karte
+     */
+    function createObjectCardHTML(typ) {
+        // Findet alle Eigenschaften, die zu diesem Objektnamen gehören
+        const allProps = schema.properties.findAll({ object_name: typ.name });
+        
+        // Trennung in XML-Attribute (@) und normale Properties
+        const attribute = allProps.filter(p => p.name.startsWith("@"));
+        const propertys = allProps.filter(p => !p.name.startsWith("@"));
+
+        let cardHtml = `<div class="object-card" id="type-${typ.name}">`;
+        cardHtml += `<h2>${typ.name} <span class="badge">${typ.art}</span></h2>`;
+
+        // XML-Attribute anzeigen
+        if (attribute.length > 0) {
+            cardHtml += `<div class="section-title">Attributes</div>`;
+            cardHtml += buildJSDocTable(attribute);
+        }
+
+        // Normale Kind-Elemente / Properties anzeigen
+        if (propertys.length > 0) {
+            cardHtml += `<div class="section-title">Properties</div>`;
+            cardHtml += buildJSDocTable(propertys);
+        } 
+        // ENUM-WERTE ANZEIGEN: Wenn der Typ ein Enum ist, holen wir die Werte aus schema.enums
+        else if (typ.art === "enum") {
+            cardHtml += `<div class="section-title">Erlaubte Werte (Enum)</div>`;
+            
+            // Wir suchen in der Enum-Tabelle nach dem Eintrag für diesen Typen
+            const enumEintrag = schema.enums.find({ name: typ.name });
+            
+            if (enumEintrag && enumEintrag.values && enumEintrag.values.size > 0) {
+                cardHtml += `<table class="jsdoc-table enum-table">
+                    <thead><tr><th>Erlaubter Wert</th></tr></thead>
+                    <tbody>`;
+                
+                // Da enumEintrag.values ein Set<any> ist, wandeln wir es in ein Array um
+                const werteArray = Array.from(enumEintrag.values);
+                werteArray.forEach(wert => {
+                    cardHtml += `<tr><td class="enum-value">${wert}</td></tr>`;
+                });
+                
+                cardHtml += `</tbody></table>`;
+            } else {
+                cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Enum-Werte hinterlegt.</p>`;
+            }
+        } 
+        // Wenn es ein reiner SimpleType ohne Properties ist (z.B. ein custom String-Typ)
+        else if (attribute.length === 0) {
+            cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Eigenschaften definiert (SimpleType / Primitiv).</p>`;
+        }
+
+        cardHtml += `</div>`;
+        return cardHtml;
+    }
+
+    // --- HILFSFUNKTION: Baut die JSDoc Tabelle für Attribute/Properties ---
+    /**
+     * @param {Array<PropertyType>} propListe 
+     * @returns {string} HTML-String der Tabelle
+     */
+    function buildJSDocTable(propListe) {
+        let table = `<table class="jsdoc-table">
+        <thead>
+            <tr><th>Name</th><th>Typ</th><th>Kardinalität</th><th>Details / Fixwert</th></tr>
+        </thead>
+        <tbody>`;
+
+        propListe.forEach(p => {
+            // Prüfen, ob der Typ im Schema existiert -> Dann machen wir einen Klick-Link daraus
+            const typExistiert = schema.dataTypes.has(p.prop_type || "");
+            const typLink = typExistiert
+                ? `<a class="prop-type" href="#type-${p.prop_type}">${p.prop_type}</a>`
+                : `<span style="color: #666;">${p.prop_type}</span>`;
+
+            // Kardinalität leserlich übersetzen
+            let kardinalitaet = `${p.min}..${p.max === -1 ? '*' : p.max}`;
+            if (p.min === 0 && p.max === 1) kardinalitaet += " (Optional)";
+            if (p.min === 1 && p.max === 1) kardinalitaet += " (Erforderlich)";
+
+            table += `<tr>
+                <td class="prop-name">${p.name}</td>
+                <td>${typLink}</td>
+                <td style="color: #666; font-size: 0.9em;">${kardinalitaet}</td>
+                <td style="font-style: italic; color: #555;">${p.fix ? `Fixwert: "${p.fix}"` : (p.default ? `Default: "${p.default}"` : '-')}</td>
+            </tr>`;
+        });
+
+        table += `</tbody></table>`;
+        return table;
+    }
+
+    // Startet den geschützten Ausleseprozess und gibt den HTML-String zurück
+    return renderDocumentation();
+}
 
 // ==============================
 

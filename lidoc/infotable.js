@@ -11,19 +11,8 @@
  * @callback CallbackFunction
  * @param {T} obj - Datensatz Zeile
  * @param {number} [rowIndex] - Position in der Liste nach Index
- * @param {DataTable<T>} [datatable] - Referenz auf die DatenTabelle
+ * @param {ReturnType<DataTable<T>["readOnly"]>} [datatable] - Referenz auf die DatenTabelle
  * @returns {any} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste wenn "break" wird abgebrochen.
- */
-
-
-/** 
- * Callback Funktion die für eine Spalte einer Datenzeile.  
- * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
- * @callback ColFilterFunction
- * @param {any} value - Wert der Datenspalte
- * @param {number} [colIndex] - Index der Spalte im Datensatz
- * @param {Array<any>} [rawRow] - Datenzeile
- * @returns {boolean|undefined} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste.
  */
 
 
@@ -33,7 +22,7 @@
  * @template T
  * @callback GroupFunction
  * @param {Array<T>} list - Liste mit Datensatz Objekten
- * @param {DataTable<T>} [datatable] - Referenz auf die DatenTabelle
+ * @param {ReturnType<DataTable<T>["readOnly"]>} [datatable] - Referenz auf die DatenTabelle
  * @returns {any} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste wenn "break" wird abgebrochen.
  */
 
@@ -490,6 +479,13 @@ export class DataTable {
      * @returns {string|number|undefined} Die ID wenn Änderung erfolgreich
      */
     addCellSetValue(row, col, value) {
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+                this.addCellSetValue(row, col, value[i]);
+            }
+            return row;
+        }
+        
         // DatensatzIndex lesen
         const rowIndex = this.getRowIndex(row);
         if (rowIndex <= 0) { return; }
@@ -754,6 +750,7 @@ export class DataTable {
 
         // Daten zum Filtern
         const rowIndexList = this.getIndexList(index);
+        const readOnlyTable = this.readOnly();
 
         // alle durchgehen
         for (let i = 0; i < rowIndexList.length; i++) {
@@ -762,7 +759,7 @@ export class DataTable {
             if (!obj) { continue; }
 
             // Funktion ausführen
-            const backValue = fu(obj, rowIndex, this);
+            const backValue = fu(obj, rowIndex, readOnlyTable);
             if (backValue != undefined && backValue == breakValue) {
                 return backValue;
             };
@@ -824,11 +821,13 @@ export class DataTable {
 
         // Alle Gruppen Arrays
         const groupList = [...groupIndex.keys()];
+        const readOnlyTable = this.readOnly();
+
 
         // alle Gruppierten Listen durchgehen
         for (let i = 0; i < groupList.length; i++) {
             // funktion ausführen
-            const backValue = fu(groupIndex.get(groupList[i]) || [], this);
+            const backValue = fu(groupIndex.get(groupList[i]) || [], readOnlyTable);
             if (breakValue != undefined && breakValue == backValue) { return; }
         }
     }
@@ -877,6 +876,7 @@ export class DataTable {
             return;
         }
 
+        const readOnlyTable = this.readOnly();        
 
         for (let i = 0; i < indexList.length; i++) {
             const rowIndex = indexList[i];
@@ -884,7 +884,7 @@ export class DataTable {
 
             // erste datenZeile(FeldNamen) und gelöschte auslassen
             if (!obj) { continue; }
-            if (fu(obj, rowIndex, this)) {
+            if (fu(obj, rowIndex, readOnlyTable)) {
                 return obj;
             }
         }
@@ -895,7 +895,7 @@ export class DataTable {
 
 
     /**
-     * Sucht ein Objekt aus der Liste das mit dem übergebenen Objekt übereinstimmt und gibt das erte gefundene Objekt zurück.
+     * Sucht alle Objekte aus der Liste das mit dem übergebenen Objekt übereinstimmt und gibt das erte gefundene Objekt zurück.
      * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
      * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
      * @param {string} [newIndex] - Optional Name unter der der Filterindex abgelegt wird. 
@@ -943,6 +943,8 @@ export class DataTable {
             return newObjList;
         }
 
+        const readOnlyTable = this.readOnly();
+
         // Alle Zeilen durchgehen
         for (let i = 0; i < indexList.length; i++) {
             const rowIndex = indexList[i];
@@ -950,7 +952,7 @@ export class DataTable {
 
             // erste datenZeile(FeldNamen) und gelöschte auslassen
             if (!obj) { continue; }
-            if (fu(obj, rowIndex, this)) {
+            if (fu(obj, rowIndex, readOnlyTable)) {
                 newIndexList.push(rowIndex);
                 newObjList.push(obj);
             }
@@ -965,6 +967,45 @@ export class DataTable {
         return newObjList;
     }
 
+    /**
+     * Liefert eine Schreibgeschützte Version der Liste zurück
+     * @returns {{
+     * getID: DataTable<T>["getID"]
+     * , getColIndex: DataTable<T>["getColIndex"]
+     * , has: DataTable<T>["has"]
+     * , getRowIndex: DataTable<T>["getRowIndex"]
+     * , getIndexList: DataTable<T>["getIndexList"]
+     * , hasIndexList: DataTable<T>["hasIndexList"]
+     * , getCellValue: DataTable<T>["getCellValue"]
+     * , sort: DataTable<T>["sort"]
+     * , newObject: DataTable<T>["newObject"]
+     * , getObject: DataTable<T>["getObject"]
+     * , getObjectList: DataTable<T>["getObjectList"]
+     * , forEach: DataTable<T>["forEach"]
+     * , forGroup: DataTable<T>["forGroup"]
+     * , find: DataTable<T>["find"]
+     * , findAll: DataTable<T>["findAll"]
+     * }} 
+     */
+    readOnly() {
+        return {
+            getID: this.getID.bind(this)
+            , getColIndex: this.getColIndex.bind(this)
+            , has: this.has.bind(this)
+            , getRowIndex: this.getRowIndex.bind(this)
+            , getIndexList: this.getIndexList.bind(this)
+            , hasIndexList: this.hasIndexList.bind(this)
+            , getCellValue: this.getCellValue.bind(this)
+            , sort: this.sort.bind(this)
+            , newObject: this.newObject.bind(this)
+            , getObject: this.getObject.bind(this)
+            , getObjectList: this.getObjectList.bind(this)
+            , forEach: this.forEach.bind(this)
+            , forGroup: this.forGroup.bind(this)
+            , find: this.find.bind(this)
+            , findAll: this.findAll.bind(this)
+        };
+    }
 }
 
 
