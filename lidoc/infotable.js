@@ -175,6 +175,7 @@ export class DataRow {
 
 
 /**
+ * Eine InMemmory Datentabelle
  * @template T
  */
 export class DataTable {
@@ -217,6 +218,15 @@ export class DataTable {
 
         /** @type {Set<number>} */
         this._deleted = new Set();
+    }
+
+
+    /**
+     * Gib die Anzahl der Listeneinträge zurück
+     * @param {string|Array<number>} [indexName] - Optional Index von dem die Länge zurückgegeben wird
+     */
+    getLength(indexName) {
+        return this.getIndexList(indexName).length;
     }
 
 
@@ -971,6 +981,7 @@ export class DataTable {
      * Liefert eine Schreibgeschützte Version der Liste zurück
      * @returns {{
      * getID: DataTable<T>["getID"]
+     * , getLength: DataTable<T>["getLength"]
      * , getColIndex: DataTable<T>["getColIndex"]
      * , has: DataTable<T>["has"]
      * , getRowIndex: DataTable<T>["getRowIndex"]
@@ -990,6 +1001,7 @@ export class DataTable {
     readOnly() {
         return {
             getID: this.getID.bind(this)
+            , getLength: this.getLength.bind(this)
             , getColIndex: this.getColIndex.bind(this)
             , has: this.has.bind(this)
             , getRowIndex: this.getRowIndex.bind(this)
