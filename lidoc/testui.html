@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>UI-Test</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="" />
+    <link rel="icon" href="/img/icon.png">
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex-colors.css" />
+
+    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
+    <!-- <script src="/prism/prism.js"></script> -->
+</head>
+<body>
+    <f-row>
+        <f-item id="menu">
+            <input type="text" id="filter"/>
+        </f-item>
+        <f-item id="list" w-fit>
+            <div id="table"></div>
+        </f-item>
+        <f-item id="form"></f-item>
+    </f-row>
+</body>
+<script type="module">
+    //@ts-check
+    import { KeyboardRouter,  TableComponent } from "./infoui.js";
+    import {infoSchema} from "./infoschema.js";
+
+    let kRouter = new KeyboardRouter("filter");
+    let tablle1 = new TableComponent("table", infoSchema.properties);
+
+    kRouter.pushActive(tablle1);
+
+
+</script>
+</html>

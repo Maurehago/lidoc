@@ -231,6 +231,14 @@ export class DataTable {
 
 
     /**
+     * Gibt alle Spalten der Tabelle zurück
+     * @returns {Array<string>} Alle Spalten der Tabelle in richtiger Reihenfolge
+     */
+    getCols() {
+        return this.columns;
+    }
+
+    /**
      * Liefert die ID eines Objektes zurück
      * @param {Object<string,any>|Array<any>} obj - Datenobjekt mit dem idFeld
      * @returns {any} ID
@@ -982,6 +990,7 @@ export class DataTable {
      * @returns {{
      * getID: DataTable<T>["getID"]
      * , getLength: DataTable<T>["getLength"]
+     * , getCols: DataTable<T>["getCols"]
      * , getColIndex: DataTable<T>["getColIndex"]
      * , has: DataTable<T>["has"]
      * , getRowIndex: DataTable<T>["getRowIndex"]
@@ -1002,6 +1011,7 @@ export class DataTable {
         return {
             getID: this.getID.bind(this)
             , getLength: this.getLength.bind(this)
+            , getCols: this.getCols.bind(this)
             , getColIndex: this.getColIndex.bind(this)
             , has: this.has.bind(this)
             , getRowIndex: this.getRowIndex.bind(this)
