@@ -303,7 +303,7 @@ export class DataTable {
 
     /**
      * Liefert eine Liste aller IDs vom angegeben Index oder allen Datensätzen zurück.  
-     * Existiert der Index nicht, wird eine leere Liste zurück gegeben.
+     * Existiert der Index nicht, wird eine die ganze Liste zurück gegeben.
      * @param {string|Array<number>} [indexName] - Indexname oder Liste mit PositionsNummern
      * @returns {Array<number>} Index-Liste der Datzensätze
      */
@@ -312,7 +312,7 @@ export class DataTable {
             return [...this.rows.keys()];
         } else {
             if (Array.isArray(indexName)) { return indexName; }
-            return this._indexList.get(indexName) || [];
+            return this._indexList.get(indexName) || [...this.rows.keys()];
         }
     }
 
@@ -748,9 +748,7 @@ export class DataTable {
         if (typeof newIndexName == "string") {
             this._indexList.set(newIndexName, rowList);
         } else if (typeof index == "string") {
-            // this.#indexList.set(index, rowList);
-            //this.#sortCols.set(index, sCols);
-            //this.#sortColsDirection.set(index, sDirection);
+            this._indexList.set(index, rowList);
         }
         return rowList;
     } // sort

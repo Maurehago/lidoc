@@ -19,7 +19,7 @@
             <input type="text" id="filter"/>
         </f-item>
         <f-item id="list" w-fit>
-            <div id="table"></div>
+            <table id="table" table-stripes table-border></table>
         </f-item>
         <f-item id="form"></f-item>
     </f-row>
@@ -29,11 +29,18 @@
     import { KeyboardRouter,  TableComponent } from "./infoui.js";
     import {infoSchema} from "./infoschema.js";
 
+    // nach Namen sortieren
+    infoSchema.dataTypes.sort(["name"], "name");
+
+    // Tabellen Komponente erstellen
+    let tablle1 = new TableComponent("table", infoSchema.dataTypes, "name");
+
+
+    // Tastatur Router inizialisieren
     let kRouter = new KeyboardRouter("filter");
-    let tablle1 = new TableComponent("table", infoSchema.properties);
 
+    // Komponenten im TastaturRouter registrieren
     kRouter.pushActive(tablle1);
-
 
 </script>
 </html>

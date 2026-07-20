@@ -67,22 +67,67 @@ class ListController {
         this.container = document.getElementById(containerId);
         this.dataList = dataList;
         this.indexName = indexName;
-        this.selectedRow = 0;
-        this.selectedCol = 0;
+        this.selectedRow = 1; // ZeilenIndex der Tabelle
+        this.selectedCol = 0; // SpaltenIndex der Tabelle
         this.maxRows = this.dataList.getLength(this.indexName);
+        this.maxCols = this.dataList.getCols().length;
+    }
+
+    /**
+     * Entfernt den Aktiv Status von der Zeile und Spalte
+     */
+    removeActive() {
+        if (this.container instanceof HTMLTableElement) {
+            this.container?.rows[this.selectedRow].classList.remove("active");
+            this.container?.rows[this.selectedRow].cells[this.selectedCol].classList.remove("active");
+        }
+    }
+
+    /**
+     * Setzt den Aktiv Status auf Aktuelle Zeile und Spalte
+     */
+    setActive() {
+        if (this.container instanceof HTMLTableElement) {
+            if (!this.container?.rows[this.selectedRow]) { return; }
+            this.container?.rows[this.selectedRow].classList.add("active");
+            this.container?.rows[this.selectedRow].cells[this.selectedCol].classList.add("active");
+
+            // Scroll-In-View
+            const selected = this.container?.rows[this.selectedRow].cells[this.selectedCol];
+            selected?.scrollIntoView({ block: 'nearest' });
+            //selected?.scrollIntoView();
+        }
     }
 
     moveUp() {
         if (this.selectedRow > 1) {
-            this.selectedRow--;
-            this.render();
+            this.removeActive();
+            this.selectedRow -= 1;
+            this.setActive();
         }
     }
 
     moveDown() {
         if (this.selectedRow < this.maxRows - 1) {
-            this.selectedRow++;
-            this.render();
+            this.removeActive();
+            this.selectedRow += 1;
+            this.setActive();
+        }
+    }
+
+    moveLeft() {
+        if (this.selectedCol > 0) {
+            this.removeActive();
+            this.selectedCol -= 1;
+            this.setActive();
+        }
+    }
+
+    moveRight() {
+        if (this.selectedCol < this.maxCols - 1) {
+            this.removeActive();
+            this.selectedCol += 1;
+            this.setActive();
         }
     }
 
@@ -90,8 +135,10 @@ class ListController {
      * Liefert das Ausgewählte Datenobjekt zurück
      * @returns {T|undefined} - DatenObjekt oder undefined wenn nicht gefunden
      */
-    getSelection() {
-        return this.dataList.getObject(this.selectedRow);
+    getSelectedObj() {
+        if (this.container instanceof HTMLTableElement) {
+            return this.dataList.getObject(parseInt(this.container?.rows[this.selectedRow].dataset["id"] || ""));
+        }
     }
 
     render() {
@@ -122,9 +169,9 @@ export class TableComponent extends ListController {
      * Rendert das HTML mit angegebenen Spaltennamen
      */
     render() {
-        if (!this.container) {return;}
+        if (!this.container) { return; }
         // const keys = this.data.getActiveIndexes ? this.data.getActiveIndexes() : [];
-        let html = '<table table-stripes table-border><thead><tr>';
+        let html = '<thead><tr color-p style="top:0px; position: sticky;">';
 
         // alle spalten durchgehen
         for (let i = 0; i < this.cols.length; i++) {
@@ -133,28 +180,34 @@ export class TableComponent extends ListController {
 
 
         html += '</tr></thead><tbody>';
+        let rowIndex = 0;
         this.dataList.forEach((obj, index) => {
             //const row = this.data.getRecordById(id);
-            const isSelected = index === this.selectedRow;
-            html += `<tr class="${isSelected ? 'active' : ''}" data-id="${index}">`;
+            //const isSelected = index == parseInt(this.selectedRowElm?.dataset["id"] || "");
+            html += `<tr data-id="${index}">`;
             for (let i = 0; i < this.cols.length; i++) {
                 //@ts-ignore
-                html += `<td>${obj[this.cols[i]]}</td>`;
+                html += `<td>${obj[this.cols[i]] || " "}</td>`;
             }
             html += `</tr>`;
+
+            rowIndex += 1; // nächsete Zeilennummer
         }, this.indexName);
 
-        html += '</tbody></table>';
+        html += '</tbody>';
         this.container.innerHTML = "";
         this.container.insertAdjacentHTML("afterbegin", html);
 
+        // Tabelle setzen
+        this.tableElm = this.container.querySelector('table');
+
         // Scroll-In-View
-        const selected = this.container.querySelector('.active');
-        selected?.scrollIntoView({ block: 'nearest' });
+        this.setActive();
 
         // Melde die Änderung an die Detailansicht / Untertabelle
         if (this.onSelectionChange && this.selectedRow) {
-            this.onSelectionChange(this.dataList.getObject(this.selectedRow));
+            const obj = this.getSelectedObj();
+            this.onSelectionChange(obj);
         }
     }
 }
@@ -165,53 +218,60 @@ export class TableComponent extends ListController {
  * @extends {ListController<T>}
  */
 class MenuComponent extends ListController {
-//     /**
-//      * 
-//      * @param {string} containerId - Element-ID
-//      * @param {DataTable<T>} dataList - DatenTabelle
-//      * @param {string} [indexName] - Optional IndexName vom Aktiven Index
-//      * @param {Function} [onSelectionChange] - Optional Funktion die beim Ändern des Datensatzea ausgeführt wird
-//      */
-//     constructor(containerId, menuItems) {
-//         super(containerId, menuItems); // menuItems ist ein Array [{label: 'Edit', action: ...}]
-//     }
+    //     /**
+    //      * 
+    //      * @param {string} containerId - Element-ID
+    //      * @param {DataTable<T>} dataList - DatenTabelle
+    //      * @param {string} [indexName] - Optional IndexName vom Aktiven Index
+    //      * @param {Function} [onSelectionChange] - Optional Funktion die beim Ändern des Datensatzea ausgeführt wird
+    //      */
+    //     constructor(containerId, menuItems) {
+    //         super(containerId, menuItems); // menuItems ist ein Array [{label: 'Edit', action: ...}]
+    //     }
 
-//     render() {
-//         let html = '<div class="keyboard-menu">';
-//         this.data.forEach((item, index) => {
-//             const isSelected = index === this.selectedIndex;
-//             html += `<div class="menu-item ${isSelected ? 'selected' : ''}">${item.label}</div>`;
-//         });
-//         html += '</div>';
-//         this.container.innerHTML = html;
-//     }
+    //     render() {
+    //         let html = '<div class="keyboard-menu">';
+    //         this.data.forEach((item, index) => {
+    //             const isSelected = index === this.selectedIndex;
+    //             html += `<div class="menu-item ${isSelected ? 'selected' : ''}">${item.label}</div>`;
+    //         });
+    //         html += '</div>';
+    //         this.container.innerHTML = html;
+    //     }
 
-//     execute() {
-//         const selection = this.getSelection();
-//         if (selection.data && selection.data.action) {
-//             selection.data.action(); // Führt die hinterlegte Funktion aus
-//         }
-//     }
+    //     execute() {
+    //         const selection = this.getSelection();
+    //         if (selection.data && selection.data.action) {
+    //             selection.data.action(); // Führt die hinterlegte Funktion aus
+    //         }
+    //     }
 }
 
 class FormComponent {
-//     constructor(containerId, onSave, onCancel) {
-//         this.container = document.getElementById(containerId);
-//         this.onSave = onSave;
-//         this.onCancel = onCancel;
-//         this.currentId = null;
-//     }
+    /**
+     * 
+     * @param {string} containerId - Element-ID
+     * param {DataTable<T>} dataList - DatenTabelle
+     * param {string} [indexName] - Optional IndexName vom Aktiven Index
+     * param {Function} [onSelectionChange] - Optional Funktion die beim Ändern des Datensatzea ausgeführt wird
+     */
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        //this.onSave = onSave;
+        //this.onCancel = onCancel;
+        this.currentId = null;
+    }
 
-//     open(id, recordData) {
-//         this.currentId = id;
-//         this.container.innerHTML = `
-//       <form id="active-form">
-//         <input type="text" id="field-name" value="${recordData.name || ''}" focus>
-//         <input type="text" id="field-value" value="${recordData.value || ''}">
-//       </form>
-//     `;
-//         this.container.querySelector('input').focus();
-//     }
+    //     open(id, recordData) {
+    //         this.currentId = id;
+    //         this.container.innerHTML = `
+    //       <form id="active-form">
+    //         <input type="text" id="field-name" value="${recordData.name || ''}" focus>
+    //         <input type="text" id="field-value" value="${recordData.value || ''}">
+    //       </form>
+    //     `;
+    //         this.container.querySelector('input').focus();
+    //     }
 
     render() {
 
@@ -269,6 +329,37 @@ export class KeyboardRouter {
     }
 
     initGlobalListener() {
+        window.document.addEventListener("click", (e) => {
+            const target = e.target;
+            if (target instanceof HTMLElement) {
+                // Tabelle suchen
+                const table = target.closest("table");
+                if (table) {
+                    // Position im ComponentStack ermitteln                    
+                    const componentIndex = this.componentStack.findIndex(comp => comp.container === table);
+                    if (componentIndex !== -1) {
+                        const component = this.componentStack[componentIndex];
+
+                        if (component instanceof TableComponent) {
+                            // neue aktive Zelle finden
+                            const cell = target.closest("td");
+                            const row = target.closest("tr");
+                            if (cell instanceof HTMLTableCellElement && row instanceof HTMLTableRowElement) {
+                                component.removeActive();
+                                component.selectedCol = cell.cellIndex;
+                                component.selectedRow = row.rowIndex;
+                                component.setActive();
+                            }
+                        }
+
+                        // Komponentenstack berichtigen
+                        this.componentStack.splice(componentIndex + 1);
+                    }
+                }
+            }
+        });
+
+
         window.addEventListener('keydown', (e) => {
             const active = this.getActive();
             if (!active) return;
@@ -290,6 +381,14 @@ export class KeyboardRouter {
                     e.preventDefault();
                     active.moveUp();
                     break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    active.moveLeft();
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    active.moveRight();
+                    break;
                 case 'Enter':
                     e.preventDefault();
                     if (active instanceof MenuComponent) {
@@ -309,7 +408,7 @@ export class KeyboardRouter {
                     e.preventDefault();
                     if (this.componentStack.length > 1) {
                         this.popActive();
-                    } else if (this.filterInput instanceof HTMLInputElement){
+                    } else if (this.filterInput instanceof HTMLInputElement) {
                         // Wenn wir auf der untersten Ebene sind: Filter löschen
                         this.filterInput.value = '';
                         // active.data.clearFilter(); // Falls deine Klasse das hat
@@ -334,7 +433,7 @@ export class KeyboardRouter {
      * @param {TableComponent<T>} tableComponent 
      */
     triggerDefaultTableAction(tableComponent) {
-        const selection = tableComponent.getSelection();
+        //const selection = tableComponent.getSelection();
         //console.log("Standard-Aktion für ID:", selection?.id);
     }
 

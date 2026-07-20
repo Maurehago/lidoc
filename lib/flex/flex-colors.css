@@ -141,6 +141,12 @@ body {
     color: #000000 !important;background-color: #D8EBB5 !important
   }
 
+td.active {
+    color: #000000 !important;background-color: #81a242 !important;
+    scroll-margin-top: 60px;
+    scroll-margin-bottom: 60px;
+}
+
   /* Dark Schema */
   @media (prefers-color-scheme: dark) {
     /*
