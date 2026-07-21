@@ -530,6 +530,82 @@ export class Schema {
         return [...this.#dataTypeList.rowMap.keys()];
     }
 
+    /**
+     * Prüft ob ein Wert gültig ist
+     * @param {string} typeName - Name des Datentypes
+     * @param {string} columnName - Spalten Name
+     * @param {any} value - Wert der Spalte
+     * @returns {object} {valid: true} oder {valid: false, error: "Fehler ...."}
+     */
+    validateData(typeName, columnName, value) {
+        const dataType = this.#dataTypeList.getObject(typeName);
+        if (!dataType) return { valid: true }; // Basis-Fall
+        
+        if (dataType.art == "multi") {
+            const simpleTypes = [...dataType?.simple_types || ["string"]];
+
+            for (let i = 0; i < simpleTypes.length; i++) {
+                const simpleType = this.simpleTypes.getObject(simpleTypes[i]);
+                if (!simpleType) return { valid: true }; // Basis-Fall
+
+                // 1. Validierung gegen String-Restriktionen
+                if (simpleType.art === "string" && typeof value === "string") {
+                    if (simpleType.min_length && value.length < simpleType.min_length)
+                        return { valid: false, error: `Mindestens ${simpleType.min_length} Zeichen benötigt.` };
+                    if (simpleType.max_length && value.length > simpleType.max_length)
+                        return { valid: false, error: `Maximal ${simpleType.max_length} Zeichen erlaubt.` };
+                    if (simpleType.pattern && !new RegExp(simpleType.pattern).test(value))
+                        return { valid: false, error: `Format entspricht nicht dem Muster.` };
+                    // if (typeof dataType.min_inclusive === "string" && value < dataType.min_inclusive)
+                    //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_inclusive} sein.` };
+                    // if (typeof dataType.max_inclusive === "string" && value > dataType.max_inclusive)
+                    //     return { valid: false, error: `Wert muss kleiner oder gleich ${dataType.max_inclusive} sein.` };
+                    // if (typeof dataType.min_exclusive === "string" && value <= dataType.min_exclusive)
+                    //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_exclusive} sein.` };
+                    // if (typeof dataType.max_exclusive === "string" && value >= dataType.max_exclusive)
+                    //     return { valid: false, error: `Wert muss kleiner oder gleich ${dataType.max_exclusive} sein.` };
+                }
+
+                // 2. Validierung gegen Number-Restriktionen
+                if (simpleType.art === "number" && typeof value === "number") {
+                    if (typeof simpleType.min_inclusive === "number" && value < simpleType.min_inclusive)
+                        return { valid: false, error: `Wert muss größer oder gleich ${simpleType.min_inclusive} sein.` };
+                    if (typeof simpleType.max_inclusive === "number" && value > simpleType.max_inclusive)
+                        return { valid: false, error: `Wert muss kleiner oder gleich ${simpleType.max_inclusive} sein.` };
+                    if (typeof simpleType.min_exclusive === "number" && value <= simpleType.min_exclusive)
+                        return { valid: false, error: `Wert muss größer oder gleich ${simpleType.min_exclusive} sein.` };
+                    if (typeof simpleType.max_exclusive === "number" && value >= simpleType.max_exclusive)
+                        return { valid: false, error: `Wert muss kleiner oder gleich ${simpleType.max_exclusive} sein.` };
+
+                    // Längen prüfen
+                    const parts = value.toString().split(".");
+                    const before = parts[0].replace("+", "").replace("-", "").length;
+                    const after = parts[1] ? parts[1].length : 0;
+                    const valueLength = before + after;
+
+                    if (simpleType.decimals && after > simpleType.decimals)
+                        return { valid: false, error: `Maximal ${simpleType.decimals} Kommastellen erlaubt.` };
+                    // if (dataType.length && dataType.length != valueLength)
+                    //     return { valid: false, error: `Wert muss gleich ${dataType.length} sein.` };
+                    // if (dataType.min_length && valueLength < dataType.min_length)
+                    //     return { valid: false, error: `Mindestens ${dataType.min_length} Zahlen benötigt.` };
+                    // if (dataType.max_length && valueLength > dataType.max_length)
+                    //     return { valid: false, error: `Maximal ${dataType.max_length} Zahlen erlaubt.` };
+                }
+
+            }
+        }
+
+        // 3. Validierung gegen Enums
+        if (dataType.art == "enum") {
+            // todo: hier weiter
+            const validEnum = dataType.enums.some(e => e.value === value);
+            if (!validEnum) return { valid: false, error: `Ungültiger Auswahlwert.` };
+        }
+
+        return { valid: true };
+    }
+
 
     /**
      * 
@@ -540,7 +616,7 @@ export class Schema {
             infotype: "infoSchema"
             , name: this.#name
             , refs: this.#refList
-            , uniqueitems: this.#uniqueList
+            , uniques: this.#uniqueList
             , enums: this.#enumList
             , simpletypes: this.#simpleTypeList
             , properties: this.#propList
@@ -559,7 +635,7 @@ export class Schema {
             infotype: "infoSchema"
             , name: this.#name
             , refs: this.#refList.rows
-            , uniqueitems: this.#uniqueList.rows
+            , uniques: this.#uniqueList.rows
             , enums: this.#enumList.rows
             , simpletypes: this.#simpleTypeList.rows
             , properties: this.#propList.rows
@@ -795,7 +871,7 @@ export function getSchemaHTML(schema) {
     function createObjectCardHTML(typ) {
         // Findet alle Eigenschaften, die zu diesem Objektnamen gehören
         const allProps = schema.properties.findAll({ object_name: typ.name });
-        
+
         // Trennung in XML-Attribute (@) und normale Properties
         const attribute = allProps.filter(p => p.name.startsWith("@"));
         const propertys = allProps.filter(p => !p.name.startsWith("@"));
@@ -813,30 +889,30 @@ export function getSchemaHTML(schema) {
         if (propertys.length > 0) {
             cardHtml += `<div class="section-title">Properties</div>`;
             cardHtml += buildJSDocTable(propertys);
-        } 
+        }
         // ENUM-WERTE ANZEIGEN: Wenn der Typ ein Enum ist, holen wir die Werte aus schema.enums
         else if (typ.art === "enum") {
             cardHtml += `<div class="section-title">Erlaubte Werte (Enum)</div>`;
-            
+
             // Wir suchen in der Enum-Tabelle nach dem Eintrag für diesen Typen
             const enumEintrag = schema.enums.find({ name: typ.name });
-            
+
             if (enumEintrag && enumEintrag.values && enumEintrag.values.size > 0) {
                 cardHtml += `<table class="jsdoc-table enum-table">
                     <thead><tr><th>Erlaubter Wert</th></tr></thead>
                     <tbody>`;
-                
+
                 // Da enumEintrag.values ein Set<any> ist, wandeln wir es in ein Array um
                 const werteArray = Array.from(enumEintrag.values);
                 werteArray.forEach(wert => {
                     cardHtml += `<tr><td class="enum-value">${wert}</td></tr>`;
                 });
-                
+
                 cardHtml += `</tbody></table>`;
             } else {
                 cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Enum-Werte hinterlegt.</p>`;
             }
-        } 
+        }
         // Wenn es ein reiner SimpleType ohne Properties ist (z.B. ein custom String-Typ)
         else if (attribute.length === 0) {
             cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Eigenschaften definiert (SimpleType / Primitiv).</p>`;
