@@ -7,7 +7,7 @@
 // Datum Typen: date, time, datetime, range
 
 export * from "./infotable.js";
-import { DataTable, DataRow, getGSID } from "./infotable.js";
+import { DataTable, DataRow, getGSID, isNumber } from "./infotable.js";
 
 
 /**
@@ -530,6 +530,65 @@ export class Schema {
         return [...this.#dataTypeList.rowMap.keys()];
     }
 
+
+    /**
+     * Prüft einen Wert gegen einen Simplen Typ
+     * @param {string} typeName - Name des Simplen Types
+     * @param {any} value - zu prüfender Wert
+     */
+    validateSimple(typeName, value) {
+        const simpleType = this.simpleTypes.getObject(typeName);
+        if (!simpleType) return { valid: true }; // Basis-Fall
+
+        // 1. Validierung gegen String-Restriktionen
+        if (simpleType.art === "string" && typeof value === "string") {
+            if (simpleType.min_length && value.length < simpleType.min_length)
+                return { valid: false, error: `Mindestens ${simpleType.min_length} Zeichen benötigt.` };
+            if (simpleType.max_length && value.length > simpleType.max_length)
+                return { valid: false, error: `Maximal ${simpleType.max_length} Zeichen erlaubt.` };
+            if (simpleType.pattern && !new RegExp(simpleType.pattern).test(value))
+                return { valid: false, error: `Format entspricht nicht dem Muster.` };
+            // if (typeof dataType.min_inclusive === "string" && value < dataType.min_inclusive)
+            //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_inclusive} sein.` };
+            // if (typeof dataType.max_inclusive === "string" && value > dataType.max_inclusive)
+            //     return { valid: false, error: `Wert muss kleiner oder gleich ${dataType.max_inclusive} sein.` };
+            // if (typeof dataType.min_exclusive === "string" && value <= dataType.min_exclusive)
+            //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_exclusive} sein.` };
+            // if (typeof dataType.max_exclusive === "string" && value >= dataType.max_exclusive)
+            //     return { valid: false, error: `Wert muss kleiner oder gleich ${dataType.max_exclusive} sein.` };
+        }
+
+        // 2. Validierung gegen Number-Restriktionen
+        if (simpleType.art === "number" && typeof value === "number") {
+            if (typeof simpleType.min_inclusive === "number" && value < simpleType.min_inclusive)
+                return { valid: false, error: `Wert muss größer oder gleich ${simpleType.min_inclusive} sein.` };
+            if (typeof simpleType.max_inclusive === "number" && value > simpleType.max_inclusive)
+                return { valid: false, error: `Wert muss kleiner oder gleich ${simpleType.max_inclusive} sein.` };
+            if (typeof simpleType.min_exclusive === "number" && value <= simpleType.min_exclusive)
+                return { valid: false, error: `Wert muss größer oder gleich ${simpleType.min_exclusive} sein.` };
+            if (typeof simpleType.max_exclusive === "number" && value >= simpleType.max_exclusive)
+                return { valid: false, error: `Wert muss kleiner oder gleich ${simpleType.max_exclusive} sein.` };
+
+            // Längen prüfen
+            const parts = value.toString().split(".");
+            const before = parts[0].replace("+", "").replace("-", "").length;
+            const after = parts[1] ? parts[1].length : 0;
+            const valueLength = before + after;
+
+            if (simpleType.decimals && after > simpleType.decimals)
+                return { valid: false, error: `Maximal ${simpleType.decimals} Kommastellen erlaubt.` };
+            // if (dataType.length && dataType.length != valueLength)
+            //     return { valid: false, error: `Wert muss gleich ${dataType.length} sein.` };
+            // if (dataType.min_length && valueLength < dataType.min_length)
+            //     return { valid: false, error: `Mindestens ${dataType.min_length} Zahlen benötigt.` };
+            // if (dataType.max_length && valueLength > dataType.max_length)
+            //     return { valid: false, error: `Maximal ${dataType.max_length} Zahlen erlaubt.` };
+        }
+        return { valid: true };
+    }
+
+
+
     /**
      * Prüft ob ein Wert gültig ist
      * @param {string} typeName - Name des Datentypes
@@ -540,65 +599,48 @@ export class Schema {
     validateData(typeName, columnName, value) {
         const dataType = this.#dataTypeList.getObject(typeName);
         if (!dataType) return { valid: true }; // Basis-Fall
-        
+
+        let validObj = {};
+
+        // auf "string", "number", "bigint", "boolean" prüfen
+        if (["string","number","bigint","boolean"].indexOf(dataType.art) >= 0) {
+            // string
+            if (typeof value == "string" && dataType.art != "string") {
+                 return { valid: false, error: `Wert muss string sein.` };
+            }
+
+            // number
+            if (typeof value == "number" && dataType.art != "number") {
+                 return { valid: false, error: `Wert muss number sein.` };
+            }
+
+            // bigint
+            if (typeof value == "bigint" && dataType.art != "bigint") {
+                 return { valid: false, error: `Wert muss bigint sein.` };
+            }
+
+            // boolean
+            if (typeof value == "boolean" && dataType.art != "boolean") {
+                 return { valid: false, error: `Wert muss boolean sein.` };
+            }
+
+            // Details vom Simpletyp prüfen
+            validObj = this.validateSimple(typeName, value);
+            if (validObj.valid == false) {return validObj;}      
+        }
+
         if (dataType.art == "multi") {
             const simpleTypes = [...dataType?.simple_types || ["string"]];
 
             for (let i = 0; i < simpleTypes.length; i++) {
-                const simpleType = this.simpleTypes.getObject(simpleTypes[i]);
-                if (!simpleType) return { valid: true }; // Basis-Fall
-
-                // 1. Validierung gegen String-Restriktionen
-                if (simpleType.art === "string" && typeof value === "string") {
-                    if (simpleType.min_length && value.length < simpleType.min_length)
-                        return { valid: false, error: `Mindestens ${simpleType.min_length} Zeichen benötigt.` };
-                    if (simpleType.max_length && value.length > simpleType.max_length)
-                        return { valid: false, error: `Maximal ${simpleType.max_length} Zeichen erlaubt.` };
-                    if (simpleType.pattern && !new RegExp(simpleType.pattern).test(value))
-                        return { valid: false, error: `Format entspricht nicht dem Muster.` };
-                    // if (typeof dataType.min_inclusive === "string" && value < dataType.min_inclusive)
-                    //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_inclusive} sein.` };
-                    // if (typeof dataType.max_inclusive === "string" && value > dataType.max_inclusive)
-                    //     return { valid: false, error: `Wert muss kleiner oder gleich ${dataType.max_inclusive} sein.` };
-                    // if (typeof dataType.min_exclusive === "string" && value <= dataType.min_exclusive)
-                    //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_exclusive} sein.` };
-                    // if (typeof dataType.max_exclusive === "string" && value >= dataType.max_exclusive)
-                    //     return { valid: false, error: `Wert muss kleiner oder gleich ${dataType.max_exclusive} sein.` };
-                }
-
-                // 2. Validierung gegen Number-Restriktionen
-                if (simpleType.art === "number" && typeof value === "number") {
-                    if (typeof simpleType.min_inclusive === "number" && value < simpleType.min_inclusive)
-                        return { valid: false, error: `Wert muss größer oder gleich ${simpleType.min_inclusive} sein.` };
-                    if (typeof simpleType.max_inclusive === "number" && value > simpleType.max_inclusive)
-                        return { valid: false, error: `Wert muss kleiner oder gleich ${simpleType.max_inclusive} sein.` };
-                    if (typeof simpleType.min_exclusive === "number" && value <= simpleType.min_exclusive)
-                        return { valid: false, error: `Wert muss größer oder gleich ${simpleType.min_exclusive} sein.` };
-                    if (typeof simpleType.max_exclusive === "number" && value >= simpleType.max_exclusive)
-                        return { valid: false, error: `Wert muss kleiner oder gleich ${simpleType.max_exclusive} sein.` };
-
-                    // Längen prüfen
-                    const parts = value.toString().split(".");
-                    const before = parts[0].replace("+", "").replace("-", "").length;
-                    const after = parts[1] ? parts[1].length : 0;
-                    const valueLength = before + after;
-
-                    if (simpleType.decimals && after > simpleType.decimals)
-                        return { valid: false, error: `Maximal ${simpleType.decimals} Kommastellen erlaubt.` };
-                    // if (dataType.length && dataType.length != valueLength)
-                    //     return { valid: false, error: `Wert muss gleich ${dataType.length} sein.` };
-                    // if (dataType.min_length && valueLength < dataType.min_length)
-                    //     return { valid: false, error: `Mindestens ${dataType.min_length} Zahlen benötigt.` };
-                    // if (dataType.max_length && valueLength > dataType.max_length)
-                    //     return { valid: false, error: `Maximal ${dataType.max_length} Zahlen erlaubt.` };
-                }
-
+                validObj = this.validateSimple(simpleTypes[i], value);
+                if (validObj.valid == false) {return validObj;}
             }
         }
 
         // 3. Validierung gegen Enums
         if (dataType.art == "enum") {
-            // todo: hier weiter
+
             const validEnum = dataType.enums.some(e => e.value === value);
             if (!validEnum) return { valid: false, error: `Ungültiger Auswahlwert.` };
         }
