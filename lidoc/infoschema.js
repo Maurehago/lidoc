@@ -11,6 +11,13 @@ import { DataTable, DataRow, getGSID, isNumber } from "./infotable.js";
 
 
 /**
+ * @typedef {Object} ValidError
+ * @property {boolean} valid - true wenn gültig
+ * @property {string} [error] - Fehlermeldung wenn Ungültig
+ */
+
+
+/**
  * EnumType
  * @typedef {Object} EnumType
  * @property {string} name - Name des EnumTypes == SchemaType.name
@@ -594,13 +601,14 @@ export class Schema {
      * @param {string} typeName - Name des Datentypes
      * @param {string} columnName - Spalten Name
      * @param {any} value - Wert der Spalte
-     * @returns {object} {valid: true} oder {valid: false, error: "Fehler ...."}
+     * @returns {ValidError} {valid: true} oder {valid: false, error: "Fehler ...."}
      */
     validateData(typeName, columnName, value) {
         const dataType = this.#dataTypeList.getObject(typeName);
         if (!dataType) return { valid: true }; // Basis-Fall
 
-        let validObj = {};
+        /** @type {ValidError} */
+        let validObj = {valid: true};
 
         // auf "string", "number", "bigint", "boolean" prüfen
         if (["string","number","bigint","boolean"].indexOf(dataType.art) >= 0) {
