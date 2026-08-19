@@ -757,7 +757,7 @@ export class DataTable {
     /**
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
      * @param {CallbackFunction<T>} fu - Funktion die pro Datensatz ausgeführt wird.
-     * @param {string} [index] - optionaler Index Name oder Liste von ID's der als Datenquelle verwendet wird
+     * @param {string|Array<number>} [index] - optionaler Index Name oder Liste von ID's der als Datenquelle verwendet wird
      * @param {any} [breakValue] - Optionaler Wert, wenn dieser von der Funktion zurückgegeben wird, wird Abgebrochen und dieser Wert zurückgegeben
      * @returns {void}
      */

@@ -648,8 +648,9 @@ export class Schema {
 
         // 3. Validierung gegen Enums
         if (dataType.art == "enum") {
-
-            const validEnum = dataType.enums.some(e => e.value === value);
+            // Enum lesen
+            let obj = this.#enumList.getObject(typeName);
+            const validEnum = obj?.values.has(value);
             if (!validEnum) return { valid: false, error: `Ungültiger Auswahlwert.` };
         }
 
