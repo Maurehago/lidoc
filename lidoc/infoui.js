@@ -473,3 +473,54 @@ export class KeyboardRouter {
 // });
 // Initialisierungconst myDataManager = new DeineDatenKlasse();const uiController = new UIController(myDataManager, socket);
 
+
+// ======================================================
+//   HTML Seite und Module
+// -------------------------
+
+// <!DOCTYPE html>
+// <html lang="de">
+
+// <head>
+//     <meta charset="UTF-8" />
+//     <title>UI-Test</title>
+//     <meta name="viewport" content="width=device-width,initial-scale=1" />
+//     <meta name="description" content="" />
+//     <link rel="icon" href="/img/icon.png">
+//     <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+//     <link rel="stylesheet" type="text/css" href="/lib/flex/flex-colors.css" />
+
+//     <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
+//     <!-- <script src="/prism/prism.js"></script> -->
+// </head>
+// <body>
+//     <f-row>
+//         <f-item id="menu">
+//             <input type="text" id="filter"/>
+//         </f-item>
+//         <f-item id="list" w-fit>
+//             <table id="table" table-stripes table-border></table>
+//         </f-item>
+//         <f-item id="form"></f-item>
+//     </f-row>
+// </body>
+// <script type="module">
+//     //@ts-check
+//     import { KeyboardRouter,  TableComponent } from "./infoui.js";
+//     import {infoSchema} from "./infoschema.js";
+
+//     // nach Namen sortieren
+//     infoSchema.dataTypes.sort(["name"], "name");
+
+//     // Tabellen Komponente erstellen
+//     let tablle1 = new TableComponent("table", infoSchema.dataTypes, "name");
+
+
+//     // Tastatur Router inizialisieren
+//     let kRouter = new KeyboardRouter("filter");
+
+//     // Komponenten im TastaturRouter registrieren
+//     kRouter.pushActive(tablle1);
+
+// </script>
+// </html>

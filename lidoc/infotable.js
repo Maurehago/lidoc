@@ -190,7 +190,7 @@ export class DataTable {
         this.tableName = tableName;
         /** @type {Array<string>} */
         this.columns = dataArray[0] || [];
-        /** @type {Array<Array<any>>} */
+        /** @type {Array<Array<any>>} WICHTIG!! rows nicht direkt bearbeiten! */
         this.rows = dataArray;
         /** @type {string} */
         this.idColumnName = idColumnName;
@@ -264,11 +264,11 @@ export class DataTable {
         const colIndexList = [];
         if (Array.isArray(colNames)) {
             for (let i = 0; i < colNames.length; i++) {
-                colIndexList.push(this.columnIndex[colNames[i]]);
+                colIndexList.push(this.columnIndex[colNames[i]] || -1);
             }
             return colIndexList;
         } else {
-            return [this.columnIndex[colNames]];
+            return [this.columnIndex[colNames] || -1];
         }
     }
 
@@ -302,17 +302,17 @@ export class DataTable {
 
 
     /**
-     * Liefert eine Liste aller IDs vom angegeben Index oder allen Datensätzen zurück.  
+     * Liefert eine Liste aller Index-Positionen vom angegeben Index oder allen Datensätzen zurück.  
      * Existiert der Index nicht, wird eine die ganze Liste zurück gegeben.
      * @param {string|Array<number>} [indexName] - Indexname oder Liste mit PositionsNummern
-     * @returns {Array<number>} Index-Liste der Datzensätze
+     * @returns {Array<number>} ID-Liste der Datzensätze
      */
     getIndexList(indexName) {
         if (!indexName) {
-            return [...this.rows.keys()];
+            return [...this.rowMap.values()];
         } else {
             if (Array.isArray(indexName)) { return indexName; }
-            return this._indexList.get(indexName) || [...this.rows.keys()];
+            return this._indexList.get(indexName) || [...this.rowMap.values()];
         }
     }
 
@@ -404,6 +404,30 @@ export class DataTable {
 
 
     /**
+     * Liefert eine Liste mit allen gelöschen Datensatzobjekten zurück
+     * @returns {Array<T>} Liste mit Datensatz-Objekten
+     */
+    getDeletedList() {
+        /** @type {Array<T>} */
+        let objList = [];
+
+        const index = [...this._deleted.values()];
+
+        // Wenn Array
+        if (Array.isArray(index)) {
+            for (let i = 0; i < index.length; i++) {
+                const obj = this.getObject(index[i]);
+                if (obj) {
+                    objList.push(obj);
+                }
+            }
+        }
+
+        return objList;
+    }
+
+
+    /**
      * Liefert den Wert einer Spalte von der angegebenen Zeilenposition zurück
      * @param {string|number} row - Zeilennummer oder ID
      * @param {string|number} col - Spaltenname oder Spalten Position
@@ -434,14 +458,22 @@ export class DataTable {
         const rowIndex = this.getRowIndex(row);
         if (rowIndex <= 0) { return; }
 
+        let colIndex = -1;
         if (typeof col == "string") {
-            this.rows[rowIndex][this.columnIndex[col]] = value;
+            colIndex = this.columnIndex[col];
         } else {
-            this.rows[rowIndex][col] = value;
+            colIndex = col;
+        } 
+        
+        // Nur wenn Spalte vorhanden
+        if (colIndex != undefined && colIndex >= 0 && colIndex < this.columns.length) {
+            // Wert übernehmen
+            this.rows[rowIndex][colIndex] = value;
+            
+            // als Geändert markieren
+            this._changed.add(rowIndex);
         }
 
-        // als Geändert markieren
-        this._changed.add(rowIndex);
         return row;
     }
 
@@ -460,6 +492,11 @@ export class DataTable {
 
         if (typeof col == "string") {
             col = this.columnIndex[col]
+        }
+
+        // Wenn Spalte nicht in der Datenzeile
+        if (col == undefined || col < 0 || col >= this.columns.length) {
+            return row;
         }
 
         const oldValue = this.rows[rowIndex][col];
@@ -497,6 +534,21 @@ export class DataTable {
      * @returns {string|number|undefined} Die ID wenn Änderung erfolgreich
      */
     addCellSetValue(row, col, value) {
+        // SpaltenIndex bestimmen
+        if (typeof col == "string") {
+            col = this.columnIndex[col]
+        }
+
+        // Wenn Spalte nicht in der Datenzeile
+        if (col == undefined || col < 0 || col >= this.columns.length) {
+            return;
+        }
+
+        // DatensatzIndex lesen
+        const rowIndex = this.getRowIndex(row);
+        if (rowIndex <= 0) { return; }
+
+        // wenn eine Liste von Werten
         if (Array.isArray(value)) {
             for (let i = 0; i < value.length; i++) {
                 this.addCellSetValue(row, col, value[i]);
@@ -504,13 +556,6 @@ export class DataTable {
             return row;
         }
         
-        // DatensatzIndex lesen
-        const rowIndex = this.getRowIndex(row);
-        if (rowIndex <= 0) { return; }
-
-        if (typeof col == "string") {
-            col = this.columnIndex[col]
-        }
 
         const oldValue = this.rows[rowIndex][col];
         if (oldValue instanceof Set) {
@@ -535,6 +580,7 @@ export class DataTable {
      */
     setObject(obj, createNew = true) {
         let id = this.getID(obj);
+        let isChanged = false;
 
         // Wenn keine ID dann kann nicht eingefügt werden
         if (id == undefined) {
@@ -544,8 +590,13 @@ export class DataTable {
             id = getGSID();
             //@ts-ignore
             obj[this.idColumnName] = id;
+
+            isChanged = true;
         }
 
+        // gelöschte Datensätze mit selber ID nicht mehr anlegen
+        if (this._deleted.has(id)) { return;} 
+        
         /** @type {Array<string>} neue Spalten */
         const newColNames = [...Object.keys(obj)];
         const colIds = this.getColIndex(newColNames);
@@ -553,14 +604,18 @@ export class DataTable {
         /** @type {Array<any>} */
         let rawRow = [];
 
-        let rowIndex = this.rowMap.get(id);
+        //let rowIndex = this.rowMap.get(id);
+        let rowIndex = this.getRowIndex(id);
 
-        // Wenn kein rowindex
+        // Wenn kein rowindex (oder datensatz gelöscht?)
         if (rowIndex == undefined) {
             if (createNew == false) { return; }
+
+            // neu anlegen
             rawRow = new Array(this.columns.length);
             rowIndex = this.rows.push(rawRow) - 1;
             this.rowMap.set(id, rowIndex);
+            isChanged = true;
         } else if (rowIndex > 0) {
             rawRow = this.rows[rowIndex];
         } else {
@@ -569,12 +624,20 @@ export class DataTable {
 
         // Werte zuweisen
         for (let i = 0; i < newColNames.length; i++) {
-            //@ts-ignore
-            rawRow[colIds[i]] = obj[newColNames[i]];
+            if (colIds[i] >= 0 && colIds[i] < this.columns.length) {
+                //@ts-ignore
+                rawRow[colIds[i]] = obj[newColNames[i]];
+                isChanged = true;
+            }
         }
 
-        this._changed.add(rowIndex);
-        return id;
+        // nur wenn Bearbeitet die ID zurückgeben
+        if (isChanged) {
+            this._changed.add(rowIndex);
+            return id;
+        }
+
+        return;
     }
 
 
@@ -586,6 +649,8 @@ export class DataTable {
      * @returns {string|number|undefined} die ID wenn Bearbeitet oder angelegt
      */
     setValues(id, obj, createNew = true) {
+        if (id == undefined) return;
+
         //@ts-ignore
         obj[this.idColumnName] = id;
         return this.setObject(obj, createNew);
@@ -610,6 +675,41 @@ export class DataTable {
         if (rowIndex) {
             // zeile als gelöscht markieren
             this._deleted.add(rowIndex);
+
+            // Zeile aus IndexMap entfernen ???
+            if (typeof id == "string") {
+                this.rowMap.delete(id)
+            } else {
+                this.rowMap.delete(this.getID(this.rows[rowIndex]));
+            }
+        }
+    }
+
+    /**
+     * Markiert einen oder mehrere Datensätze aus der Liste als nicht gelöscht
+     * @param {string|number|Array<string|number>} id - ID oder ZeilenIndex oder Liste mit Ids oder ZeilenIndexes
+     */
+    unDelete(id) {
+        // Wenn liste mit ID's
+        if (Array.isArray(id)) {
+            for (let i = 0; i < id.length; i++) {
+                this.unDelete(id);
+            }
+            return;
+        }
+
+        // Zeilenindex lesen
+        const rowIndex = this.getRowIndex(id);
+        if (rowIndex) {
+            // zeile als gelöscht markieren
+            this._deleted.add(rowIndex);
+
+            // Zeile aus IndexMap entfernen ???
+            if (typeof id == "string") {
+                this.rowMap.delete(id)
+            } else {
+                this.rowMap.delete(this.getID(this.rows[rowIndex]));
+            }
         }
     }
 
@@ -629,7 +729,7 @@ export class DataTable {
      */
     sort(sortCols, index, newIndexName) {
         // Alle Datenzeile in einer liste
-        const rowList = this.getIndexList(index); // todo: ??? prüfen ob Kopie oder Referenz ???
+        const rowList = this.getIndexList(index); // todo: ??? prüfen ob Kopie oder Referenz ??? Es ist eine Referenz!!!!
 
         // Wenn Sortierungs Funktion
         if (typeof sortCols == "function") {
@@ -663,7 +763,7 @@ export class DataTable {
 
                 // prüfen auf Sortier Richtung
                 const fieldData = col.split(" ");
-                sCols[i] = this.columnIndex[fieldData[0]]; // Spalten-ID für spätere Verwendung merken
+                sCols[i] = this.columnIndex[fieldData[0]] || -1; // Spalten-ID für spätere Verwendung merken
                 sDirection[i] = "ASC";
                 if (fieldData[1]?.trim().toUpperCase() == "DESC") {
                     direction = -1;
@@ -687,6 +787,8 @@ export class DataTable {
 
                 // Prüfen
                 for (let i = 0; i < colLength; i++) {
+                    if (sCols[i] < 0) continue;
+
                     const aValue = aRow[sCols[i]];
                     const bValue = bRow[sCols[i]];
                     if (aValue == undefined && bValue == undefined) {
@@ -757,7 +859,7 @@ export class DataTable {
     /**
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
      * @param {CallbackFunction<T>} fu - Funktion die pro Datensatz ausgeführt wird.
-     * @param {string|Array<number>} [index] - optionaler Index Name oder Liste von ID's der als Datenquelle verwendet wird
+     * @param {string|Array<number>} [index] - optionaler Index Name oder Liste von Indexes der als Datenquelle verwendet wird
      * @param {any} [breakValue] - Optionaler Wert, wenn dieser von der Funktion zurückgegeben wird, wird Abgebrochen und dieser Wert zurückgegeben
      * @returns {void}
      */
@@ -850,10 +952,10 @@ export class DataTable {
 
 
     /**
-     * Sucht in der Liste nach angegebener Quest und liefert den Datensatz Index der gefundenen Datenzeile zurück
+     * Sucht in der Liste nach angegebener Quest und liefert das gefundene Objekt zurück
      * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
      * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
-     * @returns {T|undefined} Datensatz Zeilen-Index oder -1 wenn nicht gefunden.
+     * @returns {T|undefined} DatenObjekt oder undefined wenn nicht gefunden.
      */
     find(quest, index) {
         const indexList = this.getIndexList(index);
@@ -911,7 +1013,7 @@ export class DataTable {
 
 
     /**
-     * Sucht alle Objekte aus der Liste das mit dem übergebenen Objekt übereinstimmt und gibt das erte gefundene Objekt zurück.
+     * Sucht alle Objekte aus der Liste das mit dem übergebenen Objekt übereinstimmt und gibt eine Liste der gefundenen Objekte zurück.
      * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
      * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
      * @param {string} [newIndex] - Optional Name unter der der Filterindex abgelegt wird. 

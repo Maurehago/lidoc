@@ -158,6 +158,9 @@ export class Schema {
         return this.#name;
     }
 
+    /** @type {string} */
+    version = ""
+
     /** @type {DataTable<RefType>} Liste mit Referenzen Typen */
     #refList = new DataTable("refs", [RefTypeFields], RefTypeUnique);
 
@@ -183,10 +186,10 @@ export class Schema {
 
     // Tabellen (ReadOnly) für Listen Funktionen
     get dataTypes() { return this.#dataTypeList.readOnly(); }
-    get properties() { return this.#propList.readOnly(); }
-    get enums() { return this.#enumList.readOnly(); }
     get simpleTypes() { return this.#simpleTypeList.readOnly(); }
+    get properties() { return this.#propList.readOnly(); }
     get uniques() { return this.#uniqueList.readOnly(); }
+    get enums() { return this.#enumList.readOnly(); }
     get refs() { return this.#refList.readOnly(); }
     get infos() { return this.#infoList.readOnly(); }
 
@@ -341,8 +344,9 @@ export class Schema {
     addProperty(object_name, prop_name, options) {
         if (!object_name || !prop_name) { return ""; }
 
-        if (!options) { options = this.#propList.newObject(prop_name); }
+        if (!options) { options = this.#propList.newObject(); }
 
+        // ObjektName(DatenTyp.name) muss angegeben werden
         options.object_name = object_name;
         options.name = prop_name;
 
@@ -369,7 +373,7 @@ export class Schema {
      * @returns {string} ID wenn erfolgreich
      */
     setProperty(options) {
-        return this.#propList.setObject(options) || "";
+        return this.#propList.setObject(options, false) || "";
     }
 
 
@@ -414,7 +418,7 @@ export class Schema {
         // SchemaTyp ausbessern/anlegen
         this.#dataTypeList.setObject({ name: options.name, art: "enum" });
 
-        // DatenTyp setzen
+        // EnumTyp setzen
         return this.#enumList.setObject(options);
     }
 
@@ -666,12 +670,13 @@ export class Schema {
         const obj = {
             infotype: "infoSchema"
             , name: this.#name
-            , refs: this.#refList
-            , uniques: this.#uniqueList
-            , enums: this.#enumList
+            , version: this.version
+            , datatypes: this.#dataTypeList
             , simpletypes: this.#simpleTypeList
             , properties: this.#propList
-            , datatypes: this.#dataTypeList
+            , uniques: this.#uniqueList
+            , enums: this.#enumList
+            , refs: this.#refList
             , infos: this.#infoList
         };
         return obj;
@@ -685,12 +690,13 @@ export class Schema {
         const obj = {
             infotype: "infoSchema"
             , name: this.#name
-            , refs: this.#refList.rows
-            , uniques: this.#uniqueList.rows
-            , enums: this.#enumList.rows
+            , version: this.version
+            , datatypes: this.#dataTypeList.rows
             , simpletypes: this.#simpleTypeList.rows
             , properties: this.#propList.rows
-            , datatypes: this.#dataTypeList.rows
+            , uniques: this.#uniqueList.rows
+            , enums: this.#enumList.rows
+            , refs: this.#refList.rows
             , infos: this.#infoList.rows
         };
 
@@ -707,13 +713,16 @@ export class Schema {
     setFromObject(obj) {
         if (!obj || typeof obj != "object") { return; }
         if (obj.infotype != "infoSchema") { return; }
+        
+        this.#name = obj.name;
+        this.version = obj.version;
 
-        this.#refList = new DataTable("refs", obj.refs || [RefTypeFields], RefTypeUnique);
-        this.#uniqueList = new DataTable("uniques", obj.uniques || [UniqueTypeFields], UniqueTypeUnique);
-        this.#enumList = new DataTable("enums", obj.enums || [EnumTypeFields], EnumTypUnique);
+        this.#dataTypeList = new DataTable("datatypes", obj.datatypes || [DataTypeFields], DataTypeUnique);
         this.#simpleTypeList = new DataTable("simpletypes", obj.simpletypes || [SimpleTypeFields], SimpleTypeUnique);
         this.#propList = new DataTable("properties", obj.items || [PropTypeFields], PropTypeUnique);
-        this.#dataTypeList = new DataTable("datatypes", obj.datatypes || [DataTypeFields], DataTypeUnique);
+        this.#uniqueList = new DataTable("uniques", obj.uniques || [UniqueTypeFields], UniqueTypeUnique);
+        this.#enumList = new DataTable("enums", obj.enums || [EnumTypeFields], EnumTypUnique);
+        this.#refList = new DataTable("refs", obj.refs || [RefTypeFields], RefTypeUnique);
         this.#infoList = new DataTable("infos", obj.infos || [InfoTextFields], InfoTextUnique);
 
         return true;
@@ -800,7 +809,6 @@ infoSchema.setDataType({ name: "EnumType", art: "object", id: "name" });
 infoSchema.addProperty("EnumType", "name");
 infoSchema.addProperty("EnumType", "values", { prop_type: "set" });
 infoSchema.addProperty("EnumType", "moreEnums", { min: 0, max: -1 });
-
 
 
 // SimpleType
