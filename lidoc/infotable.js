@@ -27,6 +27,14 @@
  */
 
 
+/**
+ * ID Objekt welche die ID und den Index eines Datensatzes oder Spalte enthält
+ * @typedef {Object} RowInfo
+ * @property {string} id - Die ID des Datensatzes oder der Spalte
+ * @property {number} index - Die Position des Datensatzes oder der Spalte
+ */
+
+
 // ===================================
 //   Funktionen
 // -------------
@@ -213,11 +221,11 @@ export class DataTable {
         /** @type {Map<string,Array<number>>} */
         this._indexList = new Map();
 
-        /** @type {Set<number>} */
-        this._changed = new Set();
+        /** @type {Map<string,number>} */
+        this._changed = new Map();
 
-        /** @type {Set<number>} */
-        this._deleted = new Set();
+        /** @type {Map<string,number>} */
+        this._deleted = new Map();
     }
 
 
@@ -284,20 +292,31 @@ export class DataTable {
 
 
     /**
-     * Lieftert die Datensatz Position in der Liste zurück oder -1 wenn nicht gefunden.
+     * Lieftert die Datensatz Information (ID und Position(index) in der Liste) zurück. index: -1 wenn nicht gefunden oder gelöscht.
      * @param {string|number} id - ID oder Datensatzindex
-     * @returns {number} Datensatz Position oder -1 wenn nicht gefunden
+     * @returns {RowInfo} DatensatzInformation Objekt mit ID und Position(index). index: -1 wenn nicht gefunden
      */
-    getRowIndex(id) {
+    getRowInfo(id) {
+        /** @type {RowInfo} */
+        const rowInfo = {id: "", index: -1};
+
         // Wenn ID des Datensatzen
         if (typeof id == "string") {
-            return this.rowMap.get(id) || -1;
+            rowInfo.id = id;
+            rowInfo.index = this.rowMap.get(id) || -1;
+        } else if (id > 0 && id < this.rows.length) {
+            rowInfo.index = id;
+            rowInfo.id = this.getID(this.rows[id]);
+        } else {
+            return rowInfo;
         }
 
         // wenn gelöscht -> abbrechen
-        if (id <= 0 || this._deleted.has(id)) { return -1; }
+        if (this._deleted.has(rowInfo.id)) {
+            rowInfo.index = -1;
+        }
 
-        return id;
+        return rowInfo;
     }
 
 
@@ -332,12 +351,12 @@ export class DataTable {
      * @returns {Array<any>|undefined}
      */
     getRow(id) {
-        const rowIndex = this.getRowIndex(id);
+        const rowInfo = this.getRowInfo(id);
 
         // wenn gelöscht -> abbrechen
-        if (rowIndex <= 0) { return; }
+        if (rowInfo.index <= 0) { return; }
 
-        return this.rows[rowIndex];
+        return this.rows[rowInfo.index];
     }
 
 
@@ -455,7 +474,8 @@ export class DataTable {
      */
     setCellValue(row, col, value) {
         // DatensatzIndex lesen
-        const rowIndex = this.getRowIndex(row);
+        const rowInfo = this.getRowInfo(row);
+        const rowIndex = rowInfo.index;
         if (rowIndex <= 0) { return; }
 
         let colIndex = -1;
@@ -471,7 +491,7 @@ export class DataTable {
             this.rows[rowIndex][colIndex] = value;
             
             // als Geändert markieren
-            this._changed.add(rowIndex);
+            this._changed.set(rowInfo.id, rowIndex);
         }
 
         return row;
@@ -487,7 +507,8 @@ export class DataTable {
      */
     addCellArrayValue(row, col, value) {
         // DatensatzIndex lesen
-        const rowIndex = this.getRowIndex(row);
+        const rowInfo = this.getRowInfo(row);
+        const rowIndex = rowInfo.index;
         if (rowIndex <= 0) { return; }
 
         if (typeof col == "string") {
@@ -521,7 +542,7 @@ export class DataTable {
         }
 
         // als Geändert markieren
-        this._changed.add(rowIndex);
+        this._changed.set(rowInfo.id, rowIndex);
         return row;
     }
 
@@ -545,7 +566,8 @@ export class DataTable {
         }
 
         // DatensatzIndex lesen
-        const rowIndex = this.getRowIndex(row);
+        const rowInfo = this.getRowInfo(row);
+        const rowIndex = rowInfo.index;
         if (rowIndex <= 0) { return; }
 
         // wenn eine Liste von Werten
@@ -567,7 +589,7 @@ export class DataTable {
         }
 
         // als Geändert markieren
-        this._changed.add(rowIndex);
+        this._changed.set(rowInfo.id, rowIndex);
         return row;
     }
 
@@ -605,10 +627,11 @@ export class DataTable {
         let rawRow = [];
 
         //let rowIndex = this.rowMap.get(id);
-        let rowIndex = this.getRowIndex(id);
+        const rowInfo = this.getRowInfo(id);
+        let rowIndex = rowInfo.index;
 
         // Wenn kein rowindex (oder datensatz gelöscht?)
-        if (rowIndex == undefined) {
+        if (rowIndex < 0) {
             if (createNew == false) { return; }
 
             // neu anlegen
@@ -633,7 +656,7 @@ export class DataTable {
 
         // nur wenn Bearbeitet die ID zurückgeben
         if (isChanged) {
-            this._changed.add(rowIndex);
+            this._changed.set(id, rowIndex);
             return id;
         }
 
@@ -671,17 +694,15 @@ export class DataTable {
         }
 
         // Zeilenindex lesen
-        const rowIndex = this.getRowIndex(id);
+        const rowInfo = this.getRowInfo(id);
+        const rowIndex = rowInfo.index;
         if (rowIndex) {
             // zeile als gelöscht markieren
-            this._deleted.add(rowIndex);
+            this._deleted.set(rowInfo.id, rowIndex);
 
-            // Zeile aus IndexMap entfernen ???
-            if (typeof id == "string") {
-                this.rowMap.delete(id)
-            } else {
-                this.rowMap.delete(this.getID(this.rows[rowIndex]));
-            }
+            // Zeile aus IndexMap entfernen
+            this.rowMap.delete(rowInfo.id);
+            this._changed.delete(rowInfo.id);
         }
     }
 
@@ -698,18 +719,19 @@ export class DataTable {
             return;
         }
 
-        // Zeilenindex lesen
-        const rowIndex = this.getRowIndex(id);
-        if (rowIndex) {
-            // zeile als gelöscht markieren
-            this._deleted.add(rowIndex);
+        // ZeilenInfo lesen
+        const rowInfo = this.getRowInfo(id);
 
-            // Zeile aus IndexMap entfernen ???
-            if (typeof id == "string") {
-                this.rowMap.delete(id)
-            } else {
-                this.rowMap.delete(this.getID(this.rows[rowIndex]));
-            }
+        // Wenn gelöscht
+        if (this._deleted.has(rowInfo.id)) {
+            // zeile aus gelöscht entfernen
+            this._deleted.delete(rowInfo.id);
+
+            // Zeile in IndexMap hinzufügen
+            this.rowMap.set(rowInfo.id, rowInfo.index);
+
+            // Bearbeitet setzen
+            this._changed.set(rowInfo.id, rowInfo.index);
         }
     }
 
@@ -1093,7 +1115,7 @@ export class DataTable {
      * , getCols: DataTable<T>["getCols"]
      * , getColIndex: DataTable<T>["getColIndex"]
      * , has: DataTable<T>["has"]
-     * , getRowIndex: DataTable<T>["getRowIndex"]
+     * , getRowInfo: DataTable<T>["getRowInfo"]
      * , getIndexList: DataTable<T>["getIndexList"]
      * , hasIndexList: DataTable<T>["hasIndexList"]
      * , getCellValue: DataTable<T>["getCellValue"]
@@ -1114,7 +1136,7 @@ export class DataTable {
             , getCols: this.getCols.bind(this)
             , getColIndex: this.getColIndex.bind(this)
             , has: this.has.bind(this)
-            , getRowIndex: this.getRowIndex.bind(this)
+            , getRowInfo: this.getRowInfo.bind(this)
             , getIndexList: this.getIndexList.bind(this)
             , hasIndexList: this.hasIndexList.bind(this)
             , getCellValue: this.getCellValue.bind(this)
