@@ -6,6 +6,45 @@
 import { DataTable } from "./infotable.js";
 
 
+// ==================================
+//   Typen
+// -------------
+
+/**
+ * Knoten für jedes Element im System
+ * @typedef {object} InfoNode
+ * @property {string} id - UUID oder eindeutiger String (z.B. "jira-PROJ-123", "md-uuid")
+ * @property {string} type - 'markdown', 'task', 'jira', 'xwiki', 'pdf', 'schema'
+ * @property {string} title - Anzeige Text
+ * @property {string} source_path - Pfad / Url zu Markdown,HTML, DB-Tabelle, Jira, XWiki, usw..
+ * @property {string} created_at - (datetime) Zeitstempel wann die Node angelegt worden ist
+ */
+const InfoNode_fields = ["id","type","title","source_path","created_at"];
+
+/**
+ * Knoten/Veknüpfung verknüpft alles mit allem (Richtung unabhängig)
+ * @typedef {object} InfoEdge
+ * @property {string} source_id - InfoNode.id Quelle
+ * @property {string} target_id - InfoNode.id Ziel
+ * @property {string} relation_type - 'blocks', 'documents', 'required_for', 'tagged_with'
+ */
+const InfoEdge_fields = ["source_id", "target_id", "relation_type"];
+
+/**
+ * Tags für die schnelle Suche
+ * @typedef {object} InfoTag
+ * @property {string} node_id - ID der InfoNode zu der dieser Tag gehört
+ * @property {string} tag - Name/Bezeichnung des Tags
+ */
+const InfoTag_fields = ["node_id", "tag"];
+
+// 3 Spalten Layout ?? 
+
+
+
+// ==================================
+
+
 // HTML-Template
 const base_html = `
 <div id="app-container">
