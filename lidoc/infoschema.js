@@ -10,12 +10,20 @@ export * from "./infotable.js";
 import { DataTable, DataRow, getGSID, isNumber } from "./infotable.js";
 
 
+// ==========================================
+//   Typen
+// ---------
+
 /**
  * @typedef {Object} ValidError
  * @property {boolean} valid - true wenn gültig
  * @property {string} [error] - Fehlermeldung wenn Ungültig
+ * @property {string} [property] - Name der geprüften Property
+ * @property {Array<ValidError>} [propValids] - Liste mit FehlerObjekten für jede Property 
  */
 
+
+// =============== SCHEMA ================
 
 /**
  * EnumType
@@ -136,9 +144,27 @@ const DataTypeUnique = "name";
 const InfoTextFields = ["gsid", "type_name", "prop_gsid", "lang", "date", "text"];
 const InfoTextUnique = "gsid";
 
+/**
+ * @typedef {Object} InfoSchema
+ * @property {"infoSchema"} infotype - FIX: "infoSchema"
+ * @property {string} name - Name des Schemas
+ * @property {string} version - Versionsnummer des Schemas
+ * @property {Array<Array<any>>} datatypes - Liste Mit DatenTypen Daten. Erste Zeile enthält die Spalten Namen ["name","art","base_name","simple_types","id","more_attributes","more_properties"]
+ * @property {Array<Array<any>>} simpletypes - Liste Mit SimpleTypen Daten. Erste Zeile enthält die Spalten Namen ["name","art","length","min_length","max_length","pattern","whitespace","casing","decimals","min_inclusive","min_exclusive","max_exclusive","max_inclusive"]
+ * @property {Array<Array<any>>} properties - Liste Mit PropertyTypen Daten. Erste Zeile enthält die Spalten Namen ["gsid","object_name","name","pos","prop_type","min","max","default","fix"]
+ * @property {Array<Array<any>>} uniques - Liste Mit UniqueTypen Daten. Erste Zeile enthält die Spalten Namen ["gsid", "name", "object_name", "object_props"]
+ * @property {Array<Array<any>>} enums - Liste Mit EnumTypen Daten. Erste Zeile enthält die Spalten Namen ["name","values","more_enums"]
+ * @property {Array<Array<any>>} refs - Liste Mit RefTypen Daten. Erste Zeile enthält die Spalten Namen ["gsid","name","object_name","object_props","ref_name","ref_props","on_update","on_delete"]
+ * @property {Array<Array<any>>} infos - Liste Mit InfoTypen Daten. Erste Zeile enthält die Spalten Namen ["gsid","type_name","prop_gsid","lang","date","text"]
+ */
+
+// =============== ENDE SCHEMA ================
+
 
 /** @type {Map<string,Schema>} */
 const SchemaList = new Map();
+
+
 
 
 // ==============================
@@ -353,6 +379,20 @@ export class Schema {
         // Objekttyp anlegen/setzen
         this.#dataTypeList.setObject({ name: object_name, art: "object" });
 
+        // Position der Property
+        if (prop_name.startsWith("@")) {
+            options.pos = 0;
+        } else {
+            let pos = 1;
+            let props = this.#propList.findAll({object_name});
+            for (let i = 0; i < props.length; i++) {
+                if (props[i].pos > pos) {
+                    pos = props[i].pos;
+                }
+            }
+            options.pos = pos;
+        }
+
         // neue GSID - Erforderlich beim hinzufügen
         if (!options.gsid) { options.gsid = getGSID() };
 
@@ -546,6 +586,7 @@ export class Schema {
      * Prüft einen Wert gegen einen Simplen Typ
      * @param {string} typeName - Name des Simplen Types
      * @param {any} value - zu prüfender Wert
+     * @returns {ValidError} - Valid Objekt, bei Fehler mit Fehlermeldung
      */
     validateSimple(typeName, value) {
         const simpleType = this.simpleTypes.getObject(typeName);
@@ -602,13 +643,12 @@ export class Schema {
 
     /**
      * Prüft ob ein Wert gültig ist
-     * @param {string} typeName - Name des Datentypes
-     * @param {string} columnName - Spalten Name
+     * @param {string} typeID - ID des Datentypes
      * @param {any} value - Wert der Spalte
      * @returns {ValidError} {valid: true} oder {valid: false, error: "Fehler ...."}
      */
-    validateData(typeName, columnName, value) {
-        const dataType = this.#dataTypeList.getObject(typeName);
+    validateDataType(typeID, value) {
+        const dataType = this.#dataTypeList.getObject(typeID);
         if (!dataType) return { valid: true }; // Basis-Fall
 
         /** @type {ValidError} */
@@ -637,7 +677,7 @@ export class Schema {
             }
 
             // Details vom Simpletyp prüfen
-            validObj = this.validateSimple(typeName, value);
+            validObj = this.validateSimple(typeID, value);
             if (validObj.valid == false) {return validObj;}      
         }
 
@@ -646,38 +686,107 @@ export class Schema {
 
             for (let i = 0; i < simpleTypes.length; i++) {
                 validObj = this.validateSimple(simpleTypes[i], value);
-                if (validObj.valid == false) {return validObj;}
+                if (validObj.valid == true) {return validObj;} // todo: es mus ja nur ein Wert richtig sein?
             }
+            return {valid: false, error: `kein gültiger Wert. ${simpleTypes}`};
         }
 
         // 3. Validierung gegen Enums
         if (dataType.art == "enum") {
             // Enum lesen
-            let obj = this.#enumList.getObject(typeName);
+            let obj = this.#enumList.getObject(typeID);
             const validEnum = obj?.values.has(value);
             if (!validEnum) return { valid: false, error: `Ungültiger Auswahlwert.` };
         }
 
+         if (["object","multi","ref","group","choice"].indexOf(dataType.art) >= 0) {
+            return this.validateObject(typeID, value);
+         }
+         
         return { valid: true };
     }
 
 
     /**
+     * Prüft eine Eigenschaft von einem Objekt
+     * @param {string} typeName - Name des ObjektTypes
+     * @param {string} propertyName - Name der Spalte
+     * @param {any} value - zu prüfender Wert
+     * @returns {ValidError}
+     */
+    validateProperty(typeName, propertyName, value) {
+        const dataType = this.#dataTypeList.getObject(typeName);
+        if (!dataType) return { valid: true }; // Basis-Fall
+
+        // Muss Objekt sein
+        if (["object","multi","ref","group","choice"].indexOf(dataType.art) < 0) {
+            return {valid: false, error: `${typeName} ist kein Objekt!`};
+        }
+
+        // Eigenschaften lesen
+        var prop = this.getProperty({object_name: typeName, name: propertyName});
+        if (!prop) {
+            return {valid: false, error: `${typeName}.${propertyName} nicht gefunden!`};
+        }
+
+        // Eigenschaft prüfen
+        return this.validateDataType(prop.gsid, value);
+    }
+
+
+    /**
+     * Prüft ob ein Wert gültig ist
+     * @param {string} typeName - Name des Datentypes
+     * @param {Object<string,any>} obj - DatenObjekt
+     * @returns {ValidError} {valid: true} oder {valid: false, error: "Fehler ...."}
+     */
+    validateObject(typeName, obj) {
+        const dataType = this.#dataTypeList.getObject(typeName);
+        if (!dataType) return { valid: true }; // Basis-Fall
+
+        // Muss Objekt sein
+        if (["object","multi","ref","group","choice"].indexOf(dataType.art) < 0) {
+            return {valid: false, error: `${typeName} ist kein Objekt!`};
+        }
+
+        // Alle propertys lesen
+        var props = [...Object.keys(obj)];
+        if (props.length <= 0) {
+            return {valid: true };
+        }
+
+        var isOk = true;
+        var valids = []; // Liste mit Property Prüfuntgen
+
+        // alle Propertys prüfen
+        for (let i = 0; i < props.length; i++) {
+            const valid = this.validateProperty(typeName, props[i], obj[props[i]]);
+            valid.property = props[i];
+            if (valid.valid == false) {isOk = false;}
+            valids.push(valid);
+        }
+
+        return {valid: isOk, propValids: valids};
+    }
+
+
+    /**
      * 
-     * @returns {Object<string,string|DataTable<any>>}
+     * @returns {InfoSchema}
      */
     toSchemaObj() {
+        /** @type {InfoSchema} */
         const obj = {
             infotype: "infoSchema"
             , name: this.#name
             , version: this.version
-            , datatypes: this.#dataTypeList
-            , simpletypes: this.#simpleTypeList
-            , properties: this.#propList
-            , uniques: this.#uniqueList
-            , enums: this.#enumList
-            , refs: this.#refList
-            , infos: this.#infoList
+            , datatypes: this.#dataTypeList.rows
+            , simpletypes: this.#simpleTypeList.rows
+            , properties: this.#propList.rows
+            , uniques: this.#uniqueList.rows
+            , enums: this.#enumList.rows
+            , refs: this.#refList.rows
+            , infos: this.#infoList.rows
         };
         return obj;
     }
@@ -687,6 +796,7 @@ export class Schema {
      * @returns {string} schema als JSON-String 
      */
     toString() {
+        /** @type {InfoSchema} */
         const obj = {
             infotype: "infoSchema"
             , name: this.#name
@@ -707,19 +817,19 @@ export class Schema {
 
     /**
      * Erzeugt das Schema von einem Objekt
-     * @param {Object<string,any>} obj - Schema Daten als Objekt
+     * @param {Partial<InfoSchema>} obj - Schema Daten als Objekt
      * @returns {boolean|undefined} true wenn angelegt
      */
     setFromObject(obj) {
         if (!obj || typeof obj != "object") { return; }
         if (obj.infotype != "infoSchema") { return; }
         
-        this.#name = obj.name;
-        this.version = obj.version;
+        this.#name = obj.name || "";
+        this.version = obj.version || "";
 
         this.#dataTypeList = new DataTable("datatypes", obj.datatypes || [DataTypeFields], DataTypeUnique);
         this.#simpleTypeList = new DataTable("simpletypes", obj.simpletypes || [SimpleTypeFields], SimpleTypeUnique);
-        this.#propList = new DataTable("properties", obj.items || [PropTypeFields], PropTypeUnique);
+        this.#propList = new DataTable("properties", obj.properties || [PropTypeFields], PropTypeUnique);
         this.#uniqueList = new DataTable("uniques", obj.uniques || [UniqueTypeFields], UniqueTypeUnique);
         this.#enumList = new DataTable("enums", obj.enums || [EnumTypeFields], EnumTypUnique);
         this.#refList = new DataTable("refs", obj.refs || [RefTypeFields], RefTypeUnique);
