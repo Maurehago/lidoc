@@ -122,7 +122,7 @@ const PropTypeUnique = "gsid";
  * @property {string} name - ID/Name des Types
  * @property {"string"|"number"|"bigint"|"boolean"|"multi"|"enum"|"object"|"ref"|"unique"|"group"|"choice"} art - Um welchen Art von Typ es sich handelt
  * @property {string|undefined} [base_name] - Optional: Erweitert diesen "base" ObjektTypen
- * @property {Set<string>|undefined} [simple_types] - Optional: Liste von Simplen Typen (ein oder Mehrere einschränkungen)
+ * @property {Array<string>|undefined} [simple_types] - Optional: Liste von Simplen Typen (ein oder Mehrere einschränkungen)
  * @property {string|Array<string>|undefined} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID eines Objektes/Datensatzes(object) ergeben
  * @property {string|Array<string>|undefined} [more_attributes] - Name einer Property oder Liste mit Properties die den Typ weiterer Attribute im Objekt erlaubt
  * @property {string|Array<string>|undefined} [more_properties] - Name einer Property oder Liste mit Properties die den Typ weiterer Properties im Objekt erlaubt
@@ -258,7 +258,7 @@ export class Schema {
      * @returns {string|number|undefined} ID oder Datensatz Position wenn erfolgreich 
      */
     linkSimpleType(type_name, simple_type_name) {
-        return this.#dataTypeList.addCellSetValue(type_name, "simple_types", simple_type_name);
+        return this.#dataTypeList.addCellArrayValue(type_name, "simple_types", simple_type_name);
     }
 
 
@@ -912,7 +912,7 @@ infoSchema.setEnum({ name: "enu_onupdate", values: new Set(["NO", "UPDATE", "NUL
 infoSchema.setEnum({ name: "enu_ondelete", values: new Set(["NO", "DELETE", "NULL", "DEFAULT"]) });
 
 // String_number Typ
-infoSchema.setDataType({ name: "string_number", art: "multi", simple_types: new Set(["string", "number"]) });
+infoSchema.setDataType({ name: "string_number", art: "multi", simple_types: ["string", "number"] });
 
 // EnumType
 infoSchema.setDataType({ name: "EnumType", art: "object", id: "name" });

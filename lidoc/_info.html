@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Zentrales Daten Interface</title>
+    <style>
+        /* Ein paar Zeilen CSS für das Tastatur-Feedback */
+        body { margin: 0; background: #222; color: #fff; font-family: sans-serif; }
+        .ui-column { background: #333; transition: all 0.2s; }
+        .menu-item:hover, tr:hover { background: #444; }
+        .menu-item.active, tr.active { background: #007bff !important; color: white; }
+    </style>
+</head>
+<body>
+    <!-- Der flexible Hauptcontainer für deine Spalten -->
+    <div id="miller-columns-container"></div>
+
+    <script type="module">
+        import { KeyboardRouter, MenuComponent, TableComponent, FormComponent } from "./infoui.js";
+
+        const socket = new WebSocket(`ws://${window.location.host}/socket`);
+        let router = null;
+
+        socket.addEventListener("open", () => {
+            // Initialisiere den Router mit dem Container-Element
+            router = new KeyboardRouter("miller-columns-container", socket);
+        });
+
+        socket.addEventListener("message", (event) => {
+            const message = JSON.parse(event.data);
+
+            switch (message.type) {
+                // Der Server schickt das allererste Menü beim Laden
+                case "INITIAL_STATE":
+                    const startMenu = new MenuComponent(message.initialColumn.id, message.initialColumn.rows);
+                    router.pushActive(startMenu);
+                    break;
+
+                // Der Server liefert angeforderte Daten (Menü, Tabelle oder Formular)
+                case "COLUMN_DATA":
+                    let newColumnComp;
+                    
+                    if (message.columnType === "MENU") {
+                        newColumnComp = new MenuComponent(message.columnId, message.rows);
+                    } else if (message.columnType === "TABLE") {
+                        newColumnComp = new TableComponent(message.columnId, message.rows);
+                    } else if (message.columnType === "FORM") {
+                        newColumnComp = new FormComponent(message.columnId, message.rows);
+                    }
+
+                    if (newColumnComp) {
+                        // Kontext-Informationen an das DOM-Element hängen, damit wir bei ENTER wissen, woher die Daten stammen
+                        newColumnComp.domElement.dataset.driverId = message.driverId || "";
+                        newColumnComp.domElement.dataset.tableName = message.tableName || "";
+                        
+                        router.pushActive(newColumnComp);
+                    }
+                    break;
+
+                // Wenn Daten erfolgreich gespeichert oder gelöscht wurden -> Lokales Routing / Refresh
+                case "SAVE_SUCCESS":
+                case "DELETE_SUCCESS":
+                case "DATA_MUTATED":
+                    alert(message.text || "Daten aktualisiert!");
+                    // Aktualisiere die aktuelle Tabellen-Sicht, indem wir die letzte Spalte neu anfordern
+                    window.location.reload(); // Einfachste Form des globalen Refreshes
+                    break;
+
+                case "LOCK_DENIED":
+                case "ERROR":
+                    alert(`🚨 ${message.text}`);
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>

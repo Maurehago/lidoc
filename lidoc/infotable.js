@@ -503,9 +503,10 @@ export class DataTable {
      * @param {string|number} row - Zeilennummer oder ID
      * @param {string|number} col - Spaltenname oder Spalten Position
      * @param {any} value - Wert der gespeichert wird
+     * @param {boolean} unique - Optional ob der Wert in der Liste eindeutig sein soll. DEFAULT: true
      * @returns {string|number|undefined} Die ID wenn Änderung erfolgreich
      */
-    addCellArrayValue(row, col, value) {
+    addCellArrayValue(row, col, value, unique = true) {
         // DatensatzIndex lesen
         const rowInfo = this.getRowInfo(row);
         const rowIndex = rowInfo.index;
@@ -521,11 +522,21 @@ export class DataTable {
         }
 
         const oldValue = this.rows[rowIndex][col];
+
+        // Wenn bereits ein Array
         if (Array.isArray(oldValue)) {
+            // Wenn einfügender Wert ein Array ist
             if (Array.isArray(value)) {
-                oldValue.concat(value);
+                // Alle Werte durchgehen
+                for (let i = 0; i < value.length; i++) {
+                    if (!unique || oldValue.indexOf(value[i]) < 0) {
+                        oldValue.push(value[i]);
+                    }
+                }
             } else {
-                oldValue.push(value);
+                if (!unique || oldValue.indexOf(value) < 0) {
+                    oldValue.push(value);
+                }
             }
         } else if (oldValue != undefined) {
             if (Array.isArray(value)) {
@@ -549,6 +560,7 @@ export class DataTable {
 
     /**
      * Fügt einen wert in einer Datensatz-Spalte hinzu. Die Spalte muss ein Set sein oder wird in ein Set umgewandelt. 
+     * @deprecated
      * @param {string|number} row - Zeilennummer oder ID
      * @param {string|number} col - Spaltenname oder Spalten Position
      * @param {any} value - Wert der gespeichert wird
