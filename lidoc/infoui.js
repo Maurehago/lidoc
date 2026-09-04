@@ -36,6 +36,207 @@ const base_html = `
 </div>
 `;
 
+
+// ============ Beispiel Verwendung =================
+// <!-- Die Container, in die die Tabellen generiert werden -->
+// <div id="kundenTabellenContainer"></div>
+// <div id="artikelTabellenContainer"></div>
+
+// <script type="module">
+//     import { DataTable } from "./data-table.js";
+//     import { InteractiveTable } from "./infoui.js";
+
+//     // --- Tabelle 1: Kunden ---
+//     const kundenDaten = [
+//         ["gsid", "name", "stadt"],
+//         ["k1", "Max", "Wien"],
+//         ["k2", "Anna", "Berlin"]
+//     ];
+//     const kundenTable = new DataTable("Kunden", kundenDaten, "gsid");
+//     const kundenUI = new InteractiveTable(kundenTable, "kundenTabellenContainer");
+
+//     // --- Tabelle 2: Artikel ---
+//     const artikelDaten = [
+//         ["gsid", "bezeichnung", "preis"],
+//         ["a1", "Schraube", 0.15],
+//         ["a2", "Hammer", 14.99]
+//     ];
+//     const artikelTable = new DataTable("Artikel", artikelDaten, "gsid");
+//     const artikelUI = new InteractiveTable(artikelTable, "artikelTabellenContainer");
+
+//     // Standardmäßig die erste Tabelle aktivieren
+//     InteractiveTable.setActive(kundenUI);
+// </script>
+
+
+
+
+export class InteractiveTable {
+    // Statische Eigenschaft: Merkt sich global, welche Instanz gerade aktiv ist
+    /** @type {InteractiveTable|null} */
+    static activeInstance = null;
+
+    /**
+     * @param {DataTable<any>} dataTable - Die Instanz deiner DataTable-Klasse
+     * @param {string} containerId - Die ID des HTML-Elements (z.B. ein <div>), wo die Tabelle rein soll
+     */
+    constructor(dataTable, containerId) {
+        this.dataTable = dataTable;
+        this.container = document.getElementById(containerId) || new HTMLDivElement();
+
+        this.activeRowIdx = 0;   // UI-Zeilenfokus
+        this.activeColIdx = 0;   // UI-Spaltenfokus
+        this.aktuellerIndexName = undefined; // Sortier-/Filter-Indexname
+
+        this.initDOM();
+    }
+
+    /** Erstellt das Grundgerüst der Tabelle und registriert das Klick-Event */
+    initDOM() {
+        this.container.innerHTML = `
+            <div class="table-wrapper" style="margin-bottom: 30px; padding: 10px; border: 2px solid #ccc;">
+                <h4 class="table-title" style="margin-top:0;">Tabelle: ${this.dataTable.tableName}</h4>
+                <table style="border-collapse: collapse; width: 100%; font-family: sans-serif;">
+                    <thead><tr class="header-row"></tr></thead>
+                    <tbody class="table-body"></tbody>
+                </table>
+            </div>
+        `;
+
+        // Sobald der User in diese Tabelle klickt, wird sie zur aktiven Tabelle
+        this.container.addEventListener("click", () => {
+            InteractiveTable.setActive(this);
+        });
+
+        this.render();
+    }
+
+    /** 
+     * Setzt die aktive Tabelle global und aktualisiert das visuelle Feedback
+     * @param {InteractiveTable} instance - Interaktive Tabelle
+     */
+    static setActive(instance) {
+        if (instance instanceof InteractiveTable) {
+            // Alten Rahmen entfernen
+            if (InteractiveTable.activeInstance) {
+                //@ts-ignore
+                InteractiveTableUI.activeInstance.container.querySelector(".table-wrapper").style.borderColor = "#ccc";
+            }
+
+            // Neue Instanz setzen
+            InteractiveTable.activeInstance = instance;
+            const elm = instance.container.querySelector(".table-wrapper");
+            if (elm instanceof HTMLElement) {
+                elm.style.borderColor = "#0056b3"; // Blau markieren
+            }
+        }
+    }
+
+    /** Zeichnet die Tabelle komplett neu basierend auf dem aktuellen Zustand */
+    render() {
+        const tableHeader = this.container.querySelector("thead");
+        const tableBody = this.container.querySelector("tbody");
+
+        // todo: Spalten Namen von Einstellung lesen
+        const cols = this.dataTable.getCols();
+        
+        if (tableHeader instanceof HTMLElement) {
+            let html = "";
+            for(let i = 0; i < cols.length; i++) {
+                html += `<th>${cols[i]}</th>`;
+            }
+            tableHeader.innerHTML = `<tr>${html}</tr>`;
+        }
+
+        // Datenzeilen-Indizes holen (Kopfzeile 0 herausfiltern)
+        const rowList = this.dataTable.getIndexList(this.aktuellerIndexName);
+        const colIndexes = this.dataTable.getColIndex(cols);
+
+        if (tableBody instanceof HTMLElement) {
+            tableBody.innerHTML = "";
+            let html = "";
+
+            for (let i = 0; i < rowList.length; i++) {
+                const rowIndex = rowList[i];
+                if (rowIndex == 0) { continue; }
+                const row = this.dataTable.getRow(rowIndex);
+                if (!row) { continue; }
+
+                if (rowIndex == this.activeRowIdx) {
+                    html += `<tr data-index="${rowIndex}" class="selected">`;
+                } else {
+                    html += `<tr data-index="${rowIndex}">`;
+                }
+
+                // Für jede spalte
+                for (let j = 0; j < colIndexes.length; j++) {
+                    if (this.activeColIdx == j) {
+                        html += `<td class="selected">${row[colIndexes[j]]}</td>`;
+                    } else {
+                        html += `<td>${row[colIndexes[j]]}</td>`;
+                    }
+                }
+
+                // ende der Zeile
+                html += "</tr>";
+            }
+
+            // in HTML einfügen
+            tableBody.insertAdjacentHTML("afterbegin", html);
+        }
+    }
+
+    /** 
+     * Verarbeitet die Tastatur-Events (wird vom globalen Listener aufgerufen) 
+     * @param {KeyboardEvent} e - Tastatur ereigniss vom globalen Listener
+     */
+    handleKeyDown(e) {
+        const aktuelleIndizes = this.dataTable.getIndexList(this.aktuellerIndexName).filter(idx => idx !== 0);
+        const cols = this.dataTable.getCols();
+
+        // 1. Navigation
+        if (e.key === "ArrowUp" && this.activeRowIdx > 0) { this.activeRowIdx--; e.preventDefault(); }
+        if (e.key === "ArrowDown" && this.activeRowIdx < aktuelleIndizes.length - 1) { this.activeRowIdx++; e.preventDefault(); }
+        if (e.key === "ArrowLeft" && this.activeColIdx > 0) { this.activeColIdx--; e.preventDefault(); }
+        if (e.key === "ArrowRight" && this.activeColIdx < cols.length - 1) { this.activeColIdx++; e.preventDefault(); }
+
+        // 2. S = Sortieren
+        if (e.key.toLowerCase() === "s") {
+            const aktiveSpaltenName = cols[this.activeColIdx];
+            this.dataTable.sort([aktiveSpaltenName], undefined, "sortiert");
+            this.aktuellerIndexName = "sortiert";
+        }
+
+        // 3. F = Filtern nach Zellwert
+        if (e.key.toLowerCase() === "f") {
+            const realRowIdx = aktuelleIndizes[this.activeRowIdx];
+            const aktiveSpaltenName = cols[this.activeColIdx];
+            const zellWert = this.dataTable.getCellValue(realRowIdx, aktiveSpaltenName);
+
+            /** @type {Object<string,any>} */
+            const query = {};
+            query[aktiveSpaltenName] = zellWert;
+
+            this.dataTable.findAll(query, undefined, "gefiltert");
+            this.aktuellerIndexName = "gefiltert";
+            this.activeRowIdx = 0; // Fokus zurücksetzen
+        }
+
+        // 4. R = Filter/Sortierung zurücksetzen
+        if (e.key.toLowerCase() === "r") {
+            this.aktuellerIndexName = undefined;
+        }
+
+        // Nach jeder Aktion neu zeichnen
+        this.render();
+    }
+}
+
+
+
+
+
+
 /**
  * Basis-Controller für alle Spalten-Typen
  * @template T
@@ -233,7 +434,7 @@ export class FormComponent {
 export class KeyboardRouter {
     /**
      * @param {string} appContainerId - Container für die Miller Columns
-     * @param {WebSocket} socket - Aktive WebSocket-Verbindung zum Bun Proxy
+     * @param {WebSocket} socket - Aktive WebSocket-Verbindung zum Bun Server
      */
     constructor(appContainerId, socket) {
         /** @type {Array<ListController<T>|FormComponent>} Spaltenkette von links nach rechts */
@@ -375,7 +576,7 @@ export class KeyboardRouter {
                         }));
                     } break;
 
-                case 'Delete': 
+                case 'Delete':
                     //case 'Backspace':
                     // Datensatz löschen über ENTF-Taste
                     if (active instanceof TableComponent) {
@@ -401,4 +602,14 @@ export class KeyboardRouter {
             }
         });
     }
+}
+
+export function registerEvents() {
+    // Einmaliger globaler Event-Listener für das gesamte Dokument
+    window.addEventListener("keydown", (e) => {
+        // Nur ausführen, wenn überhaupt eine Tabelle aktiv/fokussiert ist
+        if (InteractiveTable.activeInstance) {
+            InteractiveTable.activeInstance.handleKeyDown(e);
+        }
+    });
 }

@@ -55,7 +55,7 @@ import { mkdir } from "fs/promises";
  * @typedef {Object} DBDriverInterface
  * @property {string} id - Entspricht DriverConfig.id
  * @property {string} type - Entspricht DriverConfig.type
- * @property {string} name - Name des Teibers???
+ * @property {string} name - Name des Teibers
  * @property {(tableName: string) => Promise<DataRows>} getRows - Holt alle Zeilen einer Tabelle inkl. Header
  * @property {(tableName: string, recordId: string, idColName: string) => Promise<DataRows>} getRecord - Holt genau eine Zeile + Header für die Detailansicht
  * @property {(tableName: string, deltaRows: DataRows, idColName: string) => Promise<boolean>} saveRows - Schreibt nur die geänderten Spalten (Delta-Array) in die DB
@@ -86,7 +86,7 @@ const args = Bun.argv;
 const nameArg = args.find(arg => arg.startsWith("--name="));
 const APP_NAME = nameArg ? nameArg.split("=")[1] : "Standard_Echtzeit_App";
 
-console.log(`\n=== 🏗️  Bootstrapping gestartet: "${APP_NAME}" ===`);
+console.log(`\n=== Bootstrapping gestartet: "${APP_NAME}" ===`);
 
 /**
  * Ermittelt den plattformübergreifenden Projektordner im Benutzerverzeichnis.
@@ -121,7 +121,7 @@ async function saveApplicationConfig(configData) {
     await mkdir(dirPath, { recursive: true });
 
     await Bun.write(file, JSON.stringify(configData, null, 2));
-    console.log(`💾 Konfiguration erfolgreich in APPDATA/User-Ordner gespeichert.`);
+    console.log(`Konfiguration erfolgreich in APPDATA/User-Ordner gespeichert.`);
 }
 
 /**
@@ -134,11 +134,11 @@ async function loadOrInitializeConfig() {
     const file = Bun.file(filePath);
 
     if (await file.exists()) {
-        console.log(`📖 Bestehende Konfiguration geladen aus: ${filePath}`);
+        console.log(`Bestehende Konfiguration geladen aus: ${filePath}`);
         return await file.json();
     }
 
-    console.log(`🚨 Keine Konfiguration gefunden. Initialisiere Zustand "NULL" für Projekt: ${APP_NAME}`);
+    console.log(`Keine Konfiguration gefunden. Initialisiere Zustand "NULL" für Projekt: ${APP_NAME}`);
 
     /** @type {ApplicationConfig} */
     const freshConfig = {
@@ -153,7 +153,7 @@ async function loadOrInitializeConfig() {
 }
 
 // 3. SERVER CLASS IMPLEMENTIERUNG
-export class ProxyRealtimeServer {
+export class RealtimeServer {
     /**
      * @param {number} port - Der Port, auf dem Bun lauschen soll
      */
@@ -191,13 +191,13 @@ export class ProxyRealtimeServer {
         this.activeDrivers.clear();
 
         if (config.isNewSystem || config.drivers.length === 0) {
-            console.log("ℹ️  Keine aktiven Treiber zu initialisieren (Zustand: NULL). Waiting for UI setup...");
+            console.log("Keine aktiven Treiber zu initialisieren (Zustand: NULL). Waiting for UI setup...");
             return;
         }
 
         for (const driverCfg of config.drivers) {
             try {
-                console.log(`🔌 Initialisiere Treiber [${driverCfg.id}] vom Typ [${driverCfg.type}]...`);
+                console.log(`Initialisiere Treiber [${driverCfg.id}] vom Typ [${driverCfg.type}]...`);
 
                 // HIER: Dynamische Zuweisung je nach Technologie-Typ
                 if (driverCfg.type === "SQLITE") {
@@ -214,21 +214,21 @@ export class ProxyRealtimeServer {
                     // this.activeDrivers.set(driverCfg.id, driverInstance);
                 }
                 else if (driverCfg.type === "FIREBIRD") {
-                    console.log(`🔥 Teste Netzwerk-Verbindung zu Firebird über ConnectionString...`);
+                    console.log(`Teste Netzwerk-Verbindung zu Firebird über ConnectionString...`);
                     // Keine lokale Dateierstellung, da Server bereits im Netzwerk laufen muss!
                     // const driverInstance = new FirebirdDriver(driverCfg.id, driverCfg.name, driverCfg.connectionString);
                     // this.activeDrivers.set(driverCfg.id, driverInstance);
                 }
                 else if (driverCfg.type === "JSON_FILES") {
-                    console.log(`📁 JSON-Dateien-Verzeichnis wird überwacht/initialisiert: ${driverCfg.connectionString}`);
+                    console.log(`JSON-Dateien-Verzeichnis wird überwacht/initialisiert: ${driverCfg.connectionString}`);
                 }
 
             } catch (err) {
                 //@ts-ignore
-                console.error(`❌ Fehler beim Starten des Treibers ${driverCfg.id}:`, err.message);
+                console.error(`Fehler beim Starten des Treibers ${driverCfg.id}:`, err.message);
             }
         }
-        console.log(`✨ ${this.activeDrivers.size} Treiber erfolgreich im Server-Proxy registriert.`);
+        console.log(`${this.activeDrivers.size} Treiber erfolgreich im Server-Proxy registriert.`);
     }
 
     /**
@@ -242,11 +242,6 @@ export class ProxyRealtimeServer {
             fetch: async (req, server) => {
                 const url = new URL(req.url);
 
-                // Lokale Weboberfläche ausliefern (Beinhaltet dein CSS und die Tasten-Events)
-                if (url.pathname === "/" || url.pathname === "/index.html") {
-                    return new Response(Bun.file("./index.html"), { headers: { "Content-Type": "text/html" } });
-                }
-
                 // WebSocket Upgrade Handshake
                 if (url.pathname === "/socket") {
                     return server.upgrade(req, {
@@ -257,13 +252,24 @@ export class ProxyRealtimeServer {
                     });
                 }
 
-                return new Response(Bun.file(req.url) || "Not Found");
-                //return new Response("Not Found", { status: 404 });
+                // 2. Standard-Pfad auf index.html umleiten
+                let filePath = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
+                
+                // Pfad für Bun.file vorbereiten (Punkt voranstellen für relativen Pfad)
+                const file = Bun.file("." + filePath);
+
+                // 3. Prüfen, ob die Datei existiert, und ausliefern
+                if (await file.exists()) {
+                    return new Response(file);
+                }
+
+                // 4. Fallback, falls die Datei nicht existiert
+                return new Response("Not Found", { status: 404 });                
             },
 
             websocket: {
                 open: async (ws) => {
-                    console.log(`💻 Client verbunden (ID: ${ws.data.userId})`);
+                    console.log(`Client verbunden (ID: ${ws.data.userId})`);
 
                     // Jedes Mal beim Verbindungsaufbau prüfen wir frisch den Zustand der config.json
                     const currentConfig = await loadOrInitializeConfig();
@@ -275,7 +281,7 @@ export class ProxyRealtimeServer {
                         // Der Server meldet den Zustand "NULL" an das Frontend
                         startMenuRows.push([
                             "wizard_setup",
-                            "🚨 System einrichten (Keine Verbindungen vorhanden)",
+                            "System einrichten (Keine Verbindungen vorhanden)",
                             "WIZARD",
                             ""
                         ]);
@@ -284,7 +290,7 @@ export class ProxyRealtimeServer {
                         for (const driverCfg of currentConfig.drivers) {
                             startMenuRows.push([
                                 driverCfg.id,
-                                `📦 Datenquelle: ${driverCfg.name} (${driverCfg.type})`,
+                                `Datenquelle: ${driverCfg.name} (${driverCfg.type})`,
                                 "DRIVER_MAIN",
                                 driverCfg.id
                             ]);
@@ -310,7 +316,7 @@ export class ProxyRealtimeServer {
                     try {
                         /** @type {ClientServerMessage} */
                         const msg = JSON.parse(message.toString());
-                        console.log(`📩 Aktion [${msg.type}] angefordert von [${ws.data.username}]`);
+                        console.log(`Aktion [${msg.type}] angefordert von [${ws.data.username}]`);
 
                         // Frisch geladene Konfiguration für eventuelle Abgleiche holen
                         const currentConfig = await loadOrInitializeConfig();
@@ -555,14 +561,14 @@ export class ProxyRealtimeServer {
                                 break;
                         }
                     } catch (err) {
-                        console.error("❌ Fehler im WebSocket-Handler:", err);
+                        console.error("Fehler im WebSocket-Handler:", err);
                         ws.send(JSON.stringify({ type: "ERROR", text: "Interner Serverfehler bei der Verarbeitung der Nachricht." }));
 
                     }
-                    //console.log(`📩 Nachricht empfangen von ${ws.data.userId}:`, message.toString());
+                    //console.log(`Nachricht empfangen von ${ws.data.userId}:`, message.toString());
                 },
                 close: (ws) => {
-                    console.log(`❌ Client getrennt(ID: ${ws.data.userId})`);
+                    console.log(`Client getrennt(ID: ${ws.data.userId})`);
                     // Bereinige In-Memory Locks dieses Users
                     for (const [key, lock] of this.activeLocks.entries()) {
                         if (lock.username === ws.data.username) { this.activeLocks.delete(key); }
@@ -570,12 +576,11 @@ export class ProxyRealtimeServer {
                 }
             }
         });
-        console.log(`🚀 Proxy-Server läuft auf http://localhost:${this.port}`);
+        console.log(`Server läuft auf http://localhost:${this.port}`);
     }
 }
 
 // 4. AUSFÜHRUNG STARTEN
-const appProxy = new ProxyRealtimeServer(3000);
-await appProxy.initializeConfiguredDrivers();
-appProxy.start();
-
+const app = new RealtimeServer(3000);
+await app.initializeConfiguredDrivers();
+app.start();

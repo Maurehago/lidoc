@@ -181,6 +181,34 @@ export class DataRow {
     getPopulatedFields() { return []; }
 }
 
+// ======== Info zu Coumn Mapping ===============
+// const infoTable = [
+//     ["id", "name", "spalte5"], // Zeile 0
+//     [1, "Max", "Wert A"],      // Zeile 1
+//     [2, "Anna", "Wert B"]      // Zeile 2
+// ];
+
+// // Mapping erstellen (Spaltenname -> Index-Nummer)
+// const columnMapping = {};
+// infoTable[0].forEach((name, index) => { columnMapping[name] = index; });
+// // columnMapping ist jetzt: { id: 0, name: 1, spalte5: 2 }
+
+// // DEINE SYNTAX: Holt die Index-Nummern heraus
+// const { id, name, spalte5 } = columnMapping;
+
+// // Anwendung:
+// const zeile = infoTable[1]; // Wir nehmen die Zeile von Max
+
+// console.log(zeile[id]);     // Gibt 1 aus
+// console.log(zeile[name]);   // Gibt "Max" aus
+
+// // Werte ändern funktioniert genauso:
+// zeile[name] = "hallo";
+// console.log(infoTable[1]);  // Ausgabe: [1, "hallo", "Wert A"]
+
+
+
+
 
 /**
  * Eine InMemmory Datentabelle
@@ -1165,65 +1193,65 @@ export class DataTable {
 }
 
 
-// Umsetzung
-// Alles in Tabellen Strucktur
-// 1. Zeile enthält Feldnamen - Wichtig IDFeld muss immer angegeben werden
-// Neue Datensätze (ID) In Map (_newRows)
-// generische Klasse constructor (Array in daten)
-// funktion toArray -> Feldnamen in Richtige Spalten vom Array
+// // Umsetzung
+// // Alles in Tabellen Strucktur
+// // 1. Zeile enthält Feldnamen - Wichtig IDFeld muss immer angegeben werden
+// // Neue Datensätze (ID) In Map (_newRows)
+// // generische Klasse constructor (Array in daten)
+// // funktion toArray -> Feldnamen in Richtige Spalten vom Array
 
 
 
-/// Example
-// @ts-check
-// import { DataTable } from "./data-table.js";
-// import { Customer } from "./customer.js";
+// /// Example
+// // @ts-check
+// // import { DataTable } from "./data-table.js";
+// // import { Customer } from "./customer.js";
 
-const rohDaten = [
-    ["gsid", "name", "city"],
-    ["C-1", "Max", "Wien"]
-];
+// const rohDaten = [
+//     ["gsid", "name", "city"],
+//     ["C-1", "Max", "Wien"]
+// ];
 
-// class Customer extends DataRow {
-//     /** Eindeutige ID */
-//     gsid = "";
-//     name = "";
-//     city = "";
-//     /** Test @type {Map<string,string>} */
-//     test = new Map();
-//     constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
-// }
+// // class Customer extends DataRow {
+// //     /** Eindeutige ID */
+// //     gsid = "";
+// //     name = "";
+// //     city = "";
+// //     /** Test @type {Map<string,string>} */
+// //     test = new Map();
+// //     constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
+// // }
 
-/**
- * @typedef {Object} Customer
- * @property {string} gsid
- * @property {string} name
- * @property {string} city
- */
-let CustomerCols = ["gsid", "name", "city"];
+// /**
+//  * @typedef {Object} Customer
+//  * @property {string} gsid
+//  * @property {string} name
+//  * @property {string} city
+//  */
+// let CustomerCols = ["gsid", "name", "city"];
 
-/** @type {DataTable<Customer>} */
-const kundenTabelle = new DataTable("customers", rohDaten, "gsid");
+// /** @type {DataTable<Customer>} */
+// const kundenTabelle = new DataTable("customers", rohDaten, "gsid");
 
-// --- NEUEN DATENSATZ ANLEGEN ---
-// VS Code vervollständigt dir hier alles und prüft die Typen!
-const neuerKunde = kundenTabelle.newObject();
-neuerKunde.city = "Salzburg";
+// // --- NEUEN DATENSATZ ANLEGEN ---
+// // VS Code vervollständigt dir hier alles und prüft die Typen!
+// const neuerKunde = kundenTabelle.newObject();
+// neuerKunde.city = "Salzburg";
 
-// Werte zuweisen (schreibt LIVE ins 'rohDaten'-Array!)
-neuerKunde.name = "Sabine";
+// // Werte zuweisen (schreibt LIVE ins 'rohDaten'-Array!)
+// neuerKunde.name = "Sabine";
 
-console.log(neuerKunde.gsid);  // Autogenerierte GSID (z.B. "f81d4fae-...")
+// console.log(neuerKunde.gsid);  // Autogenerierte GSID (z.B. "f81d4fae-...")
 
-kundenTabelle.setObject(neuerKunde);
+// kundenTabelle.setObject(neuerKunde);
 
-// Überprüfung der globalen Rohdaten:
-console.log(rohDaten);
-/*
-Output zeigt, dass die Zeile vollautomatisch am Ende des Arrays angefügt wurde:
-[
-  ["gsid", "name", "city"],
-  ["C-1", "Max", "Wien"],
-  ["f81d4fae-...", "Sabine", "Salzburg"]
-]
-*/
+// // Überprüfung der globalen Rohdaten:
+// console.log(rohDaten);
+// /*
+// Output zeigt, dass die Zeile vollautomatisch am Ende des Arrays angefügt wurde:
+// [
+//   ["gsid", "name", "city"],
+//   ["C-1", "Max", "Wien"],
+//   ["f81d4fae-...", "Sabine", "Salzburg"]
+// ]
+// */
