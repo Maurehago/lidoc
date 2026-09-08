@@ -48,7 +48,7 @@ export class SQLiteDriver {
         this.type = "SQLITE";
         this.name = name;
         this.db = new Database(dbPath);
-        this._initTables();
+        //this._initTables();
     }
 
     _initTables() {

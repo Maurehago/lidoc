@@ -783,7 +783,7 @@ export class DataTable {
      * Wenn "index" angegeben, werden nur die Daten unter diesem Index sortiert.
      * Wenn "newIndex" angegeben, wird die Sortierung unter "newIndex" abgelegt.
      * @param {Array<string>} sortCols - Liste mit Spalten nach denen Sortiert wird oder eine Sortierungsfunktion (|CallbackSortFunction<T>)
-     * @param {string|Array<number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird.
+     * @param {string|Array<number>} [index] - Index Name oder Liste mit IndexPositionan der zum sortieren verwendet wird.
      * @param {string} [newIndexName] - Index Name der nach dem Sortieren gesetzt wird.
      * @returns {Array<number>} sortierte Liste mit sortiertem Datenzeilen-Positionen
      * @example

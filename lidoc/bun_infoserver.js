@@ -20,6 +20,14 @@ import { mkdir } from "fs/promises";
  */
 
 /**
+ * @typedef {Object} Token
+ * @property {string} gsid - Eindeutige Session ID
+ * @property {string} userId - ID des Users
+ * @property {string} username - Name des Benutzers
+ * @property {number} exp - Gültigkeitszeitraum
+ */
+
+/**
  * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
  * Diese Struktur wird in der lokalen config.json persistiert.
  * @typedef {Object} DriverConfig
@@ -56,6 +64,7 @@ import { mkdir } from "fs/promises";
  * @property {string} id - Entspricht DriverConfig.id
  * @property {string} type - Entspricht DriverConfig.type
  * @property {string} name - Name des Teibers
+ * @property {() => Promise<DataRows>} getTables - Holt alle Tabellen aus der Datenbank
  * @property {(tableName: string) => Promise<DataRows>} getRows - Holt alle Zeilen einer Tabelle inkl. Header
  * @property {(tableName: string, recordId: string, idColName: string) => Promise<DataRows>} getRecord - Holt genau eine Zeile + Header für die Detailansicht
  * @property {(tableName: string, deltaRows: DataRows, idColName: string) => Promise<boolean>} saveRows - Schreibt nur die geänderten Spalten (Delta-Array) in die DB
@@ -63,15 +72,40 @@ import { mkdir } from "fs/promises";
  * @property {(newSchemaJson: string) => Promise<{success: boolean, message: string}>} [migrateSchema] - Optional: Führt Tabellen-Migrationen bei Schema-Updates aus
  */
 
+
+/**
+ * Alle erlaubten MessageTypen für das System.
+ * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
+ * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
+ * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
+ * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
+ */
+
+/**
+ * Ziel Typen für die Verarbeitung der Messages
+ * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
+ */
+
+
 /**
  * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
+ * server:"INITIAL_STATE" -> client // bei erster Verbindung
+ * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
+ * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
+ *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
+ * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
+ *                          server:"LOCK_RELEASED_CONFIRMED" -> client
+ * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
  * @typedef {Object} ClientServerMessage
- * @property {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA" | "DELETE_DATA" | "SAVE_CONFIG"} type - Aktionstyp
+ * @property {MessageType} type - Aktionstyp
  * @property {string} [driverId] - Ziel-Treiber für die Aktion
  * @property {string} [tableName] - Ziel-Tabelle für die Aktion
  * @property {string} [recordId] - Ziel-Datensatz-ID (falls anwendbar)
  * @property {string} [idColName] - Name der Primärschlüssel-Spalte (Standard meist "gsid")
- * @property {string} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
+ * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
  * @property {string} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
  * @property {DataRows} [rows] - Das Datenpaket (entweder gesamte Tabelle oder Delta-Array bei SAVE)
  */
@@ -87,6 +121,22 @@ const nameArg = args.find(arg => arg.startsWith("--name="));
 const APP_NAME = nameArg ? nameArg.split("=")[1] : "Standard_Echtzeit_App";
 
 console.log(`\n=== Bootstrapping gestartet: "${APP_NAME}" ===`);
+
+
+/**
+ * Gibt eine neue GlobalShortId zurück
+ * @param {boolean} [large] - "true" Wenn in langer Form
+ * @returns {string}
+ */
+export function getGSID(large) {
+    if (large) {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    } else {
+        return new Date().getTime().toString(36) +
+            crypto.getRandomValues(new Uint16Array(1))[0].toString(36);
+    }
+}
 
 /**
  * Ermittelt den plattformübergreifenden Projektordner im Benutzerverzeichnis.
@@ -156,9 +206,18 @@ async function loadOrInitializeConfig() {
 export class RealtimeServer {
     /**
      * @param {number} port - Der Port, auf dem Bun lauschen soll
+     * @param {number} sessionTimeout - Zeit wie lange eine Session gültig ist
      */
-    constructor(port = 3000) {
+    constructor(port = 3000, sessionTimeout = 15 * 60 * 1000) {
         this.port = port;
+
+        /**
+         * Aktive Token
+         * @type {Map<string,Token>}
+         */
+        this.tokens = new Map();
+
+        this.sessionTimeout = sessionTimeout;
 
         /** 
          * Instanziierte und aktive Treiber im Speicher des Servers.
@@ -179,6 +238,9 @@ export class RealtimeServer {
          * @type {Map<string, any>}
          */
         this.loadedProjectSchemas = new Map();
+
+        /** @type {Set<any>}  Alle offenen Sockets */
+        this.openSockets = new Set();
     }
 
     /**
@@ -206,7 +268,7 @@ export class RealtimeServer {
                         ? join(getProjectFolder(), driverCfg.connectionString)
                         : driverCfg.connectionString;
 
-                    console.log(`🗄️ SQLite-Verbindung wird vorbereitet auf Datei: ${fullDbPath}`);
+                    console.log(`SQLite-Verbindung wird vorbereitet auf Datei: ${fullDbPath}`);
 
                     // Hier würde deine Klasse aus den Treibern geladen werden:
                     // const driverInstance = new SQLiteDriver(driverCfg.id, driverCfg.name, fullDbPath);
@@ -231,30 +293,142 @@ export class RealtimeServer {
         console.log(`${this.activeDrivers.size} Treiber erfolgreich im Server-Proxy registriert.`);
     }
 
+
+    // Hilfsfunktion um ein bestimmtes Cookie aus dem Header-String zu lesen
+    /**
+     * 
+     * @param {string} cookieString - Cookie Header
+     * @param {string} name - Name der Header Eigenschaft
+     * @returns 
+     */
+    getCookie(cookieString, name) {
+        if (!cookieString) return null;
+        const pairs = cookieString.split(";");
+        for (let pair of pairs) {
+            const [key, value] = pair.trim().split("=");
+            if (key === name) return decodeURIComponent(value);
+        }
+        return null;
+    }
+
+    /**
+     * Gibt eine Message zum zurücksenden eines Fehlers zurück.
+     * @param {string} message - Fehlermeldung
+     * @returns {ClientServerMessage}
+     */
+    getErrorMessage(message) {
+        /** @type {ClientServerMessage} */
+        return {
+            type: "ERROR"
+            , payload: message
+        };
+    }
+
+    /**
+     * Gibt eine Massage zum Publizieren aller Sperreinträge zurück
+     * @returns {ClientServerMessage}
+     */
+    getPublishLocksMessage() {
+        // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
+        /** @type {ClientServerMessage} */
+        return {
+            type: "LOCK_UPDATED"
+            , payload: JSON.stringify(this.activeLocks.values())
+        };
+    }
+
+
     /**
      * Startet den nativen Bun-HTTP- und WebSocket-Server
      */
     start() {
-        /** @type {Bun.Server<{userId: string, username: string}>} */
+        /** @type {Bun.Server<{userId: string, username: string, exp: number}>} */
         const server = Bun.serve({
             port: this.port,
             //@ts-ignore
             fetch: async (req, server) => {
                 const url = new URL(req.url);
+                const cookieHeader = req.headers.get("cookie") || "";
+                const tokenGsid = this.getCookie(cookieHeader, "auth_token") || "";
+                const currentToken = this.tokens.get(tokenGsid);
+
+                // 1. Erlaube den Zugriff auf die Login-Seite und statische Assets immer ohne Prüfung
+                if (url.pathname === "/login" && req.method === "GET") {
+                    // Hier lieferst du deine normalen Login-Dateien aus...
+                    // Pfad für Bun.file vorbereiten (Punkt voranstellen für relativen Pfad)
+                    const file = Bun.file("./_login.html");
+
+                    // 3. Prüfen, ob die Datei existiert, und ausliefern
+                    if (await file.exists()) {
+                        return new Response(file);
+                    }
+
+                    // 4. Fallback, falls die Datei nicht existiert
+                    return new Response("Login Not Found", { status: 404 });
+                }
+
+                // Prüfen auf aktiven user
+                if (!currentToken || Date.now() < currentToken.exp) {
+                    console.log(`Anonyme Anfrage auf ${url.pathname} - Leite um zu /login.html`);
+
+                    // REDIRECT: Status 302 und Location-Header
+                    return new Response(null, { status: 302, headers: { "Location": "/login" } });
+                }
+
+                // HTTP-Endpunkt zum EINLOGGEN und Cookie setzen
+                if (url.pathname === "/login" && req.method === "POST") {
+                    // todo: hier kommt irgendwann die Benutzer Prüfung rein
+                    const body = await req.json();
+
+                    /** @type {Token} */
+                    const token = {
+                        gsid: getGSID()
+                        , userId: getGSID() // todo: wird Später vom Benutzer gelesen
+                        , username: body.username || "lokaler_benutzer"
+                        , exp: Date.now() + this.sessionTimeout
+                    }
+
+                    // Token Merken
+                    this.tokens.set(token.gsid, token);
+
+                    return new Response(JSON.stringify({ success: true }), {
+                        status: 200,
+                        headers: {
+                            "Content-Type": "application/json",
+                            // Hier setzen wir das sichere Cookie!
+                            // HIER: Max-Age weglassen -> Es wird ein Session-Cookie!
+                            "Set-Cookie": `auth_token=${token.gsid}; Path=/; HttpOnly; Secure; SameSite=Strict`
+                        }
+                    });
+
+                    //return new Response("Nicht gefunden", { status: 404 });
+                }
 
                 // WebSocket Upgrade Handshake
                 if (url.pathname === "/socket") {
-                    return server.upgrade(req, {
-                        data: {
-                            userId: "user_" + Math.random().toString(36).substring(2, 7),
-                            username: "Local_Operator"
+                    // todo: Benutzer Daten -> Anmeldung
+                    const cookieHeader = req.headers.get("cookie") || "";
+                    const token = this.getCookie(cookieHeader, "auth_token") || "";
+
+                    // TOKEN-PRÜFUNG
+                    if (this.tokens.has(token)) {
+                        const t = this.tokens.get(token);
+                        if (t) {
+                            return server.upgrade(req, { data: t });
+                        } else {
+                            // Wenn das Cookie fehlt oder ungültig ist, brechen wir den Handshake ab
+                            return new Response("Nicht autorisiert", { status: 401 });
                         }
-                    });
+                    }
+
+                    // Wenn das Cookie fehlt oder ungültig ist, brechen wir den Handshake ab
+                    return new Response("Nicht autorisiert", { status: 401 });
                 }
+
 
                 // 2. Standard-Pfad auf index.html umleiten
                 let filePath = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;
-                
+
                 // Pfad für Bun.file vorbereiten (Punkt voranstellen für relativen Pfad)
                 const file = Bun.file("." + filePath);
 
@@ -264,11 +438,20 @@ export class RealtimeServer {
                 }
 
                 // 4. Fallback, falls die Datei nicht existiert
-                return new Response("Not Found", { status: 404 });                
+                return new Response("Not Found", { status: 404 });
             },
 
             websocket: {
                 open: async (ws) => {
+                    // Socket im Set registrieren
+                    this.openSockets.add(ws);
+
+                    if (!ws.data || !ws.data.exp || Date.now() > ws.data.exp) {
+                        console.log(`Verbindungsaufbau abgelehnt: Session abgelaufen.`);
+                        ws.close(4001, "Session Timeout");
+                        return;
+                    }
+
                     console.log(`Client verbunden (ID: ${ws.data.userId})`);
 
                     // Jedes Mal beim Verbindungsaufbau prüfen wir frisch den Zustand der config.json
@@ -298,22 +481,46 @@ export class RealtimeServer {
                     }
 
                     // Schicke dem Client das initiale State-Paket über den Socket
-                    ws.send(JSON.stringify({
+                    /** @type {ClientServerMessage} */
+                    const init_data = {
                         type: "INITIAL_STATE",
-                        appName: currentConfig.appName,
-                        isNewSystem: currentConfig.isNewSystem,
-                        locks: Object.fromEntries(this.activeLocks), // Aktuelle Sperren als Objekt
-                        initialColumn: {
-                            id: "root_column",
-                            type: "MENU",
-                            title: `${currentConfig.appName} - Hauptmenü`,
-                            rows: startMenuRows
-                        }
+                        //locks: Object.fromEntries(this.activeLocks), // Aktuelle Sperren als Objekt
+                        //id: "root_column",
+                        targetType: "MENU",
+                        //title: `${currentConfig.appName} - Hauptmenü`,
+                        rows: startMenuRows
+                    }
 
-                    }));
+                    ws.send(JSON.stringify(init_data));
                 },
                 message: async (ws, message) => {
                     try {
+                        // Prüfen, ob die Datenstruktur des Nutzers überhaupt existiert
+                        if (!ws.data || !ws.data.userId) {
+                            /** @type {ClientServerMessage} */
+                            const msg = { type: "ERROR", payload: "No Login." };
+
+                            ws.send(JSON.stringify(msg));
+                            ws.close(4001, "Nicht authentifiziert");
+                            return;
+                        }
+
+                        // Prüfen, ob die Session-Zeit (exp) abgelaufen ist
+                        if (Date.now() > ws.data.exp) {
+                            /** @type {ClientServerMessage} */
+                            const msg = { type: "ERROR", payload: "Session Timeout." };
+
+                            ws.send(JSON.stringify(msg));
+                            ws.close(4001, "Session abgelaufen");
+                            return;
+                        }
+
+                        // Berechne den neuen Ablaufzeitpunkt (Jetzt + Timeout-Dauer)
+                        const newExpiration = Date.now() + this.sessionTimeout;
+
+                        // Aktualisiert sowohl ws.data als auch den Eintrag in this.tokens (Referenz)
+                        ws.data.exp = newExpiration;
+
                         /** @type {ClientServerMessage} */
                         const msg = JSON.parse(message.toString());
                         console.log(`Aktion [${msg.type}] angefordert von [${ws.data.username}]`);
@@ -326,75 +533,90 @@ export class RealtimeServer {
                             ? `${msg.driverId}_${msg.tableName}_${msg.recordId}`
                             : "";
 
+                        const { type, driverId, tableName, recordId, idColName, targetType, payload, rows  } = msg;
+
+                        /** @type {ClientServerMessage} */
+                        const answer = {type: "ERROR", driverId, tableName, recordId, idColName};
+
                         switch (msg.type) {
 
                             // =================================================================
-                            // 1. NAVIGATION & DATENABFRAGE (Pass-Through)
+                            //   DATENABFRAGE (Pass-Through)
                             // =================================================================
                             case "GET_DATA": {
-                                const { targetType, payload, driverId, tableName, recordId, idColName } = msg;
-
                                 // Fall A: Der Client möchte das Ersteinrichtungs-Formular aufrufen
-                                if (targetType === "WIZARD") {
+                                if (targetType === "CONFIG") {
                                     // Wir liefern die Tabellenstruktur, um Treiber-Daten einzugeben
-                                    /** @type {DataRows} */
-                                    const wizardForm = [
-                                        ["id", "name", "type", "connectionString"],
-                                        ["sqlite_main", "Haupt-Datenbank", "SQLITE", "./app_data.db"]
-                                    ];
-                                    ws.send(JSON.stringify({
-                                        type: "COLUMN_DATA", columnType: "FORM", title: "Treiber einrichten", targetType: "SAVE_CONFIG", rows: wizardForm
-                                    }));
+                                    answer.type = "DATA";
+                                    answer.targetType = "CONFIG";
+                                    answer.payload = JSON.stringify(currentConfig);
+                                    //const answer = { type: "DATA", targetType: "FORM", rows: wizardForm };
+                                    
+                                    ws.send(JSON.stringify(answer));
                                     break;
                                 }
 
                                 // Fall B: Ein Treiber wurde gewählt -> Frage dessen Tabellenliste oder Menütabelle ab
-                                if (targetType === "DRIVER_MAIN" && payload) {
-                                    const driver = this.activeDrivers.get(payload);
+                                if (targetType === "DRIVER_MAIN") {
+                                    const driver = this.activeDrivers.get(driverId || "");
                                     if (!driver) {
-                                        ws.send(JSON.stringify({ type: "ERROR", text: `Treiber mit ID '${payload}' ist nicht initialisiert.` }));
+                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
                                         break;
                                     }
 
                                     // Der Treiber liefert uns die Tabellenübersicht
                                     // (Entweder per Datei-Scan oder aus einer systeminternen Menütabelle)
                                     // Format: [ ["TableName", "Beschreibung"], ["kunden", "Kundenkartei"] ]
-                                    const tablesList = await driver.getRows("sys_tables_menu");
+                                    const tablesList = await driver.getTables();
 
-                                    ws.send(JSON.stringify({
-                                        type: "COLUMN_DATA", columnType: "MENU", title: driver.name, driverId: payload, rows: tablesList
-                                    }));
+                                    answer.type = "DATA";
+                                    answer.targetType = "LIST";
+                                    answer.rows = tablesList;
+                                    
+                                    ws.send(JSON.stringify(answer));
                                     break;
                                 }
 
-                                // Fall C: Eine Tabelle wurde gewählt -> Hole alle Datensätze für die InfoTable des Browsers
-                                if (driverId && tableName && !recordId) {
+                                // Fall C: Eine Tabelle wurde gewählt -> Hole Datensätze oder Datensatz
+                                if (driverId && tableName) {
                                     const driver = this.activeDrivers.get(driverId);
+                                    
                                     if (!driver) {
-                                        ws.send(JSON.stringify({ type: "ERROR", text: `Treiber '${driverId}' nicht aktiv.` }));
+                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
                                         break;
                                     }
 
-                                    // Hole das komplette Daten-Array über den Treiber
-                                    const tableRows = await driver.getRows(tableName);
+                                    let tableRows;
+
+                                    // Wenn datensatz ID  && !recordId
+                                    if (recordId != undefined) {
+                                        tableRows = await driver.getRecord(tableName, recordId, idColName || "gsid");
+                                    } else {
+                                        // Hole das komplette Daten-Array über den Treiber
+                                        tableRows = await driver.getRows(tableName);
+                                    }
+
+                                    ///** @type {ClientServerMessage} */
+                                    //const answer = { type: "DATA", targetType: "LIST", rows: tableRows };
+                                    answer.type = "DATA";
+                                    answer.targetType = "LIST";
+                                    answer.rows = tableRows;
 
                                     // Der Server gibt das Array unverändert an den Client weiter.
                                     // Der Client speichert es in seiner lokalen InfoTable zum Filtern und Sortieren.
-                                    ws.send(JSON.stringify({
-                                        type: "COLUMN_DATA", columnType: "TABLE", title: `Tabelle: ${tableName}`, driverId, tableName, rows: tableRows
-                                    }));
+                                    ws.send(JSON.stringify(answer));
                                     break;
                                 }
                                 break;
                             }
 
                             // =================================================================
-                            // 2. CONCURRENCY LOGIC (Sperren & Freigeben)
+                            //   CONCURRENCY LOGIC (Sperren & Freigeben)
                             // =================================================================
                             case "REQUEST_LOCK": {
-                                const { driverId, tableName, recordId, idColName } = msg;
                                 if (!lockKey || !driverId || !tableName || !recordId) {
-                                    ws.send(JSON.stringify({ type: "ERROR", text: "Unvollständige Lock-Parameter." }));
+                                    answer.payload = "Wrong Lock-Params.";
+                                    ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.")));
                                     break;
                                 }
 
@@ -403,40 +625,41 @@ export class RealtimeServer {
                                     const currentLock = this.activeLocks.get(lockKey);
                                     if (currentLock && currentLock.username !== ws.data.username) {
                                         // Zugriff verweigert! Client erhält Fehlermeldung und darf nicht editieren
-                                        ws.send(JSON.stringify({
-                                            type: "LOCK_DENIED",
-                                            text: `Datensatz wird bereits von '${currentLock.username}' bearbeitet (seit ${currentLock.lockTime}).`
-                                        }));
+                                        answer.type = "LOCK_DENIED";
+                                        answer.payload = `Datensatz wird bereits von '${currentLock.username}' bearbeitet (seit ${currentLock.lockTime}).`;
+
+                                        ws.send(JSON.stringify(answer));
                                         break;
                                     }
                                 }
 
-                                // Sperre im Server-Arbeitsspeicher (In-Memory) registrieren
-                                /** @type {LockData} */
-                                const newLock = {
-                                    lockKey, driverId, tableName, recordId,
-                                    username: ws.data.username,
-                                    lockTime: new Date().toLocaleTimeString()
-                                };
-                                this.activeLocks.set(lockKey, newLock);
-
-                                // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
-                                server.publish("app-room", JSON.stringify({ type: "LOCK_UPDATED", locks: Object.fromEntries(this.activeLocks) }));
-
                                 // Jetzt holen wir den aktuellen Zustand GENAU DIESES einen Datensatzes frisch vom Treiber
                                 const driver = this.activeDrivers.get(driverId);
                                 if (driver) {
+                                    // Sperre im Server-Arbeitsspeicher (In-Memory) registrieren
+                                    /** @type {LockData} */
+                                    const newLock = {
+                                        lockKey, driverId, tableName, recordId,
+                                        username: ws.data.username,
+                                        lockTime: new Date().toLocaleTimeString()
+                                    };
+                                    this.activeLocks.set(lockKey, newLock);
+
+                                    // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
+                                    server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
+
+                                    // Daten lesen
                                     const singleRecordRows = await driver.getRecord(tableName, recordId, idColName || "gsid");
 
+                                    // Antwort zusammenstellen
+                                    answer.type = "DATA";
+                                    answer.targetType = "FORM";
+                                    answer.rows = singleRecordRows;
+
                                     // Dem anfragenden Client grünes Licht geben und das Daten-Array für sein Formular senden
-                                    ws.send(JSON.stringify({
-                                        type: "COLUMN_DATA",
-                                        columnType: "FORM",
-                                        title: `Bearbeiten: ${recordId}`,
-                                        driverId, tableName, recordId,
-                                        rows: singleRecordRows // [ [Header], [Der eine Datensatz] ]
-                                    }));
+                                    ws.send(JSON.stringify(answer));
                                 }
+
                                 break;
                             }
 
@@ -446,18 +669,21 @@ export class RealtimeServer {
                                     // Nur der Besitzer des Locks darf es regulär wieder freigeben
                                     if (currentLock?.username === ws.data.username) {
                                         this.activeLocks.delete(lockKey);
-                                        server.publish("app-room", JSON.stringify({ type: "LOCK_UPDATED", locks: Object.fromEntries(this.activeLocks) }));
+
+                                        // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
+                                        server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
+                                        
+                                        // Benutzer Informieren das die Sperre aufgehoben ist
                                         ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED" }));
                                     }
                                 }
                                 break;
                             }
+
                             // =================================================================
-                            // 3. DATEN MODIFIKATION & SPEICHERUNG (Delta-Handling)
+                            //   DATEN MODIFIKATION & SPEICHERUNG (Delta-Handling)
                             // =================================================================
                             case "SAVE_DATA": {
-                                const { driverId, tableName, recordId, idColName, rows } = msg;
-
                                 // Sonderfall: Speichern der globalen Optionen (Zustand: NULL überwinden)
                                 if (msg.tableName === "save_driver_wizard" && rows) {
                                     const headers = rows[0];
@@ -484,7 +710,7 @@ export class RealtimeServer {
                                 // Concurrency Check: Hat der User die Sperre noch?
                                 const currentLock = this.activeLocks.get(lockKey);
                                 if (currentLock && currentLock.username !== ws.data.username) {
-                                    ws.send(JSON.stringify({ type: "ERROR", text: "Speichern fehlgeschlagen: Du hast die Bearbeitungsrechte zwischenzeitlich verloren." }));
+                                    ws.send(JSON.stringify(this.getErrorMessage("Speichern fehlgeschlagen: Du hast die Bearbeitungsrechte zwischenzeitlich verloren.")));
                                     break;
                                 }
 
@@ -500,17 +726,14 @@ export class RealtimeServer {
 
                                         // Broadcast an ALLE, dass sich Daten geändert haben.
                                         // Das triggert im Client das von dir beschriebene automatische Neu-Abrufen (Routing)
-                                        server.publish("app-room", JSON.stringify({
-                                            type: "DATA_MUTATED",
-                                            driverId,
-                                            tableName,
-                                            locks: Object.fromEntries(this.activeLocks)
-                                        }));
+                                        server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
 
                                         // Dem ausführenden Client den Erfolg bestätigen
-                                        ws.send(JSON.stringify({ type: "SAVE_SUCCESS", text: "Daten erfolgreich geschrieben." }));
+                                        answer.type = "SAVE_SUCCESS";
+                                        answer.payload = "Daten erfolgreich geschrieben.";
+                                        ws.send(JSON.stringify(answer));
                                     } else {
-                                        ws.send(JSON.stringify({ type: "ERROR", text: "Der Datenbanktreiber hat das Speichern abgelehnt (Validierungsfehler)." }));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Der Datenbanktreiber hat das Speichern abgelehnt (Validierungsfehler).")));
                                     }
                                 }
                                 break;
@@ -520,14 +743,13 @@ export class RealtimeServer {
                             // 4. LÖSCH-OPERATION (Data Purge)
                             // =================================================================
                             case "DELETE_DATA": {
-                                const { driverId, tableName, recordId, idColName } = msg;
                                 if (!lockKey || !driverId || !tableName || !recordId) break;
 
                                 // Datensatz darf nicht von jemand anderem gesperrt sein
                                 if (this.activeLocks.has(lockKey)) {
                                     const currentLock = this.activeLocks.get(lockKey);
                                     if (currentLock && currentLock.username !== ws.data.username) {
-                                        ws.send(JSON.stringify({ type: "ERROR", text: "Löschen verweigert: Der Datensatz wird gerade von einem anderen Benutzer editiert." }));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Löschen verweigert: Der Datensatz wird gerade von einem anderen Benutzer editiert.")));
                                         break;
                                     }
                                 }
@@ -542,33 +764,34 @@ export class RealtimeServer {
                                         this.activeLocks.delete(lockKey);
 
                                         // Allen Clients mitteilen, dass Daten gelöscht wurden -> Veranlasst UI-Refresh
-                                        server.publish("app-room", JSON.stringify({
-                                            type: "DATA_MUTATED",
-                                            driverId,
-                                            tableName,
-                                            locks: Object.fromEntries(this.activeLocks)
-                                        }));
+                                        server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
 
-                                        ws.send(JSON.stringify({ type: "DELETE_SUCCESS", text: "Datensatz permanent entfernt." }));
+                                        answer.type = "DELETE_SUCCESS";
+                                        answer.payload = "Datensatz permanent entfernt.";
+                                        ws.send(JSON.stringify(answer));
                                     } else {
-                                        ws.send(JSON.stringify({ type: "ERROR", text: "Der Treiber konnte den Datensatz nicht löschen." }));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Der Treiber konnte den Datensatz nicht löschen.")));
                                     }
                                 }
                                 break;
                             }
                             default:
-                                ws.send(JSON.stringify({ type: "ERROR", text: `Aktionstyp '${msg.type}' wird vom Server nicht unterstützt.` }));
+                                ws.send(JSON.stringify(this.getErrorMessage(`Aktionstyp '${msg.type}' wird vom Server nicht unterstützt.`)));
                                 break;
                         }
                     } catch (err) {
                         console.error("Fehler im WebSocket-Handler:", err);
-                        ws.send(JSON.stringify({ type: "ERROR", text: "Interner Serverfehler bei der Verarbeitung der Nachricht." }));
+                        ws.send(JSON.stringify(this.getErrorMessage("Interner Serverfehler bei der Verarbeitung der Nachricht.")));
 
                     }
                     //console.log(`Nachricht empfangen von ${ws.data.userId}:`, message.toString());
                 },
                 close: (ws) => {
                     console.log(`Client getrennt(ID: ${ws.data.userId})`);
+
+                    // Socket aus dem Set entfernen
+                    this.openSockets.delete(ws);
+
                     // Bereinige In-Memory Locks dieses Users
                     for (const [key, lock] of this.activeLocks.entries()) {
                         if (lock.username === ws.data.username) { this.activeLocks.delete(key); }
@@ -576,9 +799,51 @@ export class RealtimeServer {
                 }
             }
         });
+
+
+        // =================================================================
+        // NEU: HINTERGRUND-AUFRÄUMPROZESS FÜR ABGELAUFENE SESSIONS
+        // =================================================================
+        setInterval(() => {
+            const now = Date.now();
+            let deletedTokensCount = 0;
+            let closedSocketsCount = 0;
+
+            // 1. Abgelaufene Tokens aus der Server-Map löschen
+            for (const [gsid, token] of this.tokens.entries()) {
+                if (now > token.exp) {
+                    this.tokens.delete(gsid);
+                    deletedTokensCount++;
+                }
+            }
+
+            // 2. Alle offenen WebSockets prüfen und abgelaufene Verbindungen kicken
+            for (const ws of this.openSockets) {
+                if (ws.data && ws.data.exp && now > ws.data.exp) {
+                    console.log(`Verbindung von User [${ws.data.username}] wird wegen Inaktivität geschlossen.`);
+
+                    // Dem Client ein JSON senden, damit das Frontend weiß, warum es fliegt
+                    try {
+                        ws.send(JSON.stringify({ type: "ERROR", text: "Deine Session ist wegen Inaktivität abgelaufen." }));
+                    } catch (e) {
+                        // Falls der Socket bereits im Abbau ist
+                    }
+
+                    // Verbindung hart serverseitig schließen (Code 4001 signalisiert dem Client das Timeout)
+                    ws.close(4001, "Session abgelaufen");
+                    closedSocketsCount++;
+                }
+            }
+
+            if (deletedTokensCount > 0 || closedSocketsCount > 0) {
+                console.log(`[Aufräumer] ${deletedTokensCount} abgelaufene Tokens entfernt, ${closedSocketsCount} Verbindungen getrennt.`);
+            }
+        }, 30000); // Läuft alle 30 Sekunden (für lokale Entwicklung optimal)
+
         console.log(`Server läuft auf http://localhost:${this.port}`);
     }
 }
+
 
 // 4. AUSFÜHRUNG STARTEN
 const app = new RealtimeServer(3000);
