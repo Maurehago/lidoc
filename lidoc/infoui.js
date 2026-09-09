@@ -5,6 +5,50 @@
 
 import { DataTable } from "./infotable.js";
 
+// ===================================
+//   Infos
+// --------
+
+// --------- CSS ---------------
+// /* Der umschließende Spalten-Container, wenn er den Fokus hat */
+// .ui-view-container:focus,
+// .ui-view-container.focused {
+//     outline: none;
+//     border-color: #4a90e2;
+//     box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+// }
+
+// /* Aktive Zeile in einer Tabelle oder im Menü */
+// .ui-view-container .active-row,
+// .ui-menu-item.active-menu-item {
+//     background-color: #f0f4f9 !important;
+//     color: #1a4f8a;
+//     font-weight: 500;
+// }
+
+// /* Die aktuell ausgewählte Zelle bei horizontaler Navigation */
+// .ui-view-container td.active-cell {
+//     background-color: #e2ecf7 !important;
+//     outline: 2px solid #4a90e2;
+//     outline-offset: -2px;
+// }
+
+
+// -------------- DetailAnsicht Socket Kommunikation -----------------------
+// {
+//   "type": "DATA",
+//   "targetType": "DETAIL",
+//   "tableName": "kundenDetailAnsicht",
+//   "payload": {
+//     "stammdaten": [["vorname", "nachname"], ["Max", "Mustermann"]],
+//     "kontakte": [["typ", "wert"], ["Telefon", "01234"], ["Email", "max@test.de"]],
+//     "bestellungen": [["nr", "datum", "summe"], ["B100", "2026-03-01", "99.00"]]
+//   }
+// }
+
+
+
+
 // ==================================
 //   Typen
 // -------------
@@ -43,6 +87,60 @@ const InfoTag_fields = ["node_id", "tag"];
  */
 
 
+// ----------  neue Typen ------------------
+/**
+ * Tabellen einstellungen
+ * @typedef {object} InfoTableUI
+ * @property {string} gsid - ID des Datensatzes
+ * @property {string} table_id - Name der Tabelle
+ * @property {string} column_name - Name der Spalte
+ * @property {string} display_name - Anzeige Text
+ * @property {number} position - Spalten Position
+ * @property {string} format - Darstellungs-Format
+*/
+const InfoTableUI_fields = ["gsid", "table_id", "column_name", "display_name", "position", "format"];
+const InfoTableUI_unique = "gsid";
+
+// Beispiel:
+// ```json
+// [
+//   ["table_id", "column_name", "display_name", "position", "format"],
+//   ["kundenTabelle", "gsid", "Kundennummer", 1, "text"],
+//   ["kundenTabelle", "nachname", "Nachname", 2, "text"],
+//   ["kundenTabelle", "vorname", "Vorname", 3, "text"]
+// ]
+// ```
+
+/**
+ * Formular einstellungen
+ * @typedef {object} InfoFormUI
+ * @property {string} gsid - ID des Datensatzes
+ * @property {string} form_id - Name des Formulares
+ * @property {string} field_name - Name des Datenfeldes
+ * @property {string} label - Anzeige/Überschrift/Text(bei Buttons)
+ * @property {number} position - Position des Feldes
+ * @property {string} ui_element - Typ des Input elementes oder "button"
+ * @property {string} action_module - Modul Name welches die Funktionalität bereit stellt
+ * @property {string} action_function - Name der Funktion im Modul
+ */
+const InfoFormUI_fields = ["gsid", "form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"];
+const InfoFormUI_unique = "gsid";
+
+// Beispiel
+// ```json
+// [
+//   ["form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"],
+//   ["kundenForm", "vorname", "Vorname des Kunden", 1, "input_text", null, null],
+//   ["kundenForm", "nachname", "Nachname des Kunden", 2, "input_text", null, null],
+//   ["kundenForm", "save_btn", "Speichern", 3, "button", "./modules/kunden_actions.js", "speichern"],
+//   ["kundenForm", "delete_btn", "Löschen", 4, "button", "./modules/kunden_actions.js", "loeschen"]
+// ]
+// ```
+
+
+
+
+
 // HTML-Template: Ein einziger flexibler Container für unendlich anbaubare Spalten nach rechts
 const base_html = `
 <div id="app-container" style="display: flex; flex-direction: row; overflow-x: auto; width: 100vw; height: 100vh; gap: 10px; padding: 10px; box-sizing: border-box;">
@@ -51,389 +149,579 @@ const base_html = `
 `;
 
 
-// ============ Beispiel Verwendung =================
-// <!-- Die Container, in die die Tabellen generiert werden -->
-// <div id="kundenTabellenContainer"></div>
-// <div id="artikelTabellenContainer"></div>
+// ===================================================
+//   neue Klassen
+// ---------------
 
-// <script type="module">
-//     import { DataTable } from "./data-table.js";
-//     import { InteractiveTable } from "./infoui.js";
-
-//     // --- Tabelle 1: Kunden ---
-//     const kundenDaten = [
-//         ["gsid", "name", "stadt"],
-//         ["k1", "Max", "Wien"],
-//         ["k2", "Anna", "Berlin"]
-//     ];
-//     const kundenTable = new DataTable("Kunden", kundenDaten, "gsid");
-//     const kundenUI = new InteractiveTable(kundenTable, "kundenTabellenContainer");
-
-//     // --- Tabelle 2: Artikel ---
-//     const artikelDaten = [
-//         ["gsid", "bezeichnung", "preis"],
-//         ["a1", "Schraube", 0.15],
-//         ["a2", "Hammer", 14.99]
-//     ];
-//     const artikelTable = new DataTable("Artikel", artikelDaten, "gsid");
-//     const artikelUI = new InteractiveTable(artikelTable, "artikelTabellenContainer");
-
-//     // Standardmäßig die erste Tabelle aktivieren
-//     InteractiveTable.setActive(kundenUI);
-// </script>
-
-
-
-
-export class InteractiveTable {
-    // Statische Eigenschaft: Merkt sich global, welche Instanz gerade aktiv ist
-    ///** @type {InteractiveTable|null} */
-    //static activeInstance = null;
-
-    /** @type {Array<number>} */
-    rowIndexes = [];
-
-    /** @type {Array<number>} */
-    colIndexes = [];
-
-    /** @type {Array<string>} */
-    colNames = [];
-
-    /** @type {Array<string>} */
-    colDisplayNames = [];
-
+export class UiGenerator {
     /**
-     * @param {DataTable<any>} dataTable - Die Instanz deiner DataTable-Klasse
-     * @param {string} driverId - Die ID des Datenbank Treibers
+     * Generiert eine HTML-Tabelle
+     * @param {string} tableId - ID der UI-Konfiguration
+     * @param {DataTable<InfoTableUI>} uiConfigTable - Die Tabelle mit den UI-Spalten-Definitionen
+     * @param {DataTable<any>} dataTable - Die echten Geschäftsdaten (z.B. Kunden)
      */
-    constructor(dataTable, driverId) {
-        this.dataTable = dataTable;
-        this.driverId = driverId;
-        // this.container = document.getElementById(containerId) || new HTMLDivElement();
+    static generateTable(tableId, uiConfigTable, dataTable) {
+        // 1. Hole die relevanten UI-Spalten für diese Tabelle und sortiere sie
+        const columns = uiConfigTable.findAll({ table_id: tableId }).sort((a, b) => a.position - b.position);
 
-        // Container dynamisch generieren statt fixer ID
-        this.container = document.createElement("div");
-        this.container.className = "table-wrapper";
-        this.container.style.cssText = "margin-bottom: 15px; padding: 8px; border: 2px solid #ccc; border-radius: 4px; background: #fff;";
+        let html = `<div class="ui-view-container" data-target-type="LIST" data-table-id="${tableId}" tabindex="0">`;
+        html += `<table class="pure-table"><thead><tr>`;
 
-        this.activeRowIdx = 0;   // UI-Zeilenfokus
-        this.activeColIdx = 0;   // UI-Spaltenfokus
-        this.aktuellerIndexName = undefined; // Sortier-/Filter-Indexname
+        // Header rendern
+        for (let i = 0; i < columns.length; i++) {
+            // Spalten Überschriften todo: Ausrichtung
+            html += `<th>${columns[i].display_name}</th>`;
+        }
+        html += `</tr></thead><tbody>`;
 
-        // Aktuelle Indexes und Namen lesen
-        this.rowIndexes = this.dataTable.getIndexList(this.aktuellerIndexName);
-        this.colNames = this.dataTable.getCols();
-        this.colIndexes = this.dataTable.getColIndex(this.colNames);
-        this.colDisplayNames = this.colNames;
+        // Zeilen aus den echten Daten rendern (Index 0 auslassen, da Header im Datentreiber)
+        // todo: Index für Sortierung und Filter
+        const dataRowIndex = dataTable.getIndexList();
 
-        this.initDOM();
+        for (let i = 0; i < dataRowIndex.length; i++) {
+            if (dataRowIndex[i] === 0) return;
+
+            // Datensatz ID todo: eventuel Index ?????
+            const recordId = dataTable.getCellValue(dataRowIndex[i], dataTable.idColumnName);
+
+            html += `<tr data-record-id="${recordId}">`;
+            for (let j = 0; j < columns.length; j++) {
+                const value = dataTable.getCellValue(dataRowIndex[i], columns[j].column_name) ?? "";
+
+                // Spalte anzeigen todo: Ausrichtung/Formatierung ????
+                html += `<td>${value}</td>`;
+            };
+            html += `</tr>`;
+        };
+
+        html += `</tbody></table></div>`;
+        return html;
     }
 
-    /** Erstellt das Grundgerüst der Tabelle und registriert das Klick-Event */
-    initDOM() {
-        this.container.innerHTML = `
-            <div class="table-wrapper" style="margin-bottom: 30px; padding: 10px; border: 2px solid #ccc;">
-                <h4 class="table-title" style="margin-top:0;">Tabelle: ${this.dataTable.tableName}</h4>
-                <table style="border-collapse: collapse; width: 100%; font-family: sans-serif;">
-                    <thead><tr class="header-row"></tr></thead>
-                    <tbody class="table-body"></tbody>
-                </table>
-            </div>
-        `;
+    /**
+     * Generiert ein HTML-Formular
+     * @param {string} formId - Name des Formulares
+     * @param {DataTable<InfoFormUI>} uiConfigTable - Einstellungen für das Formular
+     * @param {Object<string,any>} currentDataObj - Datenzeilen Objekt
+     */
+    static generateForm(formId, uiConfigTable, currentDataObj) {
+        const fields = uiConfigTable.findAll({ form_id: formId }).sort((a, b) => a.position - b.position);
 
-        // Sobald der User in diese Tabelle klickt, wird sie zur aktiven Tabelle
-        this.container.addEventListener("click", () => {
-            // InteractiveTable.setActiveTable(this);
+        let html = `<div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">`;
 
-            // todo: ??? Finde heraus, in welcher Spalte diese Tabelle liegt
-            const colIdx = AppCore.columns.findIndex(c => c.components.includes(this));
-            if (colIdx !== -1) {
-                AppCore.activeColIndex = colIdx;
-                AppCore.columns[colIdx].activeComponentIndex = AppCore.columns[colIdx].components.indexOf(this);
-                AppCore.columns[colIdx].focus();
+        //fields.forEach(field => {
+        for (let i = 0; i < fields.length; i++) {
+            // todo: input Formate Festlegen
+            // todo: eingabe Schema prüfen ????
+            if (fields[i].ui_element === "input_text") {
+                const val = currentDataObj ? currentDataObj[fields[i].field_name] : "";
+                html += `
+                    <div class="form-group" data-focusable="true">
+                        <label>${fields[i].label}</label>
+                        <input type="text" data-field="${fields[i].field_name}" value="${val}">
+                    </div>`;
+            } else if (fields[i].ui_element === "button") {
+                html += `
+                    <button class="ui-btn" data-focusable="true" 
+                            data-module="${fields[i].action_module || ''}" 
+                            data-function="${fields[i].action_function || ''}">
+                        ${fields[i].label}
+                    </button>`;
+            }
+        };
+
+        html += `</div>`;
+        return html;
+    }
+
+    /**
+     * Generiert ein Navigationsmenü aus einer DataTable
+     * @param {string} menuId 
+     * @param {DataTable<InfoTableUI>} uiConfigTable 
+     * @param {DataTable<any>} menuData 
+     */
+    static generateMenu(menuId, uiConfigTable, menuData) {
+        let html = `<div class="ui-view-container" data-target-type="MENU" data-table-id="${menuId}" tabindex="0">`;
+        html += `<ul class="ui-menu-list">`;
+
+        const rowIndices = menuData.getIndexList();
+        for (let i = 0; i < rowIndices.length; i++) {
+            if (rowIndices[i] === 0) continue; // Header überspringen
+
+            // Wir erwarten Spalten wie 'id' (oder gsid) und 'title'
+            const id = menuData.getCellValue(rowIndices[i], "id") || menuData.getCellValue(rowIndices[i], "gsid");
+            const title = menuData.getCellValue(rowIndices[i], "title") ?? "";
+
+            html += `<li data-record-id="${id}" class="ui-menu-item">${title}</li>`;
+        }
+
+        html += `</ul></div>`;
+        return html;
+    }
+
+
+    /**
+     * Generiert ein Formular aus einer Key-Value-Tabelle (Vertikale Daten)
+     * todo: Spalten müssen noch angepasst werden. Was ist die Key-Spalte, was ist die Value-Spalte?
+     * @param {string} formId 
+     * @param {DataTable<InfoFormUI>} uiConfigTable 
+     * @param {DataTable<any>} dataTable - Die vertikalen Tabellendaten
+     */
+    static generateVerticalForm(formId, uiConfigTable, dataTable) {
+        let html = `<div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">`;
+
+        const rowIndices = dataTable.getIndexList();
+
+        for (let i = 0; i < rowIndices.length; i++) {
+            if (rowIndices[i] === 0) continue; // Header überspringen
+
+            // Angenommen, die Tabelle hat die Spalten "key" (oder parameter) und "value"
+            const key = dataTable.getCellValue(rowIndices[i], "parameter_name");
+            const val = dataTable.getCellValue(rowIndices[i], "wert") ?? "";
+
+            // Label aus der UI-Config holen, falls vorhanden, sonst den Key nutzen
+            const uiField = uiConfigTable.find({ form_id: formId, field_name: key });
+            const labelText = uiField ? uiField.label : key;
+
+            html += `
+            <div class="form-group" data-focusable="true" style="margin-bottom: 10px;">
+                <label style="display: block; font-weight: 500;">${labelText}</label>
+                <input type="text" data-field="${key}" value="${val}" style="width: 100%;">
+            </div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    /**
+     * Generiert eine zusammengesetzte Detailansicht aus mehreren Sub-Tabellen
+     * todo: Muss angepasst werden da im payload unterschiedliche Daten kommen können (Formulare, Tabellen, Details(HTML), usw)
+     */
+    static generateDetail(viewId, uiConfigTable, compositeDataPayload) {
+        // compositeDataPayload ist das geparste JSON-Objekt aus dem Server-Payload
+        let html = `<div class="ui-view-container" data-target-type="DETAIL" data-view-id="${viewId}" tabindex="0" style="display:flex; flex-direction:column; gap:20px;">`;
+
+        // 1. Stammdaten-Segment (Formularartig, schreibgeschützt)
+        if (compositeDataPayload.stammdaten) {
+            const stammdatenTable = new DataTable(compositeDataPayload.stammdaten);
+            const obj = stammdatenTable.getObject(1);
+            html += `<div class="detail-segment card"><h3>Kundenstammdaten</h3>`;
+            for (const [key, value] of Object.entries(obj)) {
+                html += `<p><strong>${key}:</strong> ${value}</p>`;
+            }
+            html += `</div>`;
+        }
+
+        // 2. Kontakt-Sektion als kompakte Liste
+        if (compositeDataPayload.kontakte) {
+            html += `<div class="detail-segment"><h3>Kontaktinformationen</h3><ul class="ui-menu-list">`;
+            const kontakteTable = new DataTable(compositeDataPayload.kontakte);
+            kontakteTable.getIndexList().forEach(idx => {
+                if (idx === 0) return;
+                const typ = kontakteTable.getCellValue(idx, "typ");
+                const wert = kontakteTable.getCellValue(idx, "wert");
+                html += `<li class="ui-static-item"><strong>${typ}:</strong> ${wert}</li>`;
+            });
+            html += `</ul></div>`;
+        }
+
+        // 3. Letzte Bestellungen als Sub-Tabelle
+        if (compositeDataPayload.bestellungen) {
+            html += `<div class="detail-segment"><h3>Letzte Bestellungen</h3>`;
+            const bestellungenTable = new DataTable(compositeDataPayload.bestellungen);
+            // Nutzen Sie die bestehende generateTable Methode intern!
+            html += UiGenerator.generateTable("subBestellungen", uiConfigTable, bestellungenTable);
+            html += `</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+}
+
+
+export class UiController {
+    /**
+     * 
+     * @param {RealtimeSync} socketSync - WebSocketClient
+     */
+    constructor(socketSync) {
+        this.sync = socketSync;
+        this.activeContainer = null;
+        this.activeRowIdx = 0;
+        this.activeColIdx = 0;
+
+        this.initGlobalEvents();
+    }
+
+    /**
+     * Parst einen neu hinzugefügten DOM-Bereich und bindet dynamische JS-Module an Buttons
+     * @param {HTMLElement} container 
+     */
+    parseContainer(container) {
+        // 1. Suche nach interaktiven Elementen (z.B. Buttons mit Modul-Zuweisung)
+        const buttons = container.querySelectorAll("button[data-module]");
+        buttons.forEach(async (btn) => {
+            const modulePath = btn.getAttribute("data-module");
+            const functionName = btn.getAttribute("data-function");
+
+            if (modulePath && functionName) {
+                // Dynamischer JavaScript-Import zur Laufzeit!
+                try {
+                    const module = await import(modulePath);
+                    btn.addEventListener("click", (e) => {
+                        // Rufe die Funktion auf und übergebe den aktuellen Sync-Server & Kontext
+                        // todo: Daten als Datensatz Übergeben ????
+                        module[functionName]({ event: e, sync: this.sync, btn: btn });
+                    });
+                } catch (err) {
+                    console.error(`Fehler beim Laden des Moduls ${modulePath}:`, err);
+                }
             }
         });
 
-        this.render();
-    }
+        // 2. Klick-Navigation zur Maus-Unterstützung
+        container.addEventListener("click", (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) { return; }
+            const viewContainer = target.closest(".ui-view-container");
+            if (viewContainer instanceof HTMLElement) {
+                this.focusContainer(viewContainer);
 
-    /** 
-     * Setzt die aktive Tabelle global und aktualisiert das visuelle Feedback
-     * @param {InteractiveTable} instance - Interaktive Tabelle
-     */
-    static setActiveTable(instance) {
-        if (instance instanceof InteractiveTable) {
-            // Alten Rahmen entfernen
-            //if (InteractiveTable.activeInstance) {
-            //    //@ts-ignore
-            //    InteractiveTableUI.activeInstance.container.querySelector(".table-wrapper").style.borderColor = "#ccc";
-            //}
-
-            // Neue Instanz setzen
-            // InteractiveTable.activeInstance = instance;
-            // const elm = instance.container.querySelector(".table-wrapper");
-            // if (elm instanceof HTMLElement) {
-            //     elm.style.borderColor = "#0056b3"; // Blau markieren
-            // }
-        }
-    }
-
-    /** Setzt visuelle Aktiv-Klassen auf die ausgewählte Zeile */
-    setActiveCell() {
-        // Bestehendes "active" entfernen
-        const nodes = this.container.querySelectorAll(".active");
-        nodes.forEach(r => r.classList.remove("active"));
-
-        // neues active setzen
-        const tbody = this.container.querySelector("tbody");
-        if (tbody) {
-            const activeRow = tbody.rows[this.activeRowIdx];
-            if (activeRow) {
-                activeRow.classList.add("active");
-                const activeCell = activeRow.cells[this.activeColIdx];
-
-                // Zu aktiver Zeile und Spalte springen 
-                activeCell.classList.add("active");
-                activeCell.scrollIntoView({ block: "nearest" });
-            }
-        }
-    }
-
-
-    /** Zeichnet die Tabelle komplett neu basierend auf dem aktuellen Zustand */
-    render() {
-        const tableHeader = this.container.querySelector("thead");
-        const tableBody = this.container.querySelector("tbody");
-
-        // todo: Spalten Namen von Einstellung lesen
-        this.colNames = this.dataTable.getCols();
-        this.colIndexes = this.dataTable.getColIndex(this.colNames);
-
-        // Datenzeilen-Indizes holen (Kopfzeile 0 herausfiltern)
-        this.rowIndexes = this.dataTable.getIndexList(this.aktuellerIndexName);
-        //const rowList = this.dataTable.getIndexList(this.aktuellerIndexName);
-
-        // Kopfzeile Anzeigen
-        // todo: Sortierung und Filter visuell???
-        if (tableHeader instanceof HTMLElement) {
-            let html = "";
-            for (let i = 0; i < this.colIndexes.length; i++) {
-                html += `<th>${this.colDisplayNames[i]}</th>`;
-            }
-            tableHeader.innerHTML = `<tr>${html}</tr>`;
-        }
-
-
-        if (tableBody instanceof HTMLElement) {
-            tableBody.innerHTML = "";
-            let html = "";
-
-            for (let i = 0; i < this.rowIndexes.length; i++) {
-                const rowIndex = this.rowIndexes[i];
-                if (rowIndex == 0) { continue; }
-                const row = this.dataTable.getRow(rowIndex);
-                if (!row) { continue; }
-
-                if (rowIndex == this.activeRowIdx) {
-                    html += `<tr data-index="${rowIndex}" class="active">`;
-                } else {
-                    html += `<tr data-index="${rowIndex}">`;
+                // Falls auf eine Tabellenzeile geklickt wurde:
+                const tr = target.closest("tr");
+                const tr_parent = tr?.parentNode;
+                if (tr && tr_parent instanceof HTMLElement && tr_parent.tagName === "TBODY") {
+                    this.activeRowIdx = tr.rowIndex - 1; // Ohne Header
+                    this.updateVisualFocus();
                 }
-
-                // Für jede spalte
-                for (let j = 0; j < this.colIndexes.length; j++) {
-                    if (rowIndex == this.activeRowIdx && this.activeColIdx == j) {
-                        html += `<td class="active">${row[this.colIndexes[j]]}</td>`;
-                    } else {
-                        html += `<td>${row[this.colIndexes[j]]}</td>`;
-                    }
-                }
-
-                // ende der Zeile
-                html += "</tr>";
             }
-
-            // in HTML einfügen
-            tableBody.insertAdjacentHTML("afterbegin", html);
-        }
-    }
-
-    /** 
-     * Verarbeitet die Tastatur-Events (wird vom globalen Listener aufgerufen) 
-     * @param {KeyboardEvent} e - Tastatur ereigniss vom globalen Listener
-     */
-    handleKeyDown(e) {
-        //const aktuelleIndizes = this.dataTable.getIndexList(this.aktuellerIndexName).filter(idx => idx !== 0);
-        //const cols = this.dataTable.getCols();
-
-        // bestimmt ob die komplette Tabelle neu erstellt werden muss
-        let is_table_refresh = false;
-
-        // 1. Navigation
-        if (e.key === "ArrowUp" && this.activeRowIdx > 0) { this.activeRowIdx--; e.preventDefault(); }
-        if (e.key === "ArrowDown" && this.activeRowIdx < this.rowIndexes.length - 1) { this.activeRowIdx++; e.preventDefault(); }
-        if (e.key === "ArrowLeft" && this.activeColIdx > 0) { this.activeColIdx--; e.preventDefault(); }
-        if (e.key === "ArrowRight" && this.activeColIdx < this.colIndexes.length - 1) { this.activeColIdx++; e.preventDefault(); }
-
-        // ENTER-Taste gedrückt -> Daten-Verknüpfung auflösen und nächste Spalte triggern!
-        if (e.key === "Enter") {
-            e.preventDefault();
-            this.triggerSelection();
-            return;
-        }
-
-        // 2. S = Sortieren
-        if (e.key.toLowerCase() === "s") {
-            const aktiveSpaltenName = this.colNames[this.activeColIdx];
-            this.dataTable.sort([aktiveSpaltenName], this.aktuellerIndexName, "sortiert");
-            this.aktuellerIndexName = "sortiert";
-
-            // Tabelle muss neu erstellt werden
-            is_table_refresh = true;
-        }
-
-        // 3. F = Filtern nach Zellwert
-        if (e.key.toLowerCase() === "f") {
-            const realRowIdx = this.rowIndexes[this.activeRowIdx];
-            const aktiveSpaltenName = this.colNames[this.activeColIdx];
-            const zellWert = this.dataTable.getCellValue(realRowIdx, aktiveSpaltenName);
-
-            /** @type {Object<string,any>} */
-            const query = {};
-            query[aktiveSpaltenName] = zellWert;
-
-            this.dataTable.findAll(query, this.aktuellerIndexName, "gefiltert");
-            this.aktuellerIndexName = "gefiltert";
-            this.activeRowIdx = 0; // Fokus zurücksetzen
-
-            // Tabelle muss neu erstellt werden
-            is_table_refresh = true;
-        }
-
-        // 4. R = Filter/Sortierung zurücksetzen
-        if (e.key.toLowerCase() === "r") {
-            this.aktuellerIndexName = undefined;
-
-            // Tabelle muss neu erstellt werden
-            is_table_refresh = true;
-        }
-
-        // Nach jeder Aktion neu zeichnen
-        if (is_table_refresh) {
-            this.render();
-        } else {
-            this.setActiveCell();
-        }
-    }
-
-    /*** Analysiert die Auswahl und fordert die nächste logische Spalte an*/
-    triggerSelection() {
-        const realRowIdx = this.rowIndexes[this.activeRowIdx];
-        const recordId = this.dataTable.getCellValue(realRowIdx, this.dataTable.idColumnName);
-        console.log(`Auswahl in ${this.dataTable.tableName}: Datensatz-ID ${recordId}`);
-
-        // Signal an den Orchestrator senden, um die Folge-Daten zu laden
-        DataOrchestrator.loadNextSpalte(
-            this.driverId,
-            this.dataTable.tableName,
-            recordId);
-    }
-}
-
-
-
-
-// Repräsentiert eine visuelle Spalte im UI
-export class InteractiveCol {
-    constructor(title = "Spalte") {
-        this.domElement = document.createElement("div");
-        this.domElement.className = "ui-column";
-        // Flexibles, fixes Spaltenlayout
-        this.domElement.style.cssText = "display: flex; flex-direction: column; width: 350px; min-width: 350px; height: 100%; background: white; border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); box-sizing: border-box; padding: 10px; overflow-y: auto;";
-
-        this.titleElement = document.createElement("h3");
-        this.titleElement.innerText = title;
-        this.titleElement.style.cssText = "margin: 0 0 10px 0; font-size: 1.1em; color: #495057; border-bottom: 2px solid #e9ecef; padding-bottom: 5px;";
-        this.domElement.appendChild(this.titleElement);
-
-        /** @type {Array<InteractiveTable|any>} Komponenten innerhalb dieser Spalte */
-        this.components = [];
-        this.activeComponentIndex = 0;
-    }
-
-    get activeComponent() {
-        return this.components[this.activeComponentIndex] || null;
+        });
     }
 
     /**
-     * Fügt eine Tabelle, ein Formular oder Detailansicht in die Spalte ein
-     * @param {InteractiveTable|any} component 
+     * Setzt den Fokus auf das angegebene Element
+     * @param {HTMLElement} el - Element welches den Fokus erhält
      */
-    addComponent(component) {
-        this.components.push(component);
-        if (component instanceof InteractiveTable) {
-            this.domElement.appendChild(component.container);
-            if (this.components.length === 1) {
-                component.container.style.borderColor = "#ccc"; // Standard-Zustand
+    focusContainer(el) {
+        if (this.activeContainer) this.activeContainer.classList.remove("focused");
+        this.activeContainer = el;
+        this.activeContainer.classList.add("focused");
+        this.activeContainer.focus();
+        this.activeRowIdx = 0;
+        this.activeColIdx = 0;
+        this.updateVisualFocus();
+    }
+
+    initGlobalEvents() {
+        window.addEventListener("keydown", (e) => {
+            if (!this.activeContainer) return;
+
+            const targetType = this.activeContainer.getAttribute("data-target-type");
+
+            if (targetType === "LIST" || targetType === "MENU") {
+                this.handleTableNavigation(e); // Nutzt dieselbe Zeilen-Navigation
+            } else if (targetType === "FORM") {
+                this.handleFormNavigation(e);
+            }
+        });
+    }
+
+    /**
+     * Verarbeitet die TastaturEvents auf einer Tabelle
+     * @param {KeyboardEvent} e - Event für die Tastur Eingaben
+     * @returns {void}
+     */
+    handleTableNavigation(e) {
+        const tbody = this.activeContainer?.querySelector("tbody");
+        const thead = this.activeContainer?.querySelector("thead");
+        if (!tbody || !thead) return;
+
+        const maxRows = tbody.rows.length;
+        const tableId = this.activeContainer?.getAttribute("data-table-id") || "";
+
+        // Hole den technischen Spaltennamen basierend auf der aktuellen Zelle
+        const th = thead.rows[0].cells[this.activeColIdx];
+        const columnName = th?.getAttribute("data-col-name") || "";
+
+        // Standard-Pfeiltasten-Navigation (Zelle / Zeile wechseln)
+        if (e.key === "ArrowRight") {
+            const currentRowsCells = tbody.rows[this.activeRowIdx]?.cells.length || 0;
+            if (this.activeColIdx < currentRowsCells - 1) { this.activeColIdx++; e.preventDefault(); }
+        }
+        if (e.key === "ArrowLeft") {
+            if (this.activeColIdx > 0) { this.activeColIdx--; e.preventDefault(); }
+        }
+        if (e.key === "ArrowDown" && this.activeRowIdx < maxRows - 1) {
+            this.activeRowIdx++; e.preventDefault();
+        }
+        if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
+            this.activeRowIdx--; e.preventDefault();
+        }
+
+        // --- NEU: TASTENBEFEHLE FÜR AKTIONEN ---
+
+        // 1. SORTIEREN (Taste "s" oder "S")
+        if (e.key.toLowerCase() === "s" && columnName) {
+            e.preventDefault();
+            const mode = "CLIENT"; // Oder "SERVER" per Konfigurations-Flag der App
+
+            if (mode === "CLIENT") {
+                console.log(`Lokal sortieren nach: ${columnName}`);
+                const currentTable = AppCore.getLoadedTable(tableId);
+
+                if (currentTable) {
+                    currentTable.sort([columnName]); // Ihre eingebaute Sortierfunktion
+
+                    // 1. HTML mit den frisch sortierten Daten neu generieren
+                    const updatedHtml = UiGenerator.generateTable(tableId, this.sync.uiLayoutTable, currentTable);
+
+                    // 2. KORREKTUR: Die soeben geschriebene Methode nutzen, um das HTML auszutauschen
+                    AppCore.renderOrUpdateColumn(tableId, "LIST", currentTable, updatedHtml || "");
+                }
+            } else {
+                // Server-seitig
+                this.sync.send("GET_DATA", { tableName: tableId, targetType: "LIST", payload: JSON.stringify({ action: "SORT", column: columnName }) });
+            }
+        }
+
+        // 2. FILTERN (Taste "f" oder "F")
+        if (e.key.toLowerCase() === "f" && columnName) {
+            e.preventDefault();
+            const activeCell = tbody.rows[this.activeRowIdx]?.cells[this.activeColIdx];
+            const cellValue = activeCell?.textContent;
+            const mode = "CLIENT";
+
+            if (mode === "CLIENT") {
+                console.log(`Lokal filtern: ${columnName} = ${cellValue}`);
+                const currentTable = AppCore.getLoadedTable(tableId);
+                if (currentTable) {
+                    // Erstellt eine gefilterte Kopie oder mutiert die Tabelle temporär
+                    const filteredTable = currentTable.filter(columnName, cellValue);
+                    AppCore.refreshColumnHTML(tableId, filteredTable);
+                }
+            } else {
+                // Server-seitig
+                this.sync.send("GET_DATA", { tableName: tableId, targetType: "LIST", payload: JSON.stringify({ action: "FILTER", column: columnName, value: cellValue }) });
+            }
+        }
+
+        // 3. REFRESH VOM SERVER ERZWINGEN (Taste "r" oder "R")
+        if (e.key.toLowerCase() === "r") {
+            e.preventDefault();
+            this.sync.send("GET_DATA", { tableName: tableId, targetType: "LIST", payload: JSON.stringify({ action: "REFRESH" }) });
+        }
+
+        // 4. ENTER (Datensatz öffnen / in die nächste Spalte wandern)
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const activeRow = tbody.rows[this.activeRowIdx];
+            const recordId = activeRow?.getAttribute("data-record-id");
+
+            this.sync.send("GET_DATA", { tableName: tableId, recordId: recordId, targetType: "FORM" });
+        }
+
+        this.updateVisualFocus();
+    }
+
+
+    /**
+     * Verarbeitet die TastaturEvents auf einer Tabelle
+     * @param {KeyboardEvent} e - Event für die Tastur Eingaben
+     * @returns {void}
+     */
+    handleTableNavigation_old2(e) {
+        const targetType = this.activeContainer?.getAttribute("data-target-type");
+
+        // Abstraktion: Entweder Zeilen im tbody (Tabelle) oder li-Elemente (Menü)
+        const items = targetType === "MENU"
+            ? Array.from(this.activeContainer?.querySelectorAll(".ui-menu-item") || [])
+            : Array.from(this.activeContainer?.querySelectorAll("tbody tr") || []);
+
+        if (items.length === 0) return;
+
+        if (e.key === "ArrowDown" && this.activeRowIdx < items.length - 1) {
+            this.activeRowIdx++; e.preventDefault();
+        }
+        if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
+            this.activeRowIdx--; e.preventDefault();
+        }
+
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const activeItem = items[this.activeRowIdx];
+            const recordId = activeItem.getAttribute("data-record-id");
+            const tableId = this.activeContainer?.getAttribute("data-table-id");
+
+            // Über die Kanten-Spezifikation (InfoEdge) weiß der Server, was als nächstes kommt!
+            this.sync.ws?.send(JSON.stringify({
+                type: "GET_DATA",
+                tableName: tableId,
+                recordId: recordId,
+                targetType: targetType === "MENU" ? "LIST" : "FORM"
+            }));
+        }
+
+        this.updateVisualFocus();
+    }
+
+
+    /**
+     * Verarbeitet die TastaturEvents auf einer Tabelle
+     * @param {KeyboardEvent} e - Event für die Tastur Eingaben
+     * @returns {void}
+     */
+    handleTableNavigation_old(e) {
+        const tbody = this.activeContainer?.querySelector("tbody");
+        if (!tbody) return;
+        const maxRows = tbody.rows.length;
+
+        if (e.key === "ArrowDown" && this.activeRowIdx < maxRows - 1) {
+            this.activeRowIdx++; e.preventDefault();
+        }
+        if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
+            this.activeRowIdx--; e.preventDefault();
+        }
+
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const activeRow = tbody.rows[this.activeRowIdx];
+            const recordId = activeRow.getAttribute("data-record-id");
+            const tableId = this.activeContainer?.getAttribute("data-table-id");
+
+            // Trigger an Server (Nächste Spalte anfordern)
+            this.sync.ws?.send(JSON.stringify({
+                type: "GET_DATA",
+                tableName: tableId,
+                recordId: recordId,
+                targetType: "FORM" // Server weiß, er soll Formular-Daten schicken
+            }));
+        }
+
+        this.updateVisualFocus();
+    }
+
+    /**
+     * Verarbeitet die TastaturEvents auf einem Formular
+     * @param {KeyboardEvent} e - Event für die Tastur Eingaben
+     * @returns {void}
+     */
+    handleFormNavigation(e) {
+        // Im Formular navigieren wir durch die Elemente mit "data-focusable"
+        const focusables = Array.from(this.activeContainer?.querySelectorAll("[data-focusable='true']") || []);
+        let currentIdx = document.activeElement ? focusables.indexOf(document.activeElement) : 0;
+
+        if (e.key === "ArrowDown" || e.key === "Tab") {
+            e.preventDefault();
+            currentIdx = (currentIdx + 1) % focusables.length;
+            //@ts-ignore
+            focusables[currentIdx].focus();
+        }
+        if (e.key === "ArrowUp") {
+            e.preventDefault();
+            currentIdx = (currentIdx - 1 + focusables.length) % focusables.length;
+            //@ts-ignore
+            focusables[currentIdx].focus();
+        }
+    }
+
+    updateVisualFocus() {
+        if (!this.activeContainer) return;
+
+        // Alle alten Fokuseffekte aufheben
+        this.activeContainer.querySelectorAll(".active-row, .active-menu-item").forEach(el => {
+            el.classList.remove("active-row", "active-menu-item");
+        });
+
+        const targetType = this.activeContainer.getAttribute("data-target-type");
+
+        if (targetType === "MENU") {
+            const items = this.activeContainer.querySelectorAll(".ui-menu-item");
+            if (items[this.activeRowIdx]) items[this.activeRowIdx].classList.add("active-menu-item");
+        } else if (targetType === "LIST") {
+            const tbody = this.activeContainer.querySelector("tbody");
+            if (tbody && tbody.rows[this.activeRowIdx]) tbody.rows[this.activeRowIdx].classList.add("active-row");
+        }
+    }
+
+    updateVisualFocus_old() {
+        if (!this.activeContainer) return;
+
+        // Entferne alte CSS-Klassen
+        this.activeContainer.querySelectorAll(".active-row").forEach(el => el.classList.remove("active-row"));
+
+        const type = this.activeContainer.getAttribute("data-ui-type");
+        if (type === "table") {
+            const tbody = this.activeContainer.querySelector("tbody");
+            if (tbody && tbody.rows[this.activeRowIdx]) {
+                tbody.rows[this.activeRowIdx].classList.add("active-row");
             }
         }
     }
 
-    focus() {
-        // Visuelles Highlight für die aktive Spalte
-        AppCore.columns.forEach(c => c.domElement.style.borderColor = "#dee2e6");
-        this.domElement.style.borderColor = "#007bff";
+    /**
+     * Prüft alle Felder eines Formulars gegen die geladenen Schemas
+     * @param {HTMLElement} formContainer 
+     */
+    static validateFormFields(formContainer) {
+        const formId = formContainer.getAttribute("data-form-id");
+        const inputs = formContainer.querySelectorAll("input[data-field]");
+        let hasAnyError = false;
 
-        if (this.activeComponent && this.activeComponent.setActiveCell) {
-            this.activeComponent.setActiveCell();
-        }
+        inputs.forEach(input => {
+            const fieldName = input.getAttribute("data-field");
+            const value = input.value;
+
+            // Hier rufen Sie Ihre bestehende Schema-Validierungs-Logik auf!
+            // Angenommen, diese liefert { isValid: false, message: "Pflichtfeld" }
+            const validationResult = YourCustomSchemaClass.validate(formId, fieldName, value);
+
+            // Vorherige Fehler-Stylings aufräumen
+            input.classList.remove("input-error");
+            const existingMsg = input.parentNode.querySelector(".error-message");
+            if (existingMsg) existingMsg.remove();
+
+            if (!validationResult.isValid) {
+                hasAnyError = true;
+                input.classList.add("input-error"); // Macht den Rahmen z.B. rot via CSS
+
+                // Fehlermeldung als Text unter dem Input einfügen
+                const errorSpan = document.createElement("span");
+                errorSpan.className = "error-message";
+                errorSpan.style.cssText = "color: red; font-size: 12px; display: block; margin-top: 4px;";
+                errorSpan.textContent = validationResult.message;
+                input.parentNode.appendChild(errorSpan);
+            }
+        });
+
+        return !hasAnyError; // Gibt true zurück, wenn alles fehlerfrei ist
     }
 }
-
 
 
 // RealtimeSync.js - Wiederverwendbares Client-Modul
 export class RealtimeSync {
     /**
      * @param {string} serverUrl - ServerPfad 
+     * @param {UiController} [uiController] - Kontroller für die Grafische UI
      */
-    constructor(serverUrl) {
+    constructor(serverUrl, uiController) {
         this.serverUrl = serverUrl;
+        this.uiController = uiController;
         this.ws = null;
+    }
+
+    /**
+     * Setzt einen neuen UI Controler
+     * @param {UiController} uiController - Benutzer Oberfläche Controler
+     */
+    setController(uiController) {
+        this.uiController = uiController;
     }
 
     /** Gesperrte Datensätze */
     lockedData = new Map();
-
-    /** 
-     * Callback Funktion wenn ein Datensatz gesperrt wird
-     * @type {function|null} */
-    onLock = null
-
-    /** 
-     * Callback Funktion wenn ein Datensatz entsperrt wird
-     * @type {function|null} */
-    onUnlock = null
-
-    /** 
-     * Callback Funktion wenn ein Datensatz bearbeitet wird
-     * @type {function|null} */
-    onEdit = null
-
-    /** 
-     * Callback Funktion wenn die Session abläuft
-     * @type {function|null} */
-    onSessionTimeout = null
-
-    /** 
-     * Callback Funktion wenn die Session abläuft
-     * @type {function|null} */
-    onDashboard = null
-
-    /** 
-     * Callback Funktion wenn Daten ankommen
-     * @type {function|null} */
-    onDataReceived = null
 
 
     /**
@@ -446,66 +734,95 @@ export class RealtimeSync {
         this.ws.onmessage = (event) => {
             /** @type {ClientServerMessage} */
             const data = JSON.parse(event.data);
-
-            // Test
             console.log("vom Server: ", data);
 
             switch (data.type) {
                 case "ERROR":
-                    // todo: Fehler anzeigen
+                    // TODO: Fehler anzeigen
                     console.error(data.payload);
                     break;
 
                 case "INITIAL_STATE":
-                    // Erste Spalte mit dem Hauptmenü generieren!
                     if (data.rows) {
-                        const menuTable = new DataTable("Hauptmenü", data.rows, "ID");
-                        const firstCol = new InteractiveCol("Hauptmenü");
-                        const uiTable = new InteractiveTable(menuTable, data.driverId || "system");
+                        // Das Hauptmenü kommt vom Server. Da es im DataTable-Format vorliegt,
+                        // behandeln wir es wie eine Tabelle, die gerendert wird.
+                        const menuTable = new DataTable(data.tableName || "", data.rows, data.idColName);
 
-                        firstCol.addComponent(uiTable);
-                        AppCore.appendColumn(firstCol);
-                        firstCol.focus();
-                    }
-                    break;
+                        // Wir nutzen den Generator (für Menüs oder Listen)
+                        // HINWEIS: Hier greifen wir auf das global geladene UI-Schema zu
+                        const html = UiGenerator.generateMenu(data.tableName || "Hauptmenü", this.uiLayoutTable, menuTable);
 
-                case "LOCK_UPDATED":
-                    break;
+                        // Spalte im UI anhängen (Hier nutzen wir Ihr AppCore-Prinzip)
+                        const targetElement = AppCore.appendColumnHTML("Hauptmenü", html);
 
-                case "DATA":
-                    if (data.rows) {
-                        // Wenn der Orchestrator auf Daten wartet, geben wir sie ihm
-                        if (typeof this.onDataReceived === "function") {
-                            this.onDataReceived(data.rows);
+                        // Controller scannt das Menü für Pfeiltasten & Buttons
+                        if (this.uiController) {
+                            this.uiController.parseContainer(targetElement);
+                            this.uiController.focusContainer(targetElement);
                         }
                     }
                     break;
 
+                case "LOCK_UPDATED":
+                    // Optional: Sperr-Status im UI visualisieren (z.B. Zeile rot färben)
+                    break;
+
+                case "DATA":
+                    if (!data.rows) return;
+
+                    // Verwandle die Array-of-Arrays Zeilen in ein echtes DataTable-Objekt
+                    const incomingTable = new DataTable(data.tableName || "", data.rows, data.idColName);
+                    let generatedHtml = "";
+
+                    // Je nach data.targetType die Antwort-Daten verarbeiten
+                    switch (data.targetType) {
+                        case "LIST":
+                            // Generiert die HTML-Tabelle anhand der UI-Konfigurations-Tabelle
+                            generatedHtml = UiGenerator.generateTable(data.tableName || "", this.uiLayoutTable, incomingTable) || "";
+                            break;
+
+                        case "FORM":
+                            // Konvertiert die erste Zeile der Daten in ein flaches Objekt für das Formular
+                            const currentRecordObj = incomingTable.getObject(1); // Holt die Zeile 1 als Key-Value-Paar
+                            generatedHtml = UiGenerator.generateForm(data.tableName || "", this.uiLayoutTable, currentRecordObj);
+                            break;
+
+                        case "DETAIL":
+                            // Analog für Detailansichten
+                            generatedHtml = UiGenerator.generateDetail(data.tableName || "", this.uiLayoutTable, incomingTable);
+                            break;
+                    }
+
+                    // Das generierte HTML in eine neue Spalte rendern und dem Controller übergeben
+                    if (generatedHtml && this.uiController) {
+                        // const targetElement = AppCore.appendColumnHTML(data.tableName, generatedHtml);
+                        AppCore.renderOrUpdateColumn(data.tableName, data.targetType, incomingTable, generatedHtml);
+
+                        // Der magische Schritt: Der Controller übernimmt Tastatur & Button-Module
+                        this.uiController.parseContainer(targetElement);
+                        this.uiController.focusContainer(targetElement);
+                    }
+                    break;
+
                 case "LOCK_DENIED":
+                    alert("Datensatz wird gerade von einem anderen Benutzer bearbeitet!");
                     break;
 
                 case "LOCK_RELEASED_CONFIRMED":
                     break;
 
                 case "SAVE_SUCCESS":
+                    console.log("Erfolgreich gespeichert!");
+                    // Optional: Dem Controller sagen, er soll den Fokus zurück auf die Tabelle legen
                     break;
 
                 case "DATA_MUTATED":
+                    // Ein anderer Nutzer hat Daten geändert. 
+                    // Hier können Sie prüfen, ob die geänderte Tabelle gerade offen ist, 
+                    // und sie im Hintergrund neu anfordern oder updaten.
                     break;
 
                 case "DELETE_SUCCESS":
-                    break;
-
-                case "UI_CONFIG_RECOV":
-                    // Antwort vom Server mit der Schablone
-                    if (data.payload) {
-                        const config = JSON.parse(data.payload);
-
-                        // data.rows könnte hier deine InfoEdge-Verknüpfungen enthalten!
-                        if (typeof this.onUiConfigReceived === "function") {
-                            this.onUiConfigReceived(config, data.rows || []);
-                        }
-                    }
                     break;
 
                 default:
@@ -548,22 +865,38 @@ export class RealtimeSync {
             console.error("WebSocket-Fehler aufgetreten:", error);
         };
     }
+
+    /**
+     * Vereinfacht das Senden von strukturierten Nachrichten an den Bun-Server
+     * @param {MessageType} type - Nachrichten Typ
+     * @param {Partial<ClientServerMessage>} [payload={}] - Daten zum Senden
+     */
+    send(type, payload = {}) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type, payload }));
+        } else {
+            console.error("WebSocket ist nicht offen. Nachricht verworfen:", type);
+        }
+    }    
 }
 
+
+
+// ===================================================
+
+// ============ Beispiel Verwendung =================
+
+
+
 // =========================================================================
-//   ZENTRALER DATEN-ORCHESTRATOR
+//   ZENTRALER APPMANAGER & DOM ORCHESTRATOR
 // =========================================================================
 
-// Zentraler Anwendungs-Manager (Orchestrator)
 export class AppCore {
-    /** @type {Array<InteractiveCol>} */
-    static columns = [];
-    /** @type {number} Index der aktuell aktiven Spalte */
-    static activeColIndex = 0;
     /** @type {RealtimeSync|null} */
     static sync = null;
-    /** @type {any|null} Hier wird die Schema-Instanz zur Abfrage abgelegt */
-    static currentSchema = null;
+    /** @type {UiController|null} */
+    static controller = null;
 
     /**
      * Initialisiert die App und hängt den Basis-Container ein
@@ -576,370 +909,142 @@ export class AppCore {
             </div>
         `;
 
-        // Synchronisation starten
-        AppCore.sync = new RealtimeSync(serverUrl);
+        // 1. Controller und Sync instanziieren und kreuzverweisen
+        AppCore.controller = new UiController(null); // Wird gleich im Sync gesetzt
+        AppCore.sync = new RealtimeSync(serverUrl, AppCore.controller);
+        AppCore.controller.sync = AppCore.sync;
+
+        // 2. Verbindung starten
         AppCore.sync.connect();
 
-        // Globale Tastatur registrieren
+        // 3. Globale Tastatur-Navigation für den horizontalen Spaltenwechsel (Alt + Pfeiltasten)
         AppCore.registerGlobalEvents();
     }
 
-    /**
-     * Fügt eine neue Spalte hinzu und entfernt alle nachfolgenden (macOS Finder Style)
-     * @param {InteractiveCol} col 
-     */
-    static appendColumn(col) {
-        const container = document.getElementById("app-container");
-        if (!container) return;
+    // Hier merken wir uns die aktuell im UI geladenen DataTable-Instanzen
+    static loadedTables = new Map();
 
-        // Alle UI-Elemente nach der aktuellen aktiven Spalte entfernen
-        while (AppCore.columns.length > AppCore.activeColIndex + 1) {
-            const oldCol = AppCore.columns.pop();
-            oldCol?.domElement.remove();
+    /**
+     * Gibt eine bestehende DatenTabelle zurück
+     * @param {string} tableId - ID der Tabelle
+     * @returns {DataTable<any>}
+     */
+    static getLoadedTable(tableId) {
+        return AppCore.loadedTables.get(tableId);
+    }
+
+    /**
+     * Entscheidet, ob eine Spalte neu geöffnet oder nur aktualisiert (refreshed) wird
+     * @param {string} tableName - Name der Tabelle
+     * @param {string} targetType - Zile Typ ? "LIST", "FORM", ...
+     * @param {DataTable<any>} dataTable - DatenTabelle
+     * @param {string} html - HTML String ????? 
+     */
+    static renderOrUpdateColumn(tableName, targetType, dataTable, html) {
+        // Prüfen, ob dieses UI-Element bereits im DOM existiert
+        const existingView = document.querySelector(`[data-table-id="${tableName}"][data-target-type="${targetType}"]`);
+
+        // Instanz für spätere Sortierung/Filterung im Cache merken
+        AppCore.loadedTables.set(tableName, dataTable);
+
+        if (existingView) {
+            // REFRESH: Bestehendes HTML einfach austauschen!
+            const bodyContainer = existingView.closest(".app-column-body");
+            if (bodyContainer) {
+                bodyContainer.innerHTML = html;
+
+                // Dem Controller sagen, er soll das geänderte HTML neu scannen
+                const newView = bodyContainer.querySelector(".ui-view-container");
+                AppCore.controller.parseContainer(newView);
+                AppCore.controller.focusContainer(newView);
+                return;
+            }
         }
 
-        AppCore.columns.push(col);
-        container.appendChild(col.domElement);
+        // NEU ANHÄNGEN: Wenn die Spalte noch nicht offen war
+        const targetElement = AppCore.appendColumnHTML(tableName, html);
+        AppCore.controller.parseContainer(targetElement);
+        AppCore.controller.focusContainer(targetElement);
+    }
 
-        // Automatisch nach rechts scrollen
+    /**
+     * Erstellt eine neue visuelle Spalte im macOS-Finder-Stil, entfernt alle rechts davon stehenden Spalten
+     * und bettet das generierte HTML ein.
+     * @param {string} title - Titel der Spalte (wird im Header angezeigt)
+     * @param {string} innerHtml - Das vom UiGenerator erzeugte HTML
+     * @returns {HTMLElement} - Das innere Container-Element für den UiController (.ui-view-container)
+     */
+    static appendColumnHTML(title, innerHtml) {
+        const container = document.getElementById("app-container");
+        if (!container) throw new Error("App-Container nicht gefunden");
+
+        // 1. Ermittle, von wo aus die Aktion getriggert wurde (aktive Spalte)
+        // Falls kein Element aktiv ist, fangen wir bei Spalte 0 an.
+        let currentColIdx = -1;
+        if (AppCore.controller && AppCore.controller.activeContainer) {
+            const parentCol = AppCore.controller.activeContainer.closest(".app-column");
+            if (parentCol) {
+                currentColIdx = parseInt(parentCol.getAttribute("data-col-index") || "0", 10);
+            }
+        }
+
+        // 2. Kaskadierendes Löschen: Alle Spalten RECHTS von der aktuellen Spalte abschneiden
+        const targetColIdx = currentColIdx + 1;
+        const existingCols = container.querySelectorAll(".app-column");
+        existingCols.forEach(col => {
+            const idx = parseInt(col.getAttribute("data-col-index") || "0", 10);
+            if (idx >= targetColIdx) {
+                col.remove();
+            }
+        });
+
+        // 3. Neue Spalten-Hülle bauen
+        const colDiv = document.createElement("div");
+        colDiv.className = "app-column";
+        colDiv.setAttribute("data-col-index", targetColIdx.toString());
+        colDiv.style.cssText = "display: flex; flex-direction: column; width: 350px; min-width: 350px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e1e4e8; height: 100%;";
+
+        // Spalten-Kopf (Header)
+        colDiv.innerHTML = `
+            <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
+                ${title}
+            </div>
+            <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px;">
+                ${innerHtml}
+            </div>
+        `;
+
+        container.appendChild(colDiv);
+
+        // Nach rechts scrollen
         container.scrollTo({ left: container.scrollWidth, behavior: "smooth" });
+
+        // Das interaktive Element für den Controller zurückgeben
+        return colDiv.querySelector(".ui-view-container");
     }
 
     static registerGlobalEvents() {
         window.addEventListener("keydown", (e) => {
             // Horizontaler Spaltenwechsel mit Alt + ArrowLeft / ArrowRight
-            if (e.altKey && e.key === "ArrowLeft") {
-                if (AppCore.activeColIndex > 0) {
-                    AppCore.activeColIndex--;
-                    AppCore.columns[AppCore.activeColIndex].focus();
-                }
-                e.preventDefault();
-                return;
-            }
-            if (e.altKey && e.key === "ArrowRight") {
-                if (AppCore.activeColIndex < AppCore.columns.length - 1) {
-                    AppCore.activeColIndex++;
-                    AppCore.columns[AppCore.activeColIndex].focus();
-                }
-                e.preventDefault();
-                return;
-            }
+            if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+                const container = document.getElementById("app-container");
+                if (!container || !AppCore.controller || !AppCore.controller.activeContainer) return;
 
-            // Vertikale Navigation/Aktionen an die aktive Tabelle/Spalte weiterreichen
-            const activeCol = AppCore.columns[AppCore.activeColIndex];
-            if (activeCol && activeCol.activeComponent) {
-                activeCol.activeComponent.handleKeyDown(e);
-            }
-        });
-    }
-}
+                const currentCol = AppCore.controller.activeContainer.closest(".app-column");
+                if (!currentCol) return;
 
-// =========================================================================
-//   DYNAMISCHES EINGABE-FORMULAR
-// =========================================================================
-export class InteractiveForm {
-    /**
-     * @param {string} driverId
-     * @param {string} tableName
-     * @param {string} recordId
-     * @param {Object} fieldsConfig - Die vordefinierte Spalten- & Label-Konfiguration
-     * @param {Object} currentData - Die aktuellen Werte aus der DB
-     */
-    constructor(driverId, tableName, recordId, fieldsConfig, currentData) {
-        this.driverId = driverId;
-        this.tableName = tableName;
-        this.recordId = recordId;
-        this.fieldsConfig = fieldsConfig; // z.B. { name: { label: "Kundenname", type: "text" } }
-        this.currentData = currentData;
-        this.hasLock = false;
+                const currentIdx = parseInt(currentCol.getAttribute("data-col-index") || "0", 10);
+                let targetIdx = e.key === "ArrowLeft" ? currentIdx - 1 : currentIdx + 1;
 
-        this.container = document.createElement("div");
-        this.container.className = "form-wrapper";
-        this.container.style.cssText = "padding: 15px; border: 2px solid #ccc; border-radius: 4px; background: #fff; display: flex; flex-direction: column; gap: 10px;";
-
-        this.initDOM();
-    }
-
-    initDOM() {
-        let fieldsHtml = `<h4 style="margin:0 0 10px 0;">Bearbeiten: ${this.tableName}</h4>`;
-
-        // Generiere Eingabefelder basierend auf der vordefinierten Server-Konfiguration
-        for (const [fieldName, config] of Object.entries(this.fieldsConfig)) {
-            const value = this.currentData[fieldName] ?? "";
-            fieldsHtml += `
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: #555;">${config.label}</label>
-                    <input type="${config.type || 'text'}" data-field="${fieldName}" value="${value}" disabled 
-                           style="padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: #f8f9fa;">
-                </div>
-            `;
-        }
-
-        fieldsHtml += `
-            <div style="margin-top: 10px; font-size: 0.8em; color: #666;" class="lock-status">
-                Drücke <kbd>E</kbd> zum Bearbeiten (Sperre anfordern)
-            </div>
-        `;
-
-        this.container.innerHTML = fieldsHtml;
-
-        // Klick aktiviert die Spalte
-        this.container.addEventListener("click", () => {
-            this.focusThisCol();
-        });
-    }
-
-    focusThisCol() {
-        const colIdx = AppCore.columns.findIndex(c => c.components.includes(this));
-        if (colIdx !== -1) {
-            AppCore.activeColIndex = colIdx;
-            AppCore.columns[colIdx].activeComponentIndex = AppCore.columns[colIdx].components.indexOf(this);
-            AppCore.columns[colIdx].focus();
-        }
-    }
-
-    /**
-     * Steuerung des Formulars über die Tastatur
-     */
-    handleKeyDown(e) {
-        // E = Edit-Modus (Sperre beim Server anfordern)
-        if (e.key.toLowerCase() === "e" && !this.hasLock) {
-            e.preventDefault();
-            this.requestServerLock();
-        }
-
-        // ENTER = Speichern, wenn Sperre aktiv ist
-        if (e.key === "Enter" && this.hasLock) {
-            e.preventDefault();
-            this.saveData();
-        }
-
-        // ESCAPE = Abbrechen / Sperre freigeben
-        if (e.key === "Escape" && this.hasLock) {
-            e.preventDefault();
-            this.releaseServerLock();
-        }
-    }
-
-    requestServerLock() {
-        console.log("Fordere Datensatz-Sperre an...");
-        AppCore.sync?.ws?.send(JSON.stringify({
-            type: "REQUEST_LOCK",
-            driverId: this.driverId,
-            tableName: this.tableName,
-            recordId: this.recordId
-        }));
-    }
-
-    // Wird aufgerufen, wenn der Server LOCK_UPDATED / LOCK_CONFIRMED sendet
-    enableEditing(success) {
-        const statusEl = this.container.querySelector(".lock-status");
-        const inputs = this.container.querySelectorAll("input");
-
-        if (success) {
-            this.hasLock = true;
-            if (statusEl) statusEl.innerHTML = "<span style='color: green;'>🔒 Gesperrt für dich. Enter zum Speichern, Esc zum Abbrechen.</span>";
-            inputs.forEach(input => {
-                input.removeAttribute("disabled");
-                input.style.background = "#fff";
-            });
-            // Fokus auf das erste Eingabefeld setzen
-            inputs[0]?.focus();
-        } else {
-            if (statusEl) statusEl.innerHTML = "<span style='color: red;'>⚠️ Datensatz wird von anderem Benutzer bearbeitet!</span>";
-        }
-    }
-
-    saveData() {
-        const inputs = this.container.querySelectorAll("input");
-        const updatedData = {};
-
-        inputs.forEach(input => {
-            const field = input.getAttribute("data-field");
-            if (field) updatedData[field] = input.value;
-        });
-
-        console.log("Sende bearbeitete Daten an Server...", updatedData);
-        AppCore.sync?.ws?.send(JSON.stringify({
-            type: "SAVE_DATA",
-            driverId: this.driverId,
-            tableName: this.tableName,
-            recordId: this.recordId,
-            payload: JSON.stringify(updatedData)
-        }));
-
-        this.disableFields();
-    }
-
-    releaseServerLock() {
-        AppCore.sync?.ws?.send(JSON.stringify({
-            type: "RELEASE_LOCK",
-            driverId: this.driverId,
-            tableName: this.tableName,
-            recordId: this.recordId
-        }));
-        this.disableFields();
-    }
-
-    disableFields() {
-        this.hasLock = false;
-        const statusEl = this.container.querySelector(".lock-status");
-        const inputs = this.container.querySelectorAll("input");
-
-        if (statusEl) statusEl.innerHTML = "Drücke <kbd>E</kbd> zum Bearbeiten";
-        inputs.forEach(input => {
-            input.setAttribute("disabled", "true");
-            input.style.background = "#f8f9fa";
-        });
-        window.focus(); // Fokus zurück aufs Fenster für Keyboard-Router
-    }
-}
-
-
-// =========================================================================
-//   ZENTRALER DATA ORCHESTRATOR (DEKLARATIV & DATEIBASIERT)
-// =========================================================================
-
-// folgende Überlegungen:
-// Beim Start "index"(.html oder .md) vom server abrufen und in der ersten Spalte darstellen
-// Dieses muss ein Hauptmenü enthalten mit dem Aufbau | "Bezeichnung" | "Link" | welches Bestimmt(Link) was zu welchem Menüpunkt gehört
-// Wenn in dieser Liste "ENTER" oder geklickt wird, wird die verknüpfte .html oder .md abgerufen
-// nach dem Einbau in die nächste Spalte muss diese HTML geparst werden um Listen und Formulare nachzuladen. (eventuell den HTML-Parser (lidoc.js) erweitern) 
-
-
-export class DataOrchestrator {
-    /**
-     * Steuert dynamisch, welche UI-Datei geladen und wie die nächste Spalte gerendert wird
-     * @param {string} driverId 
-     * @param {string} tableName 
-     * @param {string} recordId 
-     */
-    static async loadNextSpalte(driverId, tableName, recordId) {
-        if (!AppCore.sync || !AppCore.sync.ws) return;
-
-        // 1. Hole UI-Definition und verknüpfte Edges vom Server
-        AppCore.sync.ws.send(JSON.stringify({
-            type: "GET_UI_CONFIG",
-            tableName: tableName
-        }));
-
-        // Callback, wenn der Server die UI-Schablone und Edges zurücksendet
-        AppCore.sync.onUiConfigReceived = (uiConfig, edges) => {
-            const nextCol = new InteractiveCol(uiConfig.title || `Details: ${tableName}`);
-
-            // 2. PRÜFEN: Welcher UI-Typ ist in der Konfigurationsdatei vordefiniert?
-            if (uiConfig.viewType === "form") {
-                // Echte Daten für das Formular anfordern
-                AppCore.sync.ws.send(JSON.stringify({
-                    type: "GET_DATA",
-                    driverId: driverId,
-                    tableName: tableName,
-                    recordId: recordId,
-                    idColName: "gsid"
-                }));
-
-                // Wenn die echten Tabellendaten eintreffen, Formular bauen
-                AppCore.sync.onDataReceived = (serverRows) => {
-                    const rowData = serverRows;
-
-                    const formComponent = new InteractiveForm(
-                        driverId,
-                        tableName,
-                        recordId,
-                        uiConfig.fields, // Schablone für Übersetzungen & Reihenfolge
-                        rowData
-                    );
-
-                    nextCol.addComponent(formComponent);
-
-                    // Verknüpfte Relationen (Edges) als Liste unter dem Formular anzeigen
-                    if (edges && edges.length > 0) {
-                        DataOrchestrator.renderAttachedEdges(nextCol, edges, driverId, recordId);
+                const targetCol = container.querySelector(`.app-column[data-col-index="${targetIdx}"]`);
+                if (targetCol) {
+                    const viewContainer = targetCol.querySelector(".ui-view-container");
+                    if (viewContainer instanceof HTMLElement) {
+                        AppCore.controller.focusContainer(viewContainer);
+                        e.preventDefault();
                     }
-                };
-
-            } else if (uiConfig.viewType === "table") {
-                // ... Hier wird analog eine vordefinierte Untertabelle verarbeitet
-            }
-
-            // Spalte im UI anhängen und Fokus setzen
-            AppCore.appendColumn(nextCol);
-            AppCore.activeColIndex = AppCore.columns.length - 1;
-            AppCore.columns[AppCore.activeColIndex].focus();
-        };
-    }
-
-    /**
-     * Rendert eine Liste verknüpfter Unter-Elemente (Edges) direkt in die Spalte
-     */
-    static renderAttachedEdges(columnInstance, edges, driverId, currentRecordId) {
-        const edgeContainer = document.createElement("div");
-        edgeContainer.style.cssText = "margin-top: 15px; padding: 10px; background: #f1f3f5; border-radius: 4px;";
-        edgeContainer.innerHTML = `<h5 style='margin:0 0 5px 0;'>Verknüpfte Informationen:</h5>`;
-
-        // Generiere Links basierend auf der InfoEdge-Struktur (source_id -> target_id)
-        const listHtml = edges.map(edge => {
-            return `<div class="edge-link" data-target="${edge.target_table}" style="padding: 4px; color: #007bff; cursor: pointer; text-decoration: underline;">
-                » ${edge.relation_label} (${edge.target_title})
-            </div>`;
-        }).join("");
-
-        edgeContainer.insertAdjacentHTML("beforeend", listHtml);
-        columnInstance.domElement.appendChild(edgeContainer);
-
-        // Klick auf eine Verknüpfung triggert die nächste Spalte (macOS Finder Style)
-        edgeContainer.querySelectorAll(".edge-link").forEach(el => {
-            el.addEventListener("click", () => {
-                const targetTable = el.getAttribute("data-target");
-                if (targetTable) {
-                    DataOrchestrator.loadNextSpalte(driverId, targetTable, currentRecordId);
                 }
-            });
+            }
         });
     }
 }
-
-
-// /**
-//  * Registriert globale Tatsturereignisse für die Tabellen Navigation
-//  */
-// export function registerEvents() {
-//     // Einmaliger globaler Event-Listener für das gesamte Dokument
-//     window.addEventListener("keydown", (e) => {
-//         // Nur ausführen, wenn überhaupt eine Tabelle aktiv/fokussiert ist
-//         if (InteractiveTable.activeInstance) {
-//             InteractiveTable.activeInstance.handleKeyDown(e);
-//         }
-//     });
-// }
-
-// =================================================
-//   Beispiel
-// -----------
-
-// <!DOCTYPE html>
-// <html lang="de">
-// <head>
-//     <meta charset="UTF-8">
-//     <title>Echtzeit Spalten Anwendung</title>
-// </head>
-// <body>
-//     <script type="module">
-//         import { AppCore } from "./infoui.js";
-//         import { Schema } from "./infoschema.js";
-
-//         // 1. App starten (Verbindung zum Bun Server aufbauen)
-//         AppCore.init("ws://localhost:3000/socket");
-
-//         // 2. Optional: Globales Schema laden (wird später über einen HTTP/WS-Endpunkt vom Server bezogen)
-//         // AppCore.currentSchema = myLoadedSchemaInstance;
-//     </script>
-// </body>
-// </html>
-
-// # Zusammenfassung der Funktionsweise bei Tastaturbedienung:
-// - Erster Zustand: Der Client verbindet sich. Der Server schickt INITIAL_STATE. Spalte 1 (Hauptmenü) baut sich auf.
-// - Navigation: Mit ArrowUp / ArrowDown navigierst du durch die Zeilen. Mit ArrowLeft / ArrowRight durch die Spalten-Zellen.
-// - Auswahl (ENTER): Drückst du auf einem Treiber oder Kunden-Eintrag ENTER, fängt das die Tabelle ab und ruft DataOrchestrator.loadNextSpalte auf.
-// - Server-Anfrage: Der Orchestrator schickt eine saubere ClientServerMessage an den Bun-Server.
-// - Dynamischer Anbau: Der Server antwortet mit DATA, die RealtimeSync fängt es ab, baut eine neue Unter-Laufzeit-Tabelle (DataTable), steckt sie in eine neue InteractiveCol und schiebt das UI flüssig nach rechts weiter. Mit Alt + ArrowLeft wechselst du jederzeit die Spalte zurück.

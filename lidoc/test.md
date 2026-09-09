@@ -1,3 +1,13 @@
+---
+test_schema: test:test
+
+test_cols:
+- vorname Vorname des Kunden
+- nachname Nachname
+- email Email-Adresse
+
+---
+
 === test
 - [Test](/Test1)
 - [Test 2](/Test 2)
@@ -15,6 +25,11 @@
 | Name 3 | Wert 3 | [ color-green]
 |* Name 4 | Wert 4 |
 | Name 5 | Wert 5 [ color-blue] |
+
+[table-stripes data-schema="test:test" data-cols="test_cols"]
+| |
+
+
 
 ## Liste
 1. Name1
