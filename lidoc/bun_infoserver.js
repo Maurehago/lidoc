@@ -5,46 +5,19 @@
 
 import { join } from "path";
 import { mkdir } from "fs/promises";
+import { InfoSchema, InfoTableUI_fields, InfoFormUI_fields } from "./infoschema.js";
+
 //import { JsonFileDriver } from "./db_drivers.js";
 
+// =========================================
+//   Typen
+// ---------
 
 /**
- * Eine einzelne Datenzeile. Kann primitive Werte oder Binärdaten enthalten.
- * @typedef {Array<string | number | bigint | boolean | Uint8Array | null>} DataRow
+ * DatenTypen vom Schema
+ * @import {ApplicationConfig, ClientServerMessage, Token, DBDriverInterface, DriverConfig} from "./infoschema.js"
  */
 
-/**
- * Das universelle, zweidimensionale Tabellenformat für alle Treiber und Schichten.
- * Die ERSTE Zeile (Index 0) enthält IMMER die Spaltennamen (Header).
- * @typedef {Array<DataRow>} DataRows
- */
-
-/**
- * @typedef {Object} Token
- * @property {string} gsid - Eindeutige Session ID
- * @property {string} userId - ID des Users
- * @property {string} username - Name des Benutzers
- * @property {number} exp - Gültigkeitszeitraum
- */
-
-/**
- * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
- * Diese Struktur wird in der lokalen config.json persistiert.
- * @typedef {Object} DriverConfig
- * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
- * @property {"SQLITE" | "FIREBIRD" | "JSON_FILES" | "HTML_FRAGMENTS"} type - Die technologische Art des Treibers
- * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
- * @property {string} connectionString - Pfad zur Datei (SQLite/JSON) oder Server-Verbindungsdaten (Firebird)
- */
-
-/**
- * Die globale Konfigurationsdatei der Anwendung, abgelegt im Benutzer-Appdata-Ordner.
- * @typedef {Object} ApplicationConfig
- * @property {string} appName - Der Name der App (aus Startparameter oder Default)
- * @property {boolean} isNewSystem - Flag; "true" wenn das System im Zustand "NULL" ist (keine Treiber konfiguriert)
- * @property {Array<DriverConfig>} drivers - Liste aller vom Benutzer eingerichteten Datenquellen
- * @property {string | null} defaultDriverId - Optionaler Standard-Treiber, der beim Start direkt geöffnet wird
- */
 
 /**
  * Repräsentiert eine aktive Bearbeitungssperre eines Datensatzes (Concurrency Management).
@@ -58,57 +31,6 @@ import { mkdir } from "fs/promises";
  * @property {string} lockTime - Uhrzeit des Sperr-Zeitpunkts (LocaleTimeString)
  */
 
-/**
- * Definiert die Schnittstelle, die JEDER Datenbank- oder Dateitreiber implementieren MUSS.
- * @typedef {Object} DBDriverInterface
- * @property {string} id - Entspricht DriverConfig.id
- * @property {string} type - Entspricht DriverConfig.type
- * @property {string} name - Name des Teibers
- * @property {() => Promise<DataRows>} getTables - Holt alle Tabellen aus der Datenbank
- * @property {(tableName: string) => Promise<DataRows>} getRows - Holt alle Zeilen einer Tabelle inkl. Header
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<DataRows>} getRecord - Holt genau eine Zeile + Header für die Detailansicht
- * @property {(tableName: string, deltaRows: DataRows, idColName: string) => Promise<boolean>} saveRows - Schreibt nur die geänderten Spalten (Delta-Array) in die DB
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<boolean>} deleteRow - Löscht einen spezifischen Datensatz aus der Tabelle
- * @property {(newSchemaJson: string) => Promise<{success: boolean, message: string}>} [migrateSchema] - Optional: Führt Tabellen-Migrationen bei Schema-Updates aus
- */
-
-
-/**
- * Alle erlaubten MessageTypen für das System.
- * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
- * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
- * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
- * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
- */
-
-/**
- * Ziel Typen für die Verarbeitung der Messages
- * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
- */
-
-
-/**
- * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
- * server:"INITIAL_STATE" -> client // bei erster Verbindung
- * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
- * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
- *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
- * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
- *                          server:"LOCK_RELEASED_CONFIRMED" -> client
- * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * @typedef {Object} ClientServerMessage
- * @property {MessageType} type - Aktionstyp
- * @property {string} [driverId] - Ziel-Treiber für die Aktion
- * @property {string} [tableName] - Ziel-Tabelle für die Aktion
- * @property {string} [recordId] - Ziel-Datensatz-ID (falls anwendbar)
- * @property {string} [idColName] - Name der Primärschlüssel-Spalte (Standard meist "gsid")
- * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
- * @property {string} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
- * @property {DataRows} [rows] - Das Datenpaket (entweder gesamte Tabelle oder Delta-Array bei SAVE)
- */
 
 // =========================================================================
 //   SERVER BOOTSTRAPPING & INITIALISIERUNG (server.js)
@@ -192,10 +114,13 @@ async function loadOrInitializeConfig() {
 
     /** @type {ApplicationConfig} */
     const freshConfig = {
-        appName: APP_NAME,
-        isNewSystem: true,
-        drivers: [],
-        defaultDriverId: null
+        appName: APP_NAME
+        , isNewSystem: true
+        , drivers: []
+        , defaultDriverId: null
+        , infoTables: [[...InfoTableUI_fields]]
+        , infoForms: [[...InfoFormUI_fields]]
+        , appSchema: new InfoSchema()
     };
 
     await saveApplicationConfig(freshConfig);
@@ -320,7 +245,7 @@ export class RealtimeServer {
         /** @type {ClientServerMessage} */
         return {
             type: "ERROR"
-            , payload: message
+            , payload: { message }
         };
     }
 
@@ -333,7 +258,7 @@ export class RealtimeServer {
         /** @type {ClientServerMessage} */
         return {
             type: "LOCK_UPDATED"
-            , payload: JSON.stringify(this.activeLocks.values())
+            , payload: this.activeLocks.values()
         };
     }
 
@@ -460,35 +385,33 @@ export class RealtimeServer {
                     // Initialisierung der ersten Menüspalte für den Browser
                     const startMenuRows = [["ID", "Label", "TargetType", "Payload"]];
 
-                    if (currentConfig.isNewSystem || this.activeDrivers.size === 0) {
-                        // Der Server meldet den Zustand "NULL" an das Frontend
-                        startMenuRows.push([
-                            "wizard_setup",
-                            "System einrichten (Keine Verbindungen vorhanden)",
-                            "WIZARD",
-                            ""
-                        ]);
-                    } else {
-                        // Der Server ist betriebsbereit und listet alle konfigurierten Datenbank-Ziele auf
-                        for (const driverCfg of currentConfig.drivers) {
-                            startMenuRows.push([
-                                driverCfg.id,
-                                `Datenquelle: ${driverCfg.name} (${driverCfg.type})`,
-                                "DRIVER_MAIN",
-                                driverCfg.id
-                            ]);
-                        }
+                    // Diese Verwaltungs-Punkte stehen IMMER zur Verfügung, um das System live anzupassen
+                    startMenuRows.push(["sys_schema_edit", "Schema Bearbeitung", "CONFIG_SCHEMA", ""]);
+                    startMenuRows.push(["sys_ui_edit", "UI Darstellung Bearbeiten", "CONFIG_UI", ""]);
+                    startMenuRows.push(["sys_drivers_edit", "Daten-Verbindungen Verwalten", "CONFIG_DRIVERS", ""]);
+
+                    // Erst wenn das System eingerichtet ist, listen wir die echten Datenquellen auf
+                    if (!currentConfig.isNewSystem && this.activeDrivers.size > 0) { //
+                        for (const driverCfg of currentConfig.drivers) { //
+                            startMenuRows.push([ //
+                                driverCfg.id, //
+                                `Datenquelle: ${driverCfg.name}`, //
+                                "DRIVER_MAIN", //
+                                driverCfg.id //
+                            ]); //
+                        } //
                     }
 
                     // Schicke dem Client das initiale State-Paket über den Socket
                     /** @type {ClientServerMessage} */
                     const init_data = {
-                        type: "INITIAL_STATE",
+                        type: "INITIAL_STATE"
                         //locks: Object.fromEntries(this.activeLocks), // Aktuelle Sperren als Objekt
                         //id: "root_column",
-                        targetType: "MENU",
+                        ,targetType: "MENU"
                         //title: `${currentConfig.appName} - Hauptmenü`,
-                        rows: startMenuRows
+                        ,rows: startMenuRows
+                        , payload: currentConfig
                     }
 
                     ws.send(JSON.stringify(init_data));
@@ -498,7 +421,7 @@ export class RealtimeServer {
                         // Prüfen, ob die Datenstruktur des Nutzers überhaupt existiert
                         if (!ws.data || !ws.data.userId) {
                             /** @type {ClientServerMessage} */
-                            const msg = { type: "ERROR", payload: "No Login." };
+                            const msg = this.getErrorMessage("No Login.");
 
                             ws.send(JSON.stringify(msg));
                             ws.close(4001, "Nicht authentifiziert");
@@ -508,7 +431,7 @@ export class RealtimeServer {
                         // Prüfen, ob die Session-Zeit (exp) abgelaufen ist
                         if (Date.now() > ws.data.exp) {
                             /** @type {ClientServerMessage} */
-                            const msg = { type: "ERROR", payload: "Session Timeout." };
+                            const msg = this.getErrorMessage("Session Timeout.");
 
                             ws.send(JSON.stringify(msg));
                             ws.close(4001, "Session abgelaufen");
@@ -533,10 +456,10 @@ export class RealtimeServer {
                             ? `${msg.driverId}_${msg.tableName}_${msg.recordId}`
                             : "";
 
-                        const { type, driverId, tableName, recordId, idColName, targetType, payload, rows  } = msg;
+                        const { type, driverId, tableName, recordId, idColName, targetType, payload, rows } = msg;
 
                         /** @type {ClientServerMessage} */
-                        const answer = {type: "ERROR", driverId, tableName, recordId, idColName};
+                        const answer = { type: "ERROR", driverId, tableName, recordId, idColName };
 
                         switch (msg.type) {
 
@@ -549,9 +472,9 @@ export class RealtimeServer {
                                     // Wir liefern die Tabellenstruktur, um Treiber-Daten einzugeben
                                     answer.type = "DATA";
                                     answer.targetType = "CONFIG";
-                                    answer.payload = JSON.stringify(currentConfig);
+                                    answer.payload = currentConfig;
                                     //const answer = { type: "DATA", targetType: "FORM", rows: wizardForm };
-                                    
+
                                     ws.send(JSON.stringify(answer));
                                     break;
                                 }
@@ -572,7 +495,7 @@ export class RealtimeServer {
                                     answer.type = "DATA";
                                     answer.targetType = "LIST";
                                     answer.rows = tablesList;
-                                    
+
                                     ws.send(JSON.stringify(answer));
                                     break;
                                 }
@@ -580,7 +503,7 @@ export class RealtimeServer {
                                 // Fall C: Eine Tabelle wurde gewählt -> Hole Datensätze oder Datensatz
                                 if (driverId && tableName) {
                                     const driver = this.activeDrivers.get(driverId);
-                                    
+
                                     if (!driver) {
                                         ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
                                         break;
@@ -615,7 +538,6 @@ export class RealtimeServer {
                             // =================================================================
                             case "REQUEST_LOCK": {
                                 if (!lockKey || !driverId || !tableName || !recordId) {
-                                    answer.payload = "Wrong Lock-Params.";
                                     ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.")));
                                     break;
                                 }
@@ -626,7 +548,7 @@ export class RealtimeServer {
                                     if (currentLock && currentLock.username !== ws.data.username) {
                                         // Zugriff verweigert! Client erhält Fehlermeldung und darf nicht editieren
                                         answer.type = "LOCK_DENIED";
-                                        answer.payload = `Datensatz wird bereits von '${currentLock.username}' bearbeitet (seit ${currentLock.lockTime}).`;
+                                        answer.payload = { message: `Datensatz wird bereits von '${currentLock.username}' bearbeitet (seit ${currentLock.lockTime}).` };
 
                                         ws.send(JSON.stringify(answer));
                                         break;
@@ -672,7 +594,7 @@ export class RealtimeServer {
 
                                         // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
                                         server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
-                                        
+
                                         // Benutzer Informieren das die Sperre aufgehoben ist
                                         ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED" }));
                                     }
@@ -730,7 +652,7 @@ export class RealtimeServer {
 
                                         // Dem ausführenden Client den Erfolg bestätigen
                                         answer.type = "SAVE_SUCCESS";
-                                        answer.payload = "Daten erfolgreich geschrieben.";
+                                        answer.payload = { message: "Daten erfolgreich geschrieben." };
                                         ws.send(JSON.stringify(answer));
                                     } else {
                                         ws.send(JSON.stringify(this.getErrorMessage("Der Datenbanktreiber hat das Speichern abgelehnt (Validierungsfehler).")));
@@ -767,7 +689,7 @@ export class RealtimeServer {
                                         server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
 
                                         answer.type = "DELETE_SUCCESS";
-                                        answer.payload = "Datensatz permanent entfernt.";
+                                        answer.payload = { message: "Datensatz permanent entfernt." };
                                         ws.send(JSON.stringify(answer));
                                     } else {
                                         ws.send(JSON.stringify(this.getErrorMessage("Der Treiber konnte den Datensatz nicht löschen.")));

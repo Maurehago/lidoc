@@ -73,113 +73,113 @@ export function isClass(obj) {
 }
 
 
-/**
- * Bindet eine KlassenInstanz an einen Datensatz (Array mit Werten)
- * @template T
- * @param {Object<string,any>} instance - Klassen Instanz Objekt
- * @param {Array<any>} rowArray - DatenZeile
- * @param {number} rowIndex - DatenZeile
- * @param {DataTable<T>} list - Spalten Index Objekt
- * @returns {any} mit Settern und Gettern verbessertes Instanz-Objekt
- */
-export function bindRow(instance, rowArray, rowIndex, list) {
-    instance._row = rowArray;
-    instance._rowIndex = rowIndex;
-    instance._columnIndex = list.columnIndex;
-    instance._changes = new Set(); // Set mit Spaltennamen, dessen Werte geändert worden sind
-    instance._isNew = false; // Standardmäßig existiert der Datensatz schon in der DB
-    instance._isDeleted = false; // Wenn Datensatz als gelöscht markiert ist
-    instance._list = list;
+// /**
+//  * Bindet eine KlassenInstanz an einen Datensatz (Array mit Werten)
+//  * @template T
+//  * @param {Object<string,any>} instance - Klassen Instanz Objekt
+//  * @param {Array<any>} rowArray - DatenZeile
+//  * @param {number} rowIndex - DatenZeile
+//  * @param {DataTable<T>} list - Spalten Index Objekt
+//  * @returns {any} mit Settern und Gettern verbessertes Instanz-Objekt
+//  */
+// export function bindRow(instance, rowArray, rowIndex, list) {
+//     instance._row = rowArray;
+//     instance._rowIndex = rowIndex;
+//     instance._columnIndex = list.columnIndex;
+//     instance._changes = new Set(); // Set mit Spaltennamen, dessen Werte geändert worden sind
+//     instance._isNew = false; // Standardmäßig existiert der Datensatz schon in der DB
+//     instance._isDeleted = false; // Wenn Datensatz als gelöscht markiert ist
+//     instance._list = list;
 
-    /**
-     * Fragt ab ob dieser Datensatz bearbeitet worden ist
-     * @returns {boolean} true wenn der Datensatz bearbeitet worden ist
-     */
-    instance.isChanged = function () {
-        return this._changes.size > 0;
-    };
+//     /**
+//      * Fragt ab ob dieser Datensatz bearbeitet worden ist
+//      * @returns {boolean} true wenn der Datensatz bearbeitet worden ist
+//      */
+//     instance.isChanged = function () {
+//         return this._changes.size > 0;
+//     };
 
-    /**
-     * Löscht alle Änderungs-Marker von dem Datensatz
-     */
-    instance.commitChanges = function () {
-        this._changes.clear(); // Nach dem Server-Sync einfach die Änderungs-Flags löschen
-    };
+//     /**
+//      * Löscht alle Änderungs-Marker von dem Datensatz
+//      */
+//     instance.commitChanges = function () {
+//         this._changes.clear(); // Nach dem Server-Sync einfach die Änderungs-Flags löschen
+//     };
 
-    // Alle bekannten Spalten durchgehen
-    for (let i = 0; i < list.columnIndex.length; i++) {
-        const colName = list.columnIndex[i];
-        Object.defineProperty(instance, colName, {
-            get() {
-                // Liest IMMER direkt aus dem echten, flachen Array
-                return this._row[this._index[colName]];
-            },
-            set(val) {
-                const oldVal = this._row[this._index[colName]];
-                if (val !== oldVal) {
-                    // Schreibe SOFORT direkt in das originale Roh-Array
-                    this._row[this._index[colName]] = val;
-                    // Markiere die Spalte als "changed" Bearbeitet
-                    this._changes.add(colName);
-                    this._list._changed.add(this._rowIndex);
-                }
-            },
-            configurable: true,
-            enumerable: true
-        });
-    };
+//     // Alle bekannten Spalten durchgehen
+//     for (let i = 0; i < list.columnIndex.length; i++) {
+//         const colName = list.columnIndex[i];
+//         Object.defineProperty(instance, colName, {
+//             get() {
+//                 // Liest IMMER direkt aus dem echten, flachen Array
+//                 return this._row[this._index[colName]];
+//             },
+//             set(val) {
+//                 const oldVal = this._row[this._index[colName]];
+//                 if (val !== oldVal) {
+//                     // Schreibe SOFORT direkt in das originale Roh-Array
+//                     this._row[this._index[colName]] = val;
+//                     // Markiere die Spalte als "changed" Bearbeitet
+//                     this._changes.add(colName);
+//                     this._list._changed.add(this._rowIndex);
+//                 }
+//             },
+//             configurable: true,
+//             enumerable: true
+//         });
+//     };
 
-    // Hilfsmethode, um alle Felder auszugeben, die nicht 'null' sind (für den Insert-Payload)
-    instance.getPopulatedFields = function () {
-        const colList = [];
-        for (let i = 0; i < instance._index; i++) {
-            if (instance[instance._index[i]] !== null) {
-                colList.push(instance._index[i]);
-            }
-        }
-        return colList;
-    };
+//     // Hilfsmethode, um alle Felder auszugeben, die nicht 'null' sind (für den Insert-Payload)
+//     instance.getPopulatedFields = function () {
+//         const colList = [];
+//         for (let i = 0; i < instance._index; i++) {
+//             if (instance[instance._index[i]] !== null) {
+//                 colList.push(instance._index[i]);
+//             }
+//         }
+//         return colList;
+//     };
 
-    return instance;
-}
+//     return instance;
+// }
 
 // =======================================
 //   Klassen
 // -------------
 
-/**
- * Eine Daten Modell Klasse von der alle Daten Modelle für die Datentabelle erben müssen
- * @class
- * @example
- * class Customer extends DataRow {
- *   gsid = "";
- *   name = "";
- *   city = "";
- *   constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
- *}
- */
-export class DataRow {
-    /** @type {Array<any>} Die rohe Datenzeile (Referenz) */
-    _row = [];
+// /**
+//  * Eine Daten Modell Klasse von der alle Daten Modelle für die Datentabelle erben müssen
+//  * @class
+//  * @example
+//  * class Customer extends DataRow {
+//  *   gsid = "";
+//  *   name = "";
+//  *   city = "";
+//  *   constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
+//  *}
+//  */
+// export class DataRow {
+//     /** @type {Array<any>} Die rohe Datenzeile (Referenz) */
+//     _row = [];
 
-    /** @type {Object.<string, number>} Das Spalten-Index-Mapping */
-    _index = {};
+//     /** @type {Object.<string, number>} Das Spalten-Index-Mapping */
+//     _index = {};
 
-    /** @type {Set<string>} Set der geänderten Spaltennamen */
-    _changes = new Set();
+//     /** @type {Set<string>} Set der geänderten Spaltennamen */
+//     _changes = new Set();
 
-    /** @type {boolean} Flag, ob der Datensatz brandneu auf dem Client ist */
-    _isNew = false;
+//     /** @type {boolean} Flag, ob der Datensatz brandneu auf dem Client ist */
+//     _isNew = false;
 
-    /** @returns {boolean} */
-    isChanged() { return false; }
+//     /** @returns {boolean} */
+//     isChanged() { return false; }
 
-    /** @returns {void} */
-    commitChanges() { }
+//     /** @returns {void} */
+//     commitChanges() { }
 
-    /** @returns {Array<string>} */
-    getPopulatedFields() { return []; }
-}
+//     /** @returns {Array<string>} */
+//     getPopulatedFields() { return []; }
+// }
 
 // ======== Info zu Coumn Mapping ===============
 // const infoTable = [

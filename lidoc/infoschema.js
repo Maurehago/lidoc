@@ -6,8 +6,8 @@
 // Basis Typen: string, number, boolean, object, enum
 // Datum Typen: date, time, datetime, range
 
-export * from "./infotable.js";
-import { DataTable, DataRow, getGSID, isNumber } from "./infotable.js";
+// export * from "./infotable.js";
+import { DataTable, getGSID, isNumber } from "./infotable.js";
 
 
 // ==========================================
@@ -22,6 +22,157 @@ import { DataTable, DataRow, getGSID, isNumber } from "./infotable.js";
  * @property {Array<ValidError>} [propValids] - Liste mit FehlerObjekten für jede Property 
  */
 
+/**
+ * Eine einzelne Datenzeile. Kann primitive Werte oder Binärdaten enthalten.
+ * @typedef {Array<string | number | bigint | boolean | Uint8Array | null>} DataRow
+ */
+
+/**
+ * Das universelle, zweidimensionale Tabellenformat für alle Treiber und Schichten.
+ * Die ERSTE Zeile (Index 0) enthält IMMER die Spaltennamen (Header).
+ * @typedef {Array<DataRow>} DataRows
+ */
+
+
+// ----------- Datenbank (Treiber) Datentypen
+
+/**
+ * Definiert die Schnittstelle, die JEDER Datenbank- oder Dateitreiber implementieren MUSS.
+ * @typedef {Object} DBDriverInterface
+ * @property {string} id - Entspricht DriverConfig.id
+ * @property {string} type - Entspricht DriverConfig.type
+ * @property {string} name - Name des Teibers
+ * @property {() => Promise<DataRows>} getTables - Holt alle Tabellen aus der Datenbank
+ * @property {(tableName: string) => Promise<DataRows>} getRows - Holt alle Zeilen einer Tabelle inkl. Header
+ * @property {(tableName: string, recordId: string, idColName: string) => Promise<DataRows>} getRecord - Holt genau eine Zeile + Header für die Detailansicht
+ * @property {(tableName: string, deltaRows: DataRows, idColName: string) => Promise<boolean>} saveRows - Schreibt nur die geänderten Spalten (Delta-Array) in die DB
+ * @property {(tableName: string, recordId: string, idColName: string) => Promise<boolean>} deleteRow - Löscht einen spezifischen Datensatz aus der Tabelle
+ * @property {(newSchemaJson: string) => Promise<{success: boolean, message: string}>} [migrateSchema] - Optional: Führt Tabellen-Migrationen bei Schema-Updates aus
+ */
+
+
+// ----------  UI Datentypen ------------------
+
+
+/**
+ * Tabellen einstellungen
+ * @typedef {object} InfoTableUI
+ * @property {string} gsid - ID des Datensatzes
+ * @property {string} table_id - Name der Tabelle
+ * @property {string} column_name - Name der Spalte
+ * @property {string} display_name - Anzeige Text
+ * @property {number} position - Spalten Position
+ * @property {string} format - Darstellungs-Format
+*/
+export const InfoTableUI_fields = ["gsid", "table_id", "column_name", "display_name", "position", "format"];
+export const InfoTableUI_unique = "gsid";
+
+// Beispiel:
+// ```json
+// [
+//   ["table_id", "column_name", "display_name", "position", "format"],
+//   ["kundenTabelle", "gsid", "Kundennummer", 1, "text"],
+//   ["kundenTabelle", "nachname", "Nachname", 2, "text"],
+//   ["kundenTabelle", "vorname", "Vorname", 3, "text"]
+// ]
+// ```
+
+/**
+ * Formular einstellungen
+ * @typedef {object} InfoFormUI
+ * @property {string} gsid - ID des Datensatzes
+ * @property {string} form_id - Name des Formulares
+ * @property {string} field_name - Name des Datenfeldes
+ * @property {string} label - Anzeige/Überschrift/Text(bei Buttons)
+ * @property {number} position - Position des Feldes
+ * @property {string} ui_element - Typ des Input elementes oder "button"
+ * @property {string} action_module - Modul Name welches die Funktionalität bereit stellt
+ * @property {string} action_function - Name der Funktion im Modul
+ */
+export const InfoFormUI_fields = ["gsid", "form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"];
+export const InfoFormUI_unique = "gsid";
+
+// Beispiel
+// ```json
+// [
+//   ["form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"],
+//   ["kundenForm", "vorname", "Vorname des Kunden", 1, "input_text", null, null],
+//   ["kundenForm", "nachname", "Nachname des Kunden", 2, "input_text", null, null],
+//   ["kundenForm", "save_btn", "Speichern", 3, "button", "./modules/kunden_actions.js", "speichern"],
+//   ["kundenForm", "delete_btn", "Löschen", 4, "button", "./modules/kunden_actions.js", "loeschen"]
+// ]
+// ```
+
+
+// ----------- APP DatenTypen ---------------------
+
+/**
+ * @typedef {Object} Token
+ * @property {string} gsid - Eindeutige Session ID
+ * @property {string} userId - ID des Users
+ * @property {string} username - Name des Benutzers
+ * @property {number} exp - Gültigkeitszeitraum
+ */
+
+/**
+ * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
+ * Diese Struktur wird in der lokalen config.json persistiert.
+ * @typedef {Object} DriverConfig
+ * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
+ * @property {"SQLITE" | "FIREBIRD" | "JSON_FILES" | "HTML_FRAGMENTS"} type - Die technologische Art des Treibers
+ * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
+ * @property {string} connectionString - Pfad zur Datei (SQLite/JSON), Server-Verbindungsdaten (Firebird), Pfad ("JSON_FILES"|"HTML_FRAGMENTS")
+ */
+
+/**
+ * Die globale Konfigurationsdatei der Anwendung, abgelegt im Benutzer-Appdata-Ordner.
+ * @typedef {Object} ApplicationConfig
+ * @property {string} appName - Der Name der App (aus Startparameter oder Default)
+ * @property {boolean} isNewSystem - Flag; "true" wenn das System im Zustand "NULL" ist (keine Treiber konfiguriert)
+ * @property {Array<DriverConfig>} drivers - Liste aller vom Benutzer eingerichteten Datenquellen
+ * @property {string | null} defaultDriverId - Optionaler Standard-Treiber, der beim Start direkt geöffnet wird
+ * @property {DataRows} infoTables - Liste mit allen InfoTables
+ * @property {DataRows} infoForms - Liste mit Formularen
+ * @property {InfoSchema} appSchema - Schema für die Anwendung
+ */
+
+/**
+ * Alle erlaubten MessageTypen für das System.
+ * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
+ * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
+ * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
+ * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
+ */
+
+/**
+ * Ziel Typen für die Verarbeitung der Messages
+ * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
+ */
+
+
+/**
+ * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
+ * server:"INITIAL_STATE" -> client // bei erster Verbindung
+ * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
+ * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
+ *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
+ * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
+ *                          server:"LOCK_RELEASED_CONFIRMED" -> client
+ * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * @typedef {Object} ClientServerMessage
+ * @property {MessageType} type - Aktionstyp
+ * @property {string} [driverId] - Ziel-Treiber für die Aktion
+ * @property {string} [tableName] - Ziel-Tabelle für die Aktion
+ * @property {string} [recordId] - Ziel-Datensatz-ID (falls anwendbar)
+ * @property {string} [idColName] - Name der Primärschlüssel-Spalte (Standard meist "gsid")
+ * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
+ * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
+ * @property {DataRows} [rows] - Das Datenpaket (entweder gesamte Tabelle oder Delta-Array bei SAVE)
+ */
+
 
 // =============== SCHEMA ================
 
@@ -32,8 +183,8 @@ import { DataTable, DataRow, getGSID, isNumber } from "./infotable.js";
  * @property {Set<any>} values - WertListe für den EnumTyp
  * @property {string|Array<string>|undefined} [more_enums] - Name einer Property oder Liste mit Properties die den Typ weiterer Enum Einträge im Objekt erlaubt
 */
-const EnumTypeFields = ["name", "values", "more_enums"];
-const EnumTypUnique = "name";
+export const EnumType_fields = ["name", "values", "more_enums"];
+export const EnumTyp_unique = "name";
 
 
 /**
@@ -53,7 +204,7 @@ const EnumTypUnique = "name";
  * @property {number|string|undefined} [max_exclusive] - Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
  * @property {number|string|undefined} [max_inclusive] - Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
  */
-const SimpleTypeFields = [
+export const SimpleType_fields = [
     "name" // Name des Datentypes
     , "art" // BasisTyp - default "string"
     , "length" // exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
@@ -68,7 +219,7 @@ const SimpleTypeFields = [
     , "max_exclusive" // Maximalwert kleiner angegebenen Wert (für number, date, time, datetime, range)
     , "max_inclusive" // Maximalwert kleiner gleich angegebenen Wert (für number, date, time, datetime, range)
 ];
-const SimpleTypeUnique = "name";
+export const SimpleType_unique = "name";
 
 
 /**
@@ -83,8 +234,8 @@ const SimpleTypeUnique = "name";
  * @property {"NO"|"UPDATE"|"NULL"|"DEFAULT"} on_update - Regel für Update
  * @property {"NO"|"DELETE"|"NULL"|"DEFAULT"} on_delete - Regel für Löschen
  */
-const RefTypeFields = ["gsid", "name", "object_name", "object_props", "ref_name", "ref_props", "on_update", "on_delete"];
-const RefTypeUnique = "gsid";
+export const RefType_fields = ["gsid", "name", "object_name", "object_props", "ref_name", "ref_props", "on_update", "on_delete"];
+export const RefType_unique = "gsid";
 
 
 /**
@@ -95,8 +246,8 @@ const RefTypeUnique = "gsid";
  * @property {string} object_name - Name des ObjectType
  * @property {Array<string>} object_props - Eigenschaftsnamen(Properties) die zusammen eine Eindeutigkeit ergeben
  */
-const UniqueTypeFields = ["gsid", "name", "object_name", "object_props"];
-const UniqueTypeUnique = "gsid";
+export const UniqueType_fields = ["gsid", "name", "object_name", "object_props"];
+export const UniqueType_unique = "gsid";
 
 
 /**
@@ -112,8 +263,8 @@ const UniqueTypeUnique = "gsid";
  * @property {any|undefined} [default] - Optional: Standardwert der Eigenschaft
  * @property {any|undefined} [fix] - Optional: Fixer Wert der Eigenschaft
 */
-const PropTypeFields = ["gsid", "object_name", "name", "pos", "prop_type", "min", "max", "default", "fix"];
-const PropTypeUnique = "gsid";
+export const PropType_fields = ["gsid", "object_name", "name", "pos", "prop_type", "min", "max", "default", "fix"];
+export const PropType_unique = "gsid";
 
 
 /**
@@ -127,8 +278,8 @@ const PropTypeUnique = "gsid";
  * @property {string|Array<string>|undefined} [more_attributes] - Name einer Property oder Liste mit Properties die den Typ weiterer Attribute im Objekt erlaubt
  * @property {string|Array<string>|undefined} [more_properties] - Name einer Property oder Liste mit Properties die den Typ weiterer Properties im Objekt erlaubt
  */
-const DataTypeFields = ["name", "art", "base_name", "simple_types", "id", "more_attributes", "more_properties"];
-const DataTypeUnique = "name";
+export const DataType_fields = ["name", "art", "base_name", "simple_types", "id", "more_attributes", "more_properties"];
+export const DataType_unique = "name";
 
 
 /**
@@ -141,11 +292,11 @@ const DataTypeUnique = "name";
  * @property {string} [date] - Datum(ISO)
  * @property {string} text - InfoText
 */
-const InfoTextFields = ["gsid", "type_name", "prop_gsid", "lang", "date", "text"];
-const InfoTextUnique = "gsid";
+export const InfoText_fields = ["gsid", "type_name", "prop_gsid", "lang", "date", "text"];
+export const InfoText_unique = "gsid";
 
 /**
- * @typedef {Object} InfoSchema
+ * @typedef {Object} InfoSchema_old
  * @property {"infoSchema"} infotype - FIX: "infoSchema"
  * @property {string} name - Name des Schemas
  * @property {string} version - Versionsnummer des Schemas
@@ -159,6 +310,37 @@ const InfoTextUnique = "gsid";
  */
 
 // =============== ENDE SCHEMA ================
+export class InfoSchema {
+    constructor() {
+        this.datatypes = [[...DataType_fields]];
+        this.simpletypes = [[...SimpleType_fields]];
+        this.properties = [[...PropType_fields]];
+        this.uniques = [[...UniqueType_fields]];
+        this.enums = [[...EnumType_fields]];
+        this.refs = [[...RefType_fields]];
+        this.infos = [[...InfoText_fields]];
+    }
+    /** @type {"infoSchema"} */
+    infotype = "infoSchema";
+    /** @type {string} */
+    name = "";
+    /** @type {string} */
+    version = "";
+    /** @type {Array<Array<any>>} */
+    datatypes = [];
+    /** @type {Array<Array<any>>} */
+    simpletypes = [];
+    /** @type {Array<Array<any>>} */
+    properties = [];
+    /** @type {Array<Array<any>>} */
+    uniques = [];
+    /** @type {Array<Array<any>>} */
+    enums = [];
+    /** @type {Array<Array<any>>} */
+    refs = [];
+    /** @type {Array<Array<any>>} */
+    infos = [];
+};
 
 
 /** @type {Map<string,Schema>} */
@@ -188,26 +370,26 @@ export class Schema {
     version = ""
 
     /** @type {DataTable<RefType>} Liste mit Referenzen Typen */
-    #refList = new DataTable("refs", [RefTypeFields], RefTypeUnique);
+    #refList = new DataTable("refs", [RefType_fields], RefType_unique);
 
     /** @type {DataTable<UniqueType>} Liste mit Unique Typen */
-    #uniqueList = new DataTable("uniques", [UniqueTypeFields], UniqueTypeUnique);
+    #uniqueList = new DataTable("uniques", [UniqueType_fields], UniqueType_unique);
 
     /** @type {DataTable<EnumType>} Liste mit Enum Objekten */
-    #enumList = new DataTable("enums", [EnumTypeFields], EnumTypUnique);
+    #enumList = new DataTable("enums", [EnumType_fields], EnumTyp_unique);
 
     /**  @type {DataTable<SimpleType>} Liste mit DatenTypen */
-    #simpleTypeList = new DataTable("simpletypes", [SimpleTypeFields], SimpleTypeUnique);
+    #simpleTypeList = new DataTable("simpletypes", [SimpleType_fields], SimpleType_unique);
 
 
     /** @type {DataTable<PropertyType>} Liste mit Objekt PropTypen */
-    #propList = new DataTable("properties", [PropTypeFields], PropTypeUnique);
+    #propList = new DataTable("properties", [PropType_fields], PropType_unique);
 
     /** @type {DataTable<DataType>}  Liste aller Typen */
-    #dataTypeList = new DataTable("datatypes", [DataTypeFields], DataTypeUnique);
+    #dataTypeList = new DataTable("datatypes", [DataType_fields], DataType_unique);
 
     /** @type {DataTable<InfoText>} Liste mit InformationsTexten */
-    #infoList = new DataTable("infos", [InfoTextFields], InfoTextUnique);
+    #infoList = new DataTable("infos", [InfoText_fields], InfoText_unique);
 
 
     // Tabellen (ReadOnly) für Listen Funktionen
@@ -233,10 +415,14 @@ export class Schema {
     /**
      * Registriert einen Typ im Schema
      * @param {Partial<DataType>} options - Setzt einen SchemaTyp
+     * @param {string} [info] - InfoText
      * @returns {string} ID wenn erfolgreich
      */
-    setDataType(options) {
+    setDataType(options, info) {
         if (!options.name) { options.name = getGSID(); }
+        if (info) {
+            this.setInfo({type_name: options.name, text: info});
+        }
         return this.#dataTypeList.setObject(options) || options.name;
     }
 
@@ -297,13 +483,18 @@ export class Schema {
     /**
      * Registriert einen simplen DatenTyp im Schema
      * @param {Partial<SimpleType>} options - Setzt einen SchemaTyp
+     * @param {string} [info] - Optional Infotext
      * @returns {string} ID wenn erfolgreich
      */
-    setSimpleType(options) {
+    setSimpleType(options, info) {
         if (!options.name) { options.name = getGSID(); }
 
         // SchemaTyp ausbessern/anlegen
         this.#dataTypeList.setObject({ name: options.name, art: options.art || "string" });
+
+        if (info) {
+            this.setInfo({type_name: options.name, text: info});
+        }
 
         // DatenTyp setzen
         return this.#simpleTypeList.setObject(options) || "";
@@ -365,9 +556,10 @@ export class Schema {
      * @param {string} object_name - Name des Objekt Datentypes
      * @param {string} prop_name - name der Eigenschaft
      * @param {Partial<PropertyType>} [options] - Eigenschaften vom Neuen ItemTyp
+     * @param {string} [info] - Optional Beschreibung für die Eigenschaft
      * @returns {string} ID des NEUEN Property
      */
-    addProperty(object_name, prop_name, options) {
+    addProperty(object_name, prop_name, options, info) {
         if (!object_name || !prop_name) { return ""; }
 
         if (!options) { options = this.#propList.newObject(); }
@@ -400,6 +592,11 @@ export class Schema {
         if (options.prop_type == undefined) { options.prop_type = "string"; }
         if (options.min == undefined) { options.min = 1; }
         if (options.max == undefined) { options.max = 1; }
+
+        // info anlegen
+        if (info) {
+            this.setInfo({prop_gsid: options.gsid, text: info});
+        }
 
         // Eigenschaft anlegen
         return this.#propList.setObject(options) || options.gsid;
@@ -450,13 +647,18 @@ export class Schema {
     /**
      * Registriert einen EnumTyp im Schema
      * @param {Partial<EnumType>} options - Setzt einen SchemaTyp
+     * @param {string} [info] - Optional Infotext 
      * @returns {string|undefined} Enum-Name wenn erfolgreich
      */
-    setEnum(options) {
+    setEnum(options, info) {
         if (!options.name) { options.name = getGSID(); }
 
         // SchemaTyp ausbessern/anlegen
         this.#dataTypeList.setObject({ name: options.name, art: "enum" });
+
+        if (info) {
+            this.setInfo({type_name: options.name, text: info});
+        }
 
         // EnumTyp setzen
         return this.#enumList.setObject(options);
@@ -827,13 +1029,13 @@ export class Schema {
         this.#name = obj.name || "";
         this.version = obj.version || "";
 
-        this.#dataTypeList = new DataTable("datatypes", obj.datatypes || [DataTypeFields], DataTypeUnique);
-        this.#simpleTypeList = new DataTable("simpletypes", obj.simpletypes || [SimpleTypeFields], SimpleTypeUnique);
-        this.#propList = new DataTable("properties", obj.properties || [PropTypeFields], PropTypeUnique);
-        this.#uniqueList = new DataTable("uniques", obj.uniques || [UniqueTypeFields], UniqueTypeUnique);
-        this.#enumList = new DataTable("enums", obj.enums || [EnumTypeFields], EnumTypUnique);
-        this.#refList = new DataTable("refs", obj.refs || [RefTypeFields], RefTypeUnique);
-        this.#infoList = new DataTable("infos", obj.infos || [InfoTextFields], InfoTextUnique);
+        this.#dataTypeList = new DataTable("datatypes", obj.datatypes || [DataType_fields], DataType_unique);
+        this.#simpleTypeList = new DataTable("simpletypes", obj.simpletypes || [SimpleType_fields], SimpleType_unique);
+        this.#propList = new DataTable("properties", obj.properties || [PropType_fields], PropType_unique);
+        this.#uniqueList = new DataTable("uniques", obj.uniques || [UniqueType_fields], UniqueType_unique);
+        this.#enumList = new DataTable("enums", obj.enums || [EnumType_fields], EnumTyp_unique);
+        this.#refList = new DataTable("refs", obj.refs || [RefType_fields], RefType_unique);
+        this.#infoList = new DataTable("infos", obj.infos || [InfoText_fields], InfoText_unique);
 
         return true;
     }
