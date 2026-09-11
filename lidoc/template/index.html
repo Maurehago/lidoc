@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Index</title>
+    <title>LiDoc Test</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="" />
     <link rel="icon" href="/img/icon.png">
@@ -12,17 +12,39 @@
     <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
 
     <script src="/lib/prism/prism.js"></script>
+    <!-- <script src="/lib/prism/prism_foxpro.js"></script> <!-- OPTIONAL für Foxpro Code -->
 </head>
 
 <body>
-    <f-row w-l ma-auto color-p border-b gap-s>
-        <f-item id="logo" color-p2 hide-lt-m data-lidoc="/_logo.md" style="width: 300px;"></f-item>
-        <f-item id="header" no-print w-fit data-lidoc="/_header.md"></f-item>
-    </f-row>
-    <f-col id="content" w-l ma-auto style="min-height: 100vh;"></f-col>
-    <f-item id="footer" color-darkgrey no-print data-lidoc="/_footer.md"></f-item>
+    <f-col style="min-height: 100vh;">
+        <!-- Header Pfad ausbessern wenn erforderlich -->
+        <f-item color-p pos-sticky pos-t-l data-lidoc="/_header"></f-item>
+        <!-- Content Bereich mit 2 Spalten-->
+        <f-item w-fit f-row>
+            <!-- Navigations Spalte (wird ausgebelendet wenn leer), data-lidoc muss "_nav" sein -->
+            <f-item color-p2 hide-empty hide-lt-l style="min-width: 280px;max-width: 280px;z-index: 3;">
+                <nav pos-t-l pos-sticky pa-t-m data-lidoc="_nav" style="max-height: 99vh;overflow: auto;"></nav>
+            </f-item>
+            <!-- Content Spalte, data-lidoc muss "_content" sein -->
+            <f-item w-fit ma-h-m data-lidoc="_content"></f-item>
+        </f-item>
+        <!-- Footer Pfad ausbessern wenn erforderlich -->
+        <f-item color-p pos-sticky pos-t-l data-lidoc="/_footer"></f-item>
+    </f-col>
 </body>
 
-<script type="module" src="/lib/lidoc/lidoc.js"></script>
+<!-- Skript als Modul, wird ausgeführt wenn die Seite komplett geladen -->
+<script type="module">
+    // @ts-check
+
+    /** Hier Pad zu "lidoc.js" ausbessern  **/
+    import { setConfig, showSite } from "/lidoc/lidoc.js";
+
+    /** Hier Pfad zum Dokument Ordner ausbessern */
+    setConfig({buildPath: "/build/"});
+
+    /** Zeigt die SeitenInhalte an */
+    showSite();
+</script>
 
 </html>

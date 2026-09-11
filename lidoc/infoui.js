@@ -799,6 +799,7 @@ export class UiController {
         if (!this.activeContainer) return;
 
         // Alle alten Fokuseffekte aufheben
+        //@ts-ignore todo: Verbessern
         this.activeContainer.querySelectorAll(".active-row, .active-menu-item").forEach(el => {
             el.classList.remove("active-row", "active-menu-item");
         });
@@ -1059,6 +1060,80 @@ export class RealtimeSync {
 // ===================================================
 
 // ============ Beispiel Verwendung =================
+
+
+
+export class InfoRouter {
+
+
+    /**
+     * Erzeugt aus einem String ein Objekt  
+     * Wandelt "id:456,name:hallo" in ein Objekt {id: "456", name: "hallo"} um.
+     * @param {string} valueString - Wert der geparst wird
+     * @returns {Object<string,any>}
+     */
+    get_obj_from_string(valueString) {
+        /** @type {Object<string,any>} */
+        const obj = {};
+
+        // Aufteilen am Komma
+        const pairs = valueString.split(",");
+        
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i].split(":");
+            if (pair[0] && pair[1]) {
+                const key = pair[0].trim();
+                let value = pair[1].trim();
+                
+                // Optional: Automatisch Zahlen konvertieren
+                //if (!isNaN(value)) {
+                //    value = Number(value);
+                //}
+                
+                obj[key] = value;
+            }
+        }
+        return obj;
+    }
+
+
+    /**
+     * Prüft den Hash in der URL
+     * @returns {Object<string,Array<any>>|undefined}
+     */
+    get_hashData() {
+        // darf nicht in den Daten stehen "#","/","&", "=", "," -> sind Trennzeichen
+        // key beginnt mit: "api." = Fetch API, "ws." = Websocket typ "GET_DATA", "LOCK_DATA", "SAVE_DATA", "DEL_DATA"  ("ws.get.adresse","ws.lock.adresse", "ws.save.adresse", "ws.del.adresse")
+        // domain.de/#?api.menu=/menu/menu1&api.content=/forms/form1&ws.addresse=id:456,name:hallo&ws.bestellungen=gsid:25
+        const hash = window.location.hash;
+        const hashString = hash.includes("?") ? hash.split("?")[1] : "";
+        if (!hashString) {return;}
+
+        // In parts "key=value" aufsplitten
+        const parts = hashString.split("&");
+        const api_list = []; // [["menu", "/menu/menu1"], ["content","/forms/form1"]]
+        const ws_list = []; // [ ["addresse", {id: "456", name: "hallo"}], ["bestellungen": {gsid: "25"}] ]
+
+        // alle Parts durchgehen
+        for (let i = 0; i < parts.length; i++) {
+            const key_value = parts[i].split("=");
+            
+            // wenn UI - startet mit "ui."
+            if (key_value[0].startsWith("api.")) {
+                api_list.push([key_value[0].substring(4), key_value[1]]);
+            }
+
+            // wenn Websocket-Daten - startet mit "ws."
+            if (key_value[0].startsWith("ws.")) {
+                ws_list.push([key_value[0].substring(3), this.get_obj_from_string(key_value[1])]);
+            }
+        }
+
+        // Zurückgeben
+        return { api: api_list, ws: ws_list };
+    }
+}
+
 
 
 
