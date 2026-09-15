@@ -10,6 +10,28 @@ import { Schema, infoSchema, InfoTableUI_fields, InfoTableUI_unique, InfoFormUI_
 //   Infos
 // --------
 
+// view:
+//      - list (InfoTableUI)
+//      - form (InfoFormUI)
+//      - html (InfoDetailUI)
+// hash: #liste1/detail1
+
+// hash: #add_schema
+// Form:
+//  Title: Add Schema
+//  textarea:
+//  button: addSchema
+// onOK: next: schema_detail
+// onError: self: error
+
+// view: schema_detail
+// parameters: schemaList
+// - list schema filter: {type: "object"}
+// - list schema filter: {type: "string|number|boolean"}
+
+
+
+
 // --------- CSS ---------------
 // /* Der umschließende Spalten-Container, wenn er den Fokus hat */
 // .ui-view-container:focus,
@@ -161,6 +183,243 @@ infoUISchema.addProperty("InfoForm", "position", {prop_type: "int"});
 infoUISchema.addProperty("InfoForm", "ui_element");
 infoUISchema.addProperty("InfoForm", "action_module");
 infoUISchema.addProperty("InfoForm", "action_function");
+
+// ============================================
+//   Komponente
+// --------------
+
+/**
+ * Tabellen einstellungen
+ * @typedef {object} InfoUITableCols
+ * @property {string} column_name - Name der Spalte
+ * @property {string} display_name - Anzeige Text
+ * @property {number} position - Spalten Position
+ * @property {string} [format] - Darstellungs-Format
+*/
+
+export class InfoUITable {
+    /**
+     * 
+     * @param {string} tableName - Name der Tabelle
+     */
+    constructor(tableName) {
+        this.name = tableName;
+    }
+
+    /** @type {Array<InfoUITableCols>} */
+    #cols = [];
+
+    /** @type {Object<string,number>} */
+    #colIndex = {};
+
+    #sort() {
+        this.#cols = this.#cols.sort((a, b) => a.position - b.position);
+    }
+
+    #createIndex() {
+        this.#colIndex = {};
+        for (let i = 0; i < this.#cols.length; i++) {
+            this.#colIndex[this.#cols[i].column_name] = this.#cols[i].position;
+        }
+    }
+
+    /**
+     * Fügt eine neue Tabellenspalte hinzu
+     * @param {string} column_name - name der Spalte
+     * @param {string} display_name - Text der Angezeigt wird
+     * @param {number} [position] - Optional Position der Spalte. Verschiebt alle folgenden Spalten. -1 Wenn hinten anfügen
+     * @param {string} [format] - Formatierung der Spalte. Funktion ?????
+     */
+    add_col(column_name, display_name, position = -1, format) {
+        // neues Object
+        let obj = {column_name, display_name, position, format};
+        
+        // prüfen ob vorhanden
+        let colIndex = this.#colIndex[column_name] || -1;
+        if (colIndex >= 0) {
+            // Vorhandenes ersetzen unabhängig von position
+            obj.position = colIndex;
+            this.#cols[colIndex] = obj;
+        } else {
+            // nicht vorhanden
+            if (position == undefined || position < 0) {
+                obj.position = this.#cols.push(obj) -1;
+                this.#colIndex[obj.column_name] = obj.position;
+            } else {
+                // an neuer Position einfügen
+                this.#cols.splice(position, 0, obj);
+
+                // index neu aufbauen
+                this.#createIndex();
+            }
+        }
+    }
+
+
+    /**
+     * Generiert eine HTML-Tabelle
+     * @param {string} tableId - ID der UI-Konfiguration
+     * @param {DataTable<any>} dataTable - Die echten Geschäftsdaten (z.B. Kunden)
+     * @param {string} [dataIndex] - Optional Index der DatenTabelle
+     */
+    get_html(tableId, dataTable, dataIndex) {
+        // 1. Hole die relevanten UI-Spalten für diese Tabelle und sortiere sie
+        const columns = this.#cols;
+        const colIndexes = [];
+
+        let html = `<div class="ui-view-container" data-target-type="LIST" data-table-id="${tableId}" tabindex="0">`;
+        html += `<table class="pure-table"><thead><tr>`;
+
+        // Header rendern
+        for (let i = 0; i < columns.length; i++) {
+            // Spalten Überschriften todo: Ausrichtung
+            html += `<th>${columns[i].display_name}</th>`;
+            colIndexes.push(dataTable.columnIndex[columns[i].column_name]);
+        }
+        html += `</tr></thead><tbody>`;
+
+        // Zeilen aus den echten Daten rendern (Index 0 auslassen, da Header im Datentreiber)
+        // Index für Sortierung und Filter
+        const dataRowIndex = dataTable.getIndexList(dataIndex);
+
+        for (let i = 0; i < dataRowIndex.length; i++) {
+            if (dataRowIndex[i] === 0) return;
+
+            // Datenzeile lesen
+            const row = dataTable.getRow(dataRowIndex[i]);
+            if (!row) {continue;}
+
+            // Datensatz ID todo: Optimieren: eventuell SpaltenIndex ?????
+            const recordId = dataTable.getID(row);
+
+            html += `<tr data-record-id="${recordId}">`;
+            for (let j = 0; j < columns.length; j++) {
+                const value = row[colIndexes[j]];
+
+                // Spalte anzeigen todo: Ausrichtung/Formatierung ????
+                html += `<td>${value}</td>`;
+            };
+            html += `</tr>`;
+        };
+
+        html += `</tbody></table></div>`;
+        return html;
+    }
+}
+
+
+/**
+ * Formular einstellungen
+ * @typedef {object} InfoUIFormFields
+ * @property {string} field_name - Name des Datenfeldes
+ * @property {string} label - Anzeige/Überschrift/Text(bei Buttons)
+ * @property {number} position - Position des Feldes
+ * @property {string|undefined} ui_element - Typ des Input elementes oder "button"
+ * @property {string|undefined} action_module - Modul Name welches die Funktionalität bereit stellt
+ * @property {string|undefined} action_function - Name der Funktion im Modul
+ */
+
+export class InfoUIForm {
+    /**
+     * 
+     * @param {string} formName - Name der Tabelle
+     */
+    constructor(formName) {
+        this.name = formName;
+    }
+
+    /** @type {Array<InfoUIFormFields>} */
+    #fields = [];
+
+    /** @type {Object<string,number>} */
+    #fieldIndex = {};
+
+    #sort() {
+        this.#fields = this.#fields.sort((a, b) => a.position - b.position);
+    }
+
+    #createIndex() {
+        this.#fieldIndex = {};
+        for (let i = 0; i < this.#fields.length; i++) {
+            this.#fieldIndex[this.#fields[i].field_name] = this.#fields[i].position;
+        }
+    }
+
+    /**
+     * Fügt eine neue Tabellenspalte hinzu
+     * @param {string} field_name - name der Spalte
+     * @param {string} label - Text der Angezeigt wird
+     * @param {string} [ui_element] - Formatierung der Spalte. Funktion ?????
+     * @param {number} [position] - Optional Position der Spalte. Verschiebt alle folgenden Spalten. -1 Wenn hinten anfügen
+     * @param {string} [action_module] - Formatierung der Spalte. Funktion ?????
+     * @param {string} [action_function] - Formatierung der Spalte. Funktion ?????
+     */
+    add_field(field_name, label, ui_element, position = -1, action_module, action_function) {
+        // neues Object
+        let obj = {field_name, label, ui_element, position, action_module, action_function};
+        
+        // prüfen ob vorhanden
+        let fieldIndex = this.#fieldIndex[field_name] || -1;
+        if (fieldIndex >= 0) {
+            // Vorhandenes ersetzen unabhängig von position
+            obj.position = fieldIndex;
+            this.#fields[fieldIndex] = obj;
+        } else {
+            // nicht vorhanden
+            if (position == undefined || position < 0) {
+                obj.position = this.#fields.push(obj) -1;
+                this.#fieldIndex[obj.field_name] = obj.position;
+            } else {
+                // an neuer Position einfügen
+                this.#fields.splice(position, 0, obj);
+
+                // index neu aufbauen
+                this.#createIndex();
+            }
+        }
+    }
+
+    
+    /**
+     * Generiert ein HTML-Formular
+     * @param {string} formId - ID der UI-Konfiguration
+     * @param {Object<string,any>} obj - Datensatz Objekt
+     * @param {string} [idName] - Name der ID Datenspalte
+     */
+    get_html(formId, obj, idName) {
+        const fields = this.#fields;
+
+        let html = `<div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">`;
+
+        //fields.forEach(field => {
+        for (let i = 0; i < fields.length; i++) {
+            // todo: input Formate Festlegen
+            // todo: eingabe Schema prüfen ????
+            if (fields[i].ui_element === "input_text") {
+                const val = obj ? obj[fields[i].field_name] : "";
+                html += `
+                    <div class="form-group" data-focusable="true">
+                        <label>${fields[i].label}</label>
+                        <input type="text" data-field="${fields[i].field_name}" value="${val}">
+                    </div>`;
+            } else if (fields[i].ui_element === "button") {
+                html += `
+                    <button class="ui-btn" data-focusable="true" 
+                            data-module="${fields[i].action_module || ''}" 
+                            data-function="${fields[i].action_function || ''}">
+                        ${fields[i].label}
+                    </button>`;
+            }
+        };
+
+        html += `</div>`;
+
+        return html;
+    }
+}
+
+
+
 
 // ==========================================
 
@@ -1118,7 +1377,7 @@ export class InfoRouter {
         for (let i = 0; i < parts.length; i++) {
             const key_value = parts[i].split("=");
             
-            // wenn UI - startet mit "ui."
+            // wenn UI - startet mit "api."
             if (key_value[0].startsWith("api.")) {
                 api_list.push([key_value[0].substring(4), key_value[1]]);
             }
@@ -1132,6 +1391,8 @@ export class InfoRouter {
         // Zurückgeben
         return { api: api_list, ws: ws_list };
     }
+
+
 }
 
 

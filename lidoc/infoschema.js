@@ -53,6 +53,16 @@ import { DataTable, getGSID, isNumber } from "./infotable.js";
 
 // ----------  UI Datentypen ------------------
 
+/**
+ * View Einstellungen
+ * @typedef {object} InfoViewUI
+ * @property {string} gsid - ID des Datensatzen
+ * @property {string} view_name - Name der View
+ * @property {number} position - Position in der View
+ * @property {string} [table_id] - Optional Name der Tabelle
+ * @property {string} [form_id] - Optional Name des Formulars
+ */
+
 
 /**
  * Tabellen einstellungen

@@ -389,6 +389,41 @@ export class DataTable {
 
 
     /**
+     * Fügt neue Datenzeilen hinzu oder ersetzt bestehende wenn die selbe ID. Die 1. Datenzeile muss Feldnamen enthalten.
+     * @param {Array<Array<any>>} newRows - Neue Datenzeilen, in 1. Zeile müssen die Spaltennamen stehen
+     */
+    mergeRows(newRows) {
+        if (!Array.isArray(newRows)) {return;}
+
+        // 1. Zeile mit Feldnamen
+        const colIndexes = this.getColIndex(newRows[0]);
+
+        // Alle Zeilen durchgehen
+        for (let i = 1; i< newRows.length; i++) {
+            const newRow = newRows[i];
+            const id = this.getID(newRow);
+
+            // versuchen bestehenesn Datensatz zu lesen
+            let row = this.getRow(id);
+            if (!row) {
+                row = new Array(this.columns.length);
+                const newIndex = this.rows.push(row) -1;
+                this.rowMap.set(id, newIndex);
+            }
+
+            // Alle spalten durchgehen
+            for (let j = 0; j < colIndexes.length; j++) {
+                // Wenn Spalte vorhanden
+                if (colIndexes[j] >= 0) {
+                    // wert zuweisen
+                    row[colIndexes[j]] = newRow[j];
+                }
+            }
+        }
+    }
+
+
+    /**
      * Erzeugt eine neue Datenzeile die noch nicht in der Liste angelegt wird. 
      * @param {string} [id] - Optional neue ID. Wenn nicht angegeben wird eine GSID generiert
      * @returns {Partial<T>}
