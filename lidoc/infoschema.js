@@ -9,7 +9,6 @@
 // export * from "./infotable.js";
 import { DataTable, getGSID, isNumber } from "./infotable.js";
 
-
 // ==========================================
 //   Typen
 // ---------
@@ -205,7 +204,7 @@ export const EnumTyp_unique = "name";
  * @property {number|undefined} [length] - exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
  * @property {number|undefined} [min_length] - Minimale Anzahl Zeichen (für string)
  * @property {number|undefined} [max_length] - Maximale Anzahl Zeichen (für string)
- * @property {string|undefined} [pattern] - Regular Expression (für string)
+ * @property {string|Array<string>|undefined} [pattern] - Regular Expression (für string)
  * @property {string|undefined} [whitespace] - wie wird mit Leerzeichen umgegangen (für string)
  * @property {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"|undefined} [casing] - (für string)
  * @property {number|undefined} [decimals] - Anzahl der Dezimalstellen (für number)
@@ -512,6 +511,16 @@ export class Schema {
 
 
     /**
+     * Fügt einen Pattern einem Simplen Typ hinzu
+     * @param {string} type_name - Name des simplen Types
+     * @param {string} pattern - Pattern welches gesetzt werden soll
+     */
+    setSimpleTypePattern(type_name, pattern) {
+        return this.#simpleTypeList.addCellArrayValue(type_name, "pattern", pattern);
+    }
+
+
+    /**
      * Gibt einen registrierten SimpleTyp zurück
      * @param {string} type_name - Name des Types
      * @returns {SimpleType|undefined} Type oder Undefined wenn nicht gefunden
@@ -810,8 +819,21 @@ export class Schema {
                 return { valid: false, error: `Mindestens ${simpleType.min_length} Zeichen benötigt.` };
             if (simpleType.max_length && value.length > simpleType.max_length)
                 return { valid: false, error: `Maximal ${simpleType.max_length} Zeichen erlaubt.` };
-            if (simpleType.pattern && !new RegExp(simpleType.pattern).test(value))
-                return { valid: false, error: `Format entspricht nicht dem Muster.` };
+            if (simpleType.pattern) {
+                let answer = false;
+                if (Array.isArray(simpleType.pattern)) {
+                    for (let i = 0; i < simpleType.pattern.length; i++) {
+                        if (new RegExp(simpleType.pattern[i]).test(value)) {
+                            answer = true;
+                            break;
+                        }
+                    }
+                } else {
+                    answer = new RegExp(simpleType.pattern).test(value);
+                }
+                if (answer == false) 
+                    return { valid: false, error: `Format entspricht nicht dem Muster.` };
+            }
             // if (typeof dataType.min_inclusive === "string" && value < dataType.min_inclusive)
             //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_inclusive} sein.` };
             // if (typeof dataType.max_inclusive === "string" && value > dataType.max_inclusive)
@@ -907,8 +929,32 @@ export class Schema {
         if (dataType.art == "enum") {
             // Enum lesen
             let obj = this.#enumList.getObject(typeID);
+            
             const validEnum = obj?.values.has(value);
-            if (!validEnum) return { valid: false, error: `Ungültiger Auswahlwert.` };
+            if (!validEnum) {
+                // Auf mor_enums prüfen
+                if (obj?.more_enums) {
+                    if (Array.isArray(obj.more_enums)) {
+                        // zusätzliche Liste durchgehen
+                        for (let i = 0; i < obj.more_enums.length; i++) {
+                            // es braucht nur einer gültig sein
+                            if (this.validateDataType(obj.more_enums[i], value).valid == true) {
+                                return { valid: true };
+                            }
+                        }
+                    } else {
+                        // wenn zusätzlicher gültig
+                        if (this.validateDataType(obj.more_enums, value).valid == true) {
+                            return { valid: true };
+                        }
+                    }
+                }
+                return { valid: false, error: `Ungültiger Auswahlwert.` }; 
+            }; // wenn nicht in der Liste
+
+            // Details vom Simpletyp prüfen
+            validObj = this.validateSimple(typeID, value);
+            if (validObj.valid == false) {return validObj;}      
         }
 
          if (["object","multi","ref","group","choice"].indexOf(dataType.art) >= 0) {

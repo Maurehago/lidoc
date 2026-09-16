@@ -3,7 +3,8 @@
 // =======================
 // @ts-check
 
-import { Schema, getGSID } from "./infoschema.js";
+import { getGSID } from "./infotable.js";
+import { Schema } from "./infoschema.js";
 
 // ============================
 //   Typen
@@ -409,8 +410,10 @@ function checkElement(elm, typeName, propID) {
             break;
         case "pattern":
             // Setzt eine Regular Expression für den Typ
+            // parent: restriction, redefine
             if (elmValue) {
-                XSD.setSimpleType({ name: typeName, pattern: elmValue });
+                // Es können mehrere Patterns vorkommen
+                XSD.setSimpleTypePattern(typeName, elmValue);
             }
             break;
         case "redefine":

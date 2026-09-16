@@ -190,7 +190,7 @@ infoUISchema.addProperty("InfoForm", "action_function");
 
 /**
  * Tabellen einstellungen
- * @typedef {object} InfoUITableCols
+ * @typedef {object} InfoUITableCol
  * @property {string} column_name - Name der Spalte
  * @property {string} display_name - Anzeige Text
  * @property {number} position - Spalten Position
@@ -206,7 +206,7 @@ export class InfoUITable {
         this.name = tableName;
     }
 
-    /** @type {Array<InfoUITableCols>} */
+    /** @type {Array<InfoUITableCol>} */
     #cols = [];
 
     /** @type {Object<string,number>} */
@@ -262,7 +262,7 @@ export class InfoUITable {
      * @param {DataTable<any>} dataTable - Die echten Geschäftsdaten (z.B. Kunden)
      * @param {string} [dataIndex] - Optional Index der DatenTabelle
      */
-    get_html(tableId, dataTable, dataIndex) {
+    get_table_html(tableId, dataTable, dataIndex) {
         // 1. Hole die relevanten UI-Spalten für diese Tabelle und sortiere sie
         const columns = this.#cols;
         const colIndexes = [];
@@ -310,7 +310,7 @@ export class InfoUITable {
 
 /**
  * Formular einstellungen
- * @typedef {object} InfoUIFormFields
+ * @typedef {object} InfoUIFormField
  * @property {string} field_name - Name des Datenfeldes
  * @property {string} label - Anzeige/Überschrift/Text(bei Buttons)
  * @property {number} position - Position des Feldes
@@ -328,7 +328,7 @@ export class InfoUIForm {
         this.name = formName;
     }
 
-    /** @type {Array<InfoUIFormFields>} */
+    /** @type {Array<InfoUIFormField>} */
     #fields = [];
 
     /** @type {Object<string,number>} */
@@ -379,14 +379,41 @@ export class InfoUIForm {
         }
     }
 
-    
+    /**
+     * Gibt einen Input/Textarea/Button HTML-String zurück
+     * @param {InfoUIFormField} field - FormularUI Feld 
+     * @param {any} value - zu Darstellender Wert
+     */
+    get_input_html(field, value) {
+        let html = "";
+        switch (field.ui_element) {
+            case "input_text":
+                html = `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <input type="text" data-field="${field.field_name}" value="${value}">
+                </div>`;
+                break;
+            case "button":
+                html = `
+                <button class="ui-btn" data-focusable="true" data-module="${field.action_module || ''}" data-function="${field.action_function || ''}">${field.label}</button>`;
+            default:
+                html = `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <input type="text" data-field="${field.field_name}" value="${value}">
+                </div>`;                
+                break;
+        }
+    }
+
     /**
      * Generiert ein HTML-Formular
      * @param {string} formId - ID der UI-Konfiguration
      * @param {Object<string,any>} obj - Datensatz Objekt
      * @param {string} [idName] - Name der ID Datenspalte
      */
-    get_html(formId, obj, idName) {
+    get_form_html(formId, obj, idName) {
         const fields = this.#fields;
 
         let html = `<div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">`;
@@ -395,27 +422,68 @@ export class InfoUIForm {
         for (let i = 0; i < fields.length; i++) {
             // todo: input Formate Festlegen
             // todo: eingabe Schema prüfen ????
-            if (fields[i].ui_element === "input_text") {
-                const val = obj ? obj[fields[i].field_name] : "";
-                html += `
-                    <div class="form-group" data-focusable="true">
-                        <label>${fields[i].label}</label>
-                        <input type="text" data-field="${fields[i].field_name}" value="${val}">
-                    </div>`;
-            } else if (fields[i].ui_element === "button") {
-                html += `
-                    <button class="ui-btn" data-focusable="true" 
-                            data-module="${fields[i].action_module || ''}" 
-                            data-function="${fields[i].action_function || ''}">
-                        ${fields[i].label}
-                    </button>`;
-            }
+            const val = obj ? obj[fields[i].field_name] : "";
+            
+            // Input HTML zusammenbauen
+            html += this.get_input_html(fields[i], val);
         };
 
         html += `</div>`;
 
         return html;
     }
+
+    /**
+     * Generiert ein Formular aus einer Key-Value-Tabelle (Vertikale Daten)
+     * todo: Spalten müssen noch angepasst werden. Was ist die Key-Spalte, was ist die Value-Spalte?
+     * @param {string} formId 
+     * @param {string} keyField - Spaltenname des Schüssel (Label)
+     * @param {string} valueField - Spaltenname der Datenspalte
+     * @param {DataTable<any>} dataTable - Die vertikalen Tabellendaten
+     * @param {string} [dataIndex] - Optional Index der DatenTabelle
+     */
+    get_vertical_form_html(formId, keyField, valueField, dataTable, dataIndex) {
+        let html = `<div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">`;
+
+        const keyIndex = dataTable.columnIndex[keyField];
+        const valueIndex = dataTable.columnIndex[valueField];
+
+        // Label aus der UI-Config holen, falls vorhanden, sonst den Key nutzen
+        const uiKeyField = this.#fields[this.#fieldIndex[keyField]];
+        const uiValueField = this.#fields[this.#fieldIndex[valueField]];
+        
+        const input_type = uiValueField.ui_element;
+
+        // Zeilen aus den echten Daten rendern (Index 0 auslassen, da Header im Datentreiber)
+        // Index für Sortierung und Filter
+        const dataRowIndex = dataTable.getIndexList(dataIndex);
+
+        for (let i = 0; i < dataRowIndex.length; i++) {
+            if (dataRowIndex[i] === 0) return;
+
+            // Datenzeile lesen
+            const row = dataTable.getRow(dataRowIndex[i]);
+            if (!row) {continue;}
+
+            // Datensatz ID todo: Optimieren: eventuell SpaltenIndex ?????
+            const recordId = dataTable.getID(row);
+
+            // Angenommen, die Tabelle hat die Spalten "key" (oder parameter) und "value"
+            const key = row[keyIndex];
+            const val = row[valueIndex];
+
+            //const labelText = uiField ? uiField.label : key;
+            const labelText = key;
+
+            // todo: datensatzID damit das richtig gespeichert wird
+            // todo: input-typ lesen
+            html += this.get_input_html(uiValueField, val);
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
 }
 
 
