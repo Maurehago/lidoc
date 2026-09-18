@@ -21,175 +21,13 @@ import { DataTable, getGSID, isNumber } from "./infotable.js";
  * @property {Array<ValidError>} [propValids] - Liste mit FehlerObjekten für jede Property 
  */
 
-/**
- * Eine einzelne Datenzeile. Kann primitive Werte oder Binärdaten enthalten.
- * @typedef {Array<string | number | bigint | boolean | Uint8Array | null>} DataRow
- */
-
-/**
- * Das universelle, zweidimensionale Tabellenformat für alle Treiber und Schichten.
- * Die ERSTE Zeile (Index 0) enthält IMMER die Spaltennamen (Header).
- * @typedef {Array<DataRow>} DataRows
- */
-
-
-// ----------- Datenbank (Treiber) Datentypen
-
-/**
- * Definiert die Schnittstelle, die JEDER Datenbank- oder Dateitreiber implementieren MUSS.
- * @typedef {Object} DBDriverInterface
- * @property {string} id - Entspricht DriverConfig.id
- * @property {string} type - Entspricht DriverConfig.type
- * @property {string} name - Name des Teibers
- * @property {() => Promise<DataRows>} getTables - Holt alle Tabellen aus der Datenbank
- * @property {(tableName: string) => Promise<DataRows>} getRows - Holt alle Zeilen einer Tabelle inkl. Header
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<DataRows>} getRecord - Holt genau eine Zeile + Header für die Detailansicht
- * @property {(tableName: string, deltaRows: DataRows, idColName: string) => Promise<boolean>} saveRows - Schreibt nur die geänderten Spalten (Delta-Array) in die DB
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<boolean>} deleteRow - Löscht einen spezifischen Datensatz aus der Tabelle
- * @property {(newSchemaJson: string) => Promise<{success: boolean, message: string}>} [migrateSchema] - Optional: Führt Tabellen-Migrationen bei Schema-Updates aus
- */
-
-
-// ----------  UI Datentypen ------------------
-
-/**
- * View Einstellungen
- * @typedef {object} InfoViewUI
- * @property {string} gsid - ID des Datensatzen
- * @property {string} view_name - Name der View
- * @property {number} position - Position in der View
- * @property {string} [table_id] - Optional Name der Tabelle
- * @property {string} [form_id] - Optional Name des Formulars
- */
-
-
-/**
- * Tabellen einstellungen
- * @typedef {object} InfoTableUI
- * @property {string} gsid - ID des Datensatzes
- * @property {string} table_id - Name der Tabelle
- * @property {string} column_name - Name der Spalte
- * @property {string} display_name - Anzeige Text
- * @property {number} position - Spalten Position
- * @property {string} format - Darstellungs-Format
-*/
-export const InfoTableUI_fields = ["gsid", "table_id", "column_name", "display_name", "position", "format"];
-export const InfoTableUI_unique = "gsid";
-
-// Beispiel:
-// ```json
-// [
-//   ["table_id", "column_name", "display_name", "position", "format"],
-//   ["kundenTabelle", "gsid", "Kundennummer", 1, "text"],
-//   ["kundenTabelle", "nachname", "Nachname", 2, "text"],
-//   ["kundenTabelle", "vorname", "Vorname", 3, "text"]
-// ]
-// ```
-
-/**
- * Formular einstellungen
- * @typedef {object} InfoFormUI
- * @property {string} gsid - ID des Datensatzes
- * @property {string} form_id - Name des Formulares
- * @property {string} field_name - Name des Datenfeldes
- * @property {string} label - Anzeige/Überschrift/Text(bei Buttons)
- * @property {number} position - Position des Feldes
- * @property {string} ui_element - Typ des Input elementes oder "button"
- * @property {string} action_module - Modul Name welches die Funktionalität bereit stellt
- * @property {string} action_function - Name der Funktion im Modul
- */
-export const InfoFormUI_fields = ["gsid", "form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"];
-export const InfoFormUI_unique = "gsid";
-
-// Beispiel
-// ```json
-// [
-//   ["form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"],
-//   ["kundenForm", "vorname", "Vorname des Kunden", 1, "input_text", null, null],
-//   ["kundenForm", "nachname", "Nachname des Kunden", 2, "input_text", null, null],
-//   ["kundenForm", "save_btn", "Speichern", 3, "button", "./modules/kunden_actions.js", "speichern"],
-//   ["kundenForm", "delete_btn", "Löschen", 4, "button", "./modules/kunden_actions.js", "loeschen"]
-// ]
-// ```
-
-
-// ----------- APP DatenTypen ---------------------
-
-/**
- * @typedef {Object} Token
- * @property {string} gsid - Eindeutige Session ID
- * @property {string} userId - ID des Users
- * @property {string} username - Name des Benutzers
- * @property {number} exp - Gültigkeitszeitraum
- */
-
-/**
- * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
- * Diese Struktur wird in der lokalen config.json persistiert.
- * @typedef {Object} DriverConfig
- * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
- * @property {"SQLITE" | "FIREBIRD" | "JSON_FILES" | "HTML_FRAGMENTS"} type - Die technologische Art des Treibers
- * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
- * @property {string} connectionString - Pfad zur Datei (SQLite/JSON), Server-Verbindungsdaten (Firebird), Pfad ("JSON_FILES"|"HTML_FRAGMENTS")
- */
-
-/**
- * Die globale Konfigurationsdatei der Anwendung, abgelegt im Benutzer-Appdata-Ordner.
- * @typedef {Object} ApplicationConfig
- * @property {string} appName - Der Name der App (aus Startparameter oder Default)
- * @property {boolean} isNewSystem - Flag; "true" wenn das System im Zustand "NULL" ist (keine Treiber konfiguriert)
- * @property {Array<DriverConfig>} drivers - Liste aller vom Benutzer eingerichteten Datenquellen
- * @property {string | null} defaultDriverId - Optionaler Standard-Treiber, der beim Start direkt geöffnet wird
- * @property {DataRows} infoTables - Liste mit allen InfoTables
- * @property {DataRows} infoForms - Liste mit Formularen
- * @property {InfoSchema} appSchema - Schema für die Anwendung
- */
-
-/**
- * Alle erlaubten MessageTypen für das System.
- * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
- * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
- * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
- * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
- */
-
-/**
- * Ziel Typen für die Verarbeitung der Messages
- * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
- */
-
-
-/**
- * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
- * server:"INITIAL_STATE" -> client // bei erster Verbindung
- * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
- * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
- *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
- * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
- *                          server:"LOCK_RELEASED_CONFIRMED" -> client
- * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * @typedef {Object} ClientServerMessage
- * @property {MessageType} type - Aktionstyp
- * @property {string} [driverId] - Ziel-Treiber für die Aktion
- * @property {string} [tableName] - Ziel-Tabelle für die Aktion
- * @property {string} [recordId] - Ziel-Datensatz-ID (falls anwendbar)
- * @property {string} [idColName] - Name der Primärschlüssel-Spalte (Standard meist "gsid")
- * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
- * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
- * @property {DataRows} [rows] - Das Datenpaket (entweder gesamte Tabelle oder Delta-Array bei SAVE)
- */
-
-
 // =============== SCHEMA ================
 
 /**
  * EnumType
  * @typedef {Object} EnumType
  * @property {string} name - Name des EnumTypes == SchemaType.name
- * @property {Set<any>} values - WertListe für den EnumTyp
+ * @property {Array<any>} values - WertListe für den EnumTyp
  * @property {string|Array<string>|undefined} [more_enums] - Name einer Property oder Liste mit Properties die den Typ weiterer Enum Einträge im Objekt erlaubt
 */
 export const EnumType_fields = ["name", "values", "more_enums"];
@@ -698,15 +536,13 @@ export class Schema {
 
         // Wen kein Enum Objekt
         if (!obj) {
-            obj = { name: enum_name, values: new Set() };
+            obj = { name: enum_name, values: [] };
         }
 
         if (Array.isArray(value)) {
-            for (let i = 0; i < value.length; i++) {
-                obj.values.add(value[i]);
-            }
+            obj.values.concat(value);
         } else {
-            obj.values.add(value);
+            obj.values.push(value);
         }
 
         // Objekt in der Liste ablegen
@@ -930,7 +766,7 @@ export class Schema {
             // Enum lesen
             let obj = this.#enumList.getObject(typeID);
             
-            const validEnum = obj?.values.has(value);
+            const validEnum = obj?.values.includes(value);
             if (!validEnum) {
                 // Auf mor_enums prüfen
                 if (obj?.more_enums) {
@@ -1138,7 +974,7 @@ export const infoSchema = new Schema("infoSchema");
 
 // Enums
 infoSchema.setEnum({
-    name: "enu_types", values: new Set([
+    name: "enu_types", values: [
         "string"
         , "number"
         , "bigint"
@@ -1150,24 +986,24 @@ infoSchema.setEnum({
         , "unique"
         , "group"
         , "choice"
-    ])
+    ]
 });
 
-infoSchema.setEnum({ name: "enu_art", values: new Set(["string", "number", "bigint", "boolean"]) });
+infoSchema.setEnum({ name: "enu_art", values: ["string", "number", "bigint", "boolean"] });
 
 infoSchema.setEnum({
-    name: "enu_casing", values: new Set([
+    name: "enu_casing", values: [
         "camelCase"
         , "PascalCase"
         , "snake_case"
         , "lower"
         , "upper"
-    ])
+    ]
 });
 
-infoSchema.setEnum({ name: "enu_onupdate", values: new Set(["NO", "UPDATE", "NULL", "DEFAULT"]) });
+infoSchema.setEnum({ name: "enu_onupdate", values: ["NO", "UPDATE", "NULL", "DEFAULT"] });
 
-infoSchema.setEnum({ name: "enu_ondelete", values: new Set(["NO", "DELETE", "NULL", "DEFAULT"]) });
+infoSchema.setEnum({ name: "enu_ondelete", values: ["NO", "DELETE", "NULL", "DEFAULT"] });
 
 // String_number Typ
 infoSchema.setDataType({ name: "string_number", art: "multi", simple_types: ["string", "number"] });
@@ -1247,147 +1083,4 @@ infoSchema.addProperty("InfoText", "prop_gsid", { min: 0 });
 infoSchema.addProperty("InfoText", "lang", { default: "de", min: 0 });
 infoSchema.addProperty("InfoText", "date", { min: 0 });
 infoSchema.addProperty("InfoText", "text");
-
-
-// ==========================
-//   Schema anzeigen
-// --------------------
-
-/**
- * Liefert einen HTML-String für ein Schema zurück (JSDoc-Style)
- * @param {Schema} schema - Info Schema Instanz
- * @returns {string} Vollständiger HTML-String für die Dokumentation
- */
-export function getSchemaHTML(schema) {
-
-    // --- HAUPTFUNKTION FÜR DIE ANZEIGE ---
-    function renderDocumentation() {
-        let html = "";
-
-        // 1. HAUPT-OBJEKTE RENDERN (Alle Datentypen, die die Art "object" haben)
-        // Hier nutzen wir Ihr praktisches Such-Objekt!
-        const hauptObjekte = schema.dataTypes.findAll({ art: "object" });
-
-        hauptObjekte.forEach(typ => {
-            html += createObjectCardHTML(typ);
-        });
-
-        // 2. GLOBALE HILFSTYPEN & ENUMS RENDERN
-        // Wir suchen alle Typen, deren Art NICHT "object" ist (über eine Spalten-Funktion im Such-Objekt)
-        const hilfsTypen = schema.dataTypes.findAll({
-            art: (/** @type {string} */value) => value !== "object"
-        });
-
-        if (hilfsTypen.length > 0) {
-            html += `<div class="footer-section">`;
-            html += `<h2>Globale Hilfstypen & Enums</h2>`;
-            hilfsTypen.forEach(typ => {
-                html += createObjectCardHTML(typ);
-            });
-            html += `</div>`;
-        }
-
-        return html;
-    }
-
-    // --- HILFSFUNKTION: Erstellt eine einzelne JSDoc-Karte ---
-    /**
-     * @param {DataType} typ 
-     * @returns {string} HTML-String der Karte
-     */
-    function createObjectCardHTML(typ) {
-        // Findet alle Eigenschaften, die zu diesem Objektnamen gehören
-        const allProps = schema.properties.findAll({ object_name: typ.name });
-
-        // Trennung in XML-Attribute (@) und normale Properties
-        const attribute = allProps.filter(p => p.name.startsWith("@"));
-        const propertys = allProps.filter(p => !p.name.startsWith("@"));
-
-        let cardHtml = `<div class="object-card" id="type-${typ.name}">`;
-        cardHtml += `<h2>${typ.name} <span class="badge">${typ.art}</span></h2>`;
-
-        // XML-Attribute anzeigen
-        if (attribute.length > 0) {
-            cardHtml += `<div class="section-title">Attributes</div>`;
-            cardHtml += buildJSDocTable(attribute);
-        }
-
-        // Normale Kind-Elemente / Properties anzeigen
-        if (propertys.length > 0) {
-            cardHtml += `<div class="section-title">Properties</div>`;
-            cardHtml += buildJSDocTable(propertys);
-        }
-        // ENUM-WERTE ANZEIGEN: Wenn der Typ ein Enum ist, holen wir die Werte aus schema.enums
-        else if (typ.art === "enum") {
-            cardHtml += `<div class="section-title">Erlaubte Werte (Enum)</div>`;
-
-            // Wir suchen in der Enum-Tabelle nach dem Eintrag für diesen Typen
-            const enumEintrag = schema.enums.find({ name: typ.name });
-
-            if (enumEintrag && enumEintrag.values && enumEintrag.values.size > 0) {
-                cardHtml += `<table class="jsdoc-table enum-table">
-                    <thead><tr><th>Erlaubter Wert</th></tr></thead>
-                    <tbody>`;
-
-                // Da enumEintrag.values ein Set<any> ist, wandeln wir es in ein Array um
-                const werteArray = Array.from(enumEintrag.values);
-                werteArray.forEach(wert => {
-                    cardHtml += `<tr><td class="enum-value">${wert}</td></tr>`;
-                });
-
-                cardHtml += `</tbody></table>`;
-            } else {
-                cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Enum-Werte hinterlegt.</p>`;
-            }
-        }
-        // Wenn es ein reiner SimpleType ohne Properties ist (z.B. ein custom String-Typ)
-        else if (attribute.length === 0) {
-            cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Eigenschaften definiert (SimpleType / Primitiv).</p>`;
-        }
-
-        cardHtml += `</div>`;
-        return cardHtml;
-    }
-
-    // --- HILFSFUNKTION: Baut die JSDoc Tabelle für Attribute/Properties ---
-    /**
-     * @param {Array<PropertyType>} propListe 
-     * @returns {string} HTML-String der Tabelle
-     */
-    function buildJSDocTable(propListe) {
-        let table = `<table class="jsdoc-table">
-        <thead>
-            <tr><th>Name</th><th>Typ</th><th>Kardinalität</th><th>Details / Fixwert</th></tr>
-        </thead>
-        <tbody>`;
-
-        propListe.forEach(p => {
-            // Prüfen, ob der Typ im Schema existiert -> Dann machen wir einen Klick-Link daraus
-            const typExistiert = schema.dataTypes.has(p.prop_type || "");
-            const typLink = typExistiert
-                ? `<a class="prop-type" href="#type-${p.prop_type}">${p.prop_type}</a>`
-                : `<span style="color: #666;">${p.prop_type}</span>`;
-
-            // Kardinalität leserlich übersetzen
-            let kardinalitaet = `${p.min}..${p.max === -1 ? '*' : p.max}`;
-            if (p.min === 0 && p.max === 1) kardinalitaet += " (Optional)";
-            if (p.min === 1 && p.max === 1) kardinalitaet += " (Erforderlich)";
-
-            table += `<tr>
-                <td class="prop-name">${p.name}</td>
-                <td>${typLink}</td>
-                <td style="color: #666; font-size: 0.9em;">${kardinalitaet}</td>
-                <td style="font-style: italic; color: #555;">${p.fix ? `Fixwert: "${p.fix}"` : (p.default ? `Default: "${p.default}"` : '-')}</td>
-            </tr>`;
-        });
-
-        table += `</tbody></table>`;
-        return table;
-    }
-
-    // Startet den geschützten Ausleseprozess und gibt den HTML-String zurück
-    return renderDocumentation();
-}
-
-// ==============================
 
