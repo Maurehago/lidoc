@@ -808,7 +808,7 @@ export class InfoUIForm extends InfoUIComponent {
         if (this.domElement) {
             this.domElement.innerHTML = this.render();
         }
-    }    
+    }
 
     /**
      * Liest die aktuellen Formulardaten als flaches Objekt aus
@@ -848,11 +848,11 @@ export class InfoUIForm extends InfoUIComponent {
         this.formElement = this.formElement || this.domElement.querySelector("form");
         if (!this.formElement) return false; //
 
-        // 1. Daten gesammelt auslesen
+        // Daten in Objekt lesen
         const aktuelleDaten = this.getValues();
         if (!aktuelleDaten) return false;
 
-        // 2. Deine bestehende Objekt-Validierung aus infoschema.js nutzen!
+        // todo: Schema Objekt Name ????
         // Nutzt die von dir geschriebene validateObject-Methode
         const validationResult = schema.validateObject(this.id, aktuelleDaten); //
 
