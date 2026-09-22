@@ -24,6 +24,19 @@ import { DataTable, getGSID, isNumber } from "./infotable.js";
 // =============== SCHEMA ================
 
 /**
+ * AssertType (Neu für XSD 1.1 Asserts)
+ * @typedef {Object} AssertType
+ * @property {string} gsid - Eindeutige ID des Asserts
+ * @property {string} object_name - Name des ObjectType (complexType), an dem der Assert hängt
+ * @property {string} test - Der XPath-Ausdruck der Assert-Bedingung (z.B. "sum(PmtInf/CtrlSum) = GrpHdr/CtrlSum")
+ * @property {string|undefined} [message] - Optionale Fehlermeldung aus der Dokumentation
+ */
+export const AssertType_fields = ["gsid", "object_name", "test", "message"];
+export const AssertType_unique = "gsid";
+
+
+
+/**
  * EnumType
  * @typedef {Object} EnumType
  * @property {string} name - Name des EnumTypes == SchemaType.name
@@ -118,7 +131,7 @@ export const PropType_unique = "gsid";
  * DataType
  * @typedef {Object} DataType
  * @property {string} name - ID/Name des Types
- * @property {"string"|"number"|"bigint"|"boolean"|"multi"|"enum"|"object"|"ref"|"unique"|"group"|"choice"} art - Um welchen Art von Typ es sich handelt
+ * @property {"string"|"number"|"bigint"|"boolean"|"multi"|"enum"|"object"|"ref"|"unique"|"group"|"choice"|"assert"} art - Um welchen Art von Typ es sich handelt
  * @property {string|undefined} [base_name] - Optional: Erweitert diesen "base" ObjektTypen
  * @property {Array<string>|undefined} [simple_types] - Optional: Liste von Simplen Typen (ein oder Mehrere einschränkungen)
  * @property {string|Array<string>|undefined} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID eines Objektes/Datensatzes(object) ergeben
@@ -166,6 +179,7 @@ export class InfoSchema {
         this.enums = [[...EnumType_fields]];
         this.refs = [[...RefType_fields]];
         this.infos = [[...InfoText_fields]];
+        this.asserts = [[...AssertType_fields]]; // XML Schema 1.1
     }
     /** @type {"infoSchema"} */
     infotype = "infoSchema";
@@ -187,6 +201,8 @@ export class InfoSchema {
     refs = [];
     /** @type {Array<Array<any>>} */
     infos = [];
+    /** @type {Array<Array<any>>}  XML-Schema 1.1*/
+    asserts = []; // Neu hinzugefügt    
 };
 
 
@@ -238,6 +254,9 @@ export class Schema {
     /** @type {DataTable<InfoText>} Liste mit InformationsTexten */
     #infoList = new DataTable("infos", [InfoText_fields], InfoText_unique);
 
+    /** @type {DataTable<AssertType>} Liste mit Asserts */
+    #assertList = new DataTable("asserts", [AssertType_fields], AssertType_unique);
+
 
     // Tabellen (ReadOnly) für Listen Funktionen
     get dataTypes() { return this.#dataTypeList.readOnly(); }
@@ -247,7 +266,7 @@ export class Schema {
     get enums() { return this.#enumList.readOnly(); }
     get refs() { return this.#refList.readOnly(); }
     get infos() { return this.#infoList.readOnly(); }
-
+    get asserts() { return this.#assertList.readOnly(); } // XML 1.1
 
     /**
      * Neues Leeres TypeObjekt
@@ -281,6 +300,30 @@ export class Schema {
      */
     getDataType(type_name) {
         return this.#dataTypeList.getObject(type_name);
+    }
+
+
+    /**
+     * Neues Leeres AssertObjekt (XML 1.1)
+     * @param {string} [id] - Optional neue ID
+     * @returns {Partial<AssertType>}
+     */
+    newAssert(id) {
+        return this.#assertList.newObject(id);
+    }
+
+    /**
+     * Registriert einen Assert im Schema (XML 1.1)
+     * @param {Partial<AssertType>} options - Eigenschaften des Asserts
+     * @returns {string|undefined} ID wenn erfolgreich
+     */
+    setAssert(options) {
+        if (!options.gsid) { options.gsid = getGSID(); }
+        
+        // Stellt sicher, dass ein passender Datentyp vermerkt wird
+        this.#dataTypeList.setObject({ name: options.gsid, art: "assert" });
+        
+        return this.#assertList.setObject(options);
     }
 
 
@@ -881,6 +924,7 @@ export class Schema {
             , enums: this.#enumList.rows
             , refs: this.#refList.rows
             , infos: this.#infoList.rows
+            , asserts: this.#assertList.rows
         };
         return obj;
     }
@@ -902,6 +946,7 @@ export class Schema {
             , enums: this.#enumList.rows
             , refs: this.#refList.rows
             , infos: this.#infoList.rows
+            , asserts: this.#assertList.rows
         };
 
         let schemaString = JSON.stringify(obj);
@@ -928,7 +973,7 @@ export class Schema {
         this.#enumList = new DataTable("enums", obj.enums || [EnumType_fields], EnumTyp_unique);
         this.#refList = new DataTable("refs", obj.refs || [RefType_fields], RefType_unique);
         this.#infoList = new DataTable("infos", obj.infos || [InfoText_fields], InfoText_unique);
-
+        this.#assertList = new DataTable("asserts", obj.asserts || [AssertType_fields], AssertType_unique)
         return true;
     }
 

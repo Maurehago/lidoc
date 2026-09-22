@@ -563,10 +563,10 @@ export class InfoUIForm extends InfoUIComponent {
 
         /** 
          * Speicher für dynamische Select-Optionen, die nicht aus dem Schema kommen.
-         * Format: { "feld_name": [ {value: "de", text: "Deutsch"}, ... ] }
-         * @type {Object<string, Array<{value: string, text: string}>>} 
+         * Format: { "feld_name": [[key, value], ... ] }
+         * @type {Map<string, Array<Array<any>>|Array<string>>} 
          */
-        this.dynamicOptions = {};
+        this.dynamicOptions = new Map();
     }
 
     /** @type {HTMLFormElement|null|undefined} */
@@ -706,10 +706,13 @@ export class InfoUIForm extends InfoUIComponent {
                 const currentVal = cleanVal;
 
                 // 1. Priorität: Dynamisch übergebene Listen von der App
-                if (this.dynamicOptions[field.field_name]) {
-                    this.dynamicOptions[field.field_name].forEach(opt => {
-                        optionsHtml += `<option value="${opt.value}" ${currentVal == opt.value ? 'selected' : ''}>${opt.text}</option>`;
-                    });
+                if (this.dynamicOptions.has(field.field_name)) {
+                    const optionsList = this.dynamicOptions.get(field.field_name) || [];
+                    for (let i = 0; i < optionsList?.length; i++) {
+                        const opt_key = Array.isArray(optionsList[i]) ? optionsList[i][0] : optionsList[i];
+                        const opt_value = Array.isArray(optionsList[i]) ? optionsList[i][1] : optionsList[i];
+                        optionsHtml += `<option value="${opt_value}" ${currentVal == opt_value ? 'selected' : ''}>${opt_key}</option>`;
+                    };
                 } 
                 // 2. Priorität: Fallback auf dein infoSchema Enum
                 else if (schema && field.field_name) {
@@ -798,12 +801,11 @@ export class InfoUIForm extends InfoUIComponent {
     /**
      * Erlaubt es der App, Dropdown-Daten zur Laufzeit zu setzen
      * @param {string} fieldName 
-     * @param {Array<{value: string, text: string}> | Array<string>} options 
+     * @param {Array<Array<any>>|Array<string>} options 
      */
     setSelectOptions(fieldName, options) {
-        this.dynamicOptions[fieldName] = options.map(opt => 
-            typeof opt === "string" ? { value: opt, text: opt } : opt
-        );
+        this.dynamicOptions.set(fieldName, options);
+        
         // Falls das Formular bereits im DOM ist, rendern wir es neu
         if (this.domElement) {
             this.domElement.innerHTML = this.render();
@@ -1962,6 +1964,7 @@ infoUISchema.addProperty("InfoUIDetailField", "format", {min: 0});
 //   UI- Komponenten
 // ------------------
 
+// Tabellen ansicht
 export const infoUITable_list = new InfoUITable("table_cols", "Table Columns");
 infoUITable_list.add_col("column_name");
 infoUITable_list.add_col("display_name");
@@ -1974,6 +1977,7 @@ infoUITable_form.add_field("display_name");
 infoUITable_form.add_field("position", "position", "input_number");
 infoUITable_form.add_field("format");
 
+// Formular Ansicht
 export const infoUIForm_list = new InfoUITable("form_fields", "Formular Fields");
 infoUIForm_list.add_col("field_name");
 infoUIForm_list.add_col("label");
@@ -1989,4 +1993,43 @@ infoUIForm_form.add_field("position");
 infoUIForm_form.add_field("ui_element", "ui_element", "select");
 infoUIForm_form.add_field("action_module");
 infoUIForm_form.add_field("action_function");
+infoUIForm_form.setSelectOptions("ui_element", InfoUIInputType_values);
+
+
+//-------  Schema ---------
+
+// ObjektTypen
+export const infoUISchema_typelist = new InfoUITable("schema_typelist", "Schema Type List");
+infoUISchema_typelist.add_col("name");
+infoUISchema_typelist.add_col("art");
+infoUISchema_typelist.add_col("base_name");
+infoUISchema_typelist.add_col("simple_types");
+
+
+// Propertys von Objekt Typen
+export const infoUISchema_proplist = new InfoUITable("schema_proplist", "Schema Property List");
+infoUISchema_proplist.add_col("name");
+infoUISchema_proplist.add_col("pos");
+infoUISchema_proplist.add_col("prop_type");
+infoUISchema_proplist.add_col("min");
+infoUISchema_proplist.add_col("max");
+infoUISchema_proplist.add_col("default");
+infoUISchema_proplist.add_col("fix");
+
+
+// Simple Typen
+export const infoUISchema_simpletypelist = new InfoUITable("schema_simpletypelist", "Schema SimpleType List");
+infoUISchema_simpletypelist.add_col("name");
+infoUISchema_simpletypelist.add_col("art");
+infoUISchema_simpletypelist.add_col("length");
+infoUISchema_simpletypelist.add_col("min_length");
+infoUISchema_simpletypelist.add_col("max_length");
+infoUISchema_simpletypelist.add_col("pattern");
+infoUISchema_simpletypelist.add_col("whitespace");
+infoUISchema_simpletypelist.add_col("casing");
+infoUISchema_simpletypelist.add_col("decimals");
+infoUISchema_simpletypelist.add_col("min_inclusive");
+infoUISchema_simpletypelist.add_col("min_exclusive");
+infoUISchema_simpletypelist.add_col("max_exclusive");
+infoUISchema_simpletypelist.add_col("max_inclusive");
 
