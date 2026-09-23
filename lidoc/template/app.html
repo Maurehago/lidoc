@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>InfoUI</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description" content="" />
+    <link rel="icon" href="/img/icon.png">
+    <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
+    <link rel="stylesheet" type="text/css" href="/css/page.css" />
+    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
+
+    <script src="/lib/prism/prism.js"></script>
+    <!-- <script src="/lib/prism/prism_foxpro.js"></script> <!-- OPTIONAL für Foxpro Code -->
+</head>
+
+<body>
+    <f-row class="width: 100vw, height: 100vh">
+        <f-item id="left_menu" class="width:280px;"></f-item>
+        <f-item w-fit style="overflow-x: auto;">
+            <f-row gap-s class="app-container">
+                <!-- Dynamische Spalten(Views) -->
+            </f-row>
+        </f-item>
+    </f-row>
+</body>
+
+<!-- Skript als Modul, wird ausgeführt wenn die Seite komplett geladen -->
+<script type="module">
+    // @ts-check
+
+</script>
+
+</html>

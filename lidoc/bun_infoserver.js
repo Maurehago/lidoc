@@ -5,7 +5,8 @@
 
 import { join } from "path";
 import { mkdir } from "fs/promises";
-import { InfoSchema, InfoTableUI_fields, InfoFormUI_fields } from "./infoschema.js";
+import { InfoSchema } from "./infoschema.js";
+import { InfoUITableCol_fields, InfoUIFormField_fields } from "./infoui.js";
 
 //import { JsonFileDriver } from "./db_drivers.js";
 
@@ -15,7 +16,7 @@ import { InfoSchema, InfoTableUI_fields, InfoFormUI_fields } from "./infoschema.
 
 /**
  * DatenTypen vom Schema
- * @import {ApplicationConfig, ClientServerMessage, Token, DBDriverInterface, DriverConfig} from "./infoschema.js"
+ * @import {ApplicationConfig, ClientServerMessage, Token, DBDriverInterface, DriverConfig} from "./infoui.js"
  */
 
 
@@ -118,8 +119,8 @@ async function loadOrInitializeConfig() {
         , isNewSystem: true
         , drivers: []
         , defaultDriverId: null
-        , infoTables: [[...InfoTableUI_fields]]
-        , infoForms: [[...InfoFormUI_fields]]
+        , infoTables: [[...InfoUITableCol_fields]]
+        , infoForms: [[...InfoUIFormField_fields]]
         , appSchema: new InfoSchema()
     };
 

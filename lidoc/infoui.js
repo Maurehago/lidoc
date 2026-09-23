@@ -30,6 +30,39 @@ import { Schema, InfoSchema } from "./infoschema.js";
 // - list schema filter: {type: "string|number|boolean"}
 
 
+// "row-select", {
+//     bubbles: true,
+//     detail: { tableId: this.id, recordId: activeRow?.getAttribute("data-record-id") }
+// }
+
+// "row-edit", {
+//     bubbles: true,
+//     detail: { tableId: this.id, recordId: activeRow?.getAttribute("data-record-id") }
+// }
+
+
+// CustomEvent:
+// "form-action", {
+//      bubbles: true,
+//      detail: {
+//          formId: this.id,
+//          action: actionName,
+//          values: this.getValues()
+//      }
+// })
+
+// "sync-initial-state", {
+//     detail: { rows: data.rows, idColName: data.idColName }
+// }
+
+// "sync-data-received", {
+//     detail: {
+//         tableName: data.tableName,
+//         targetType: data.targetType, // "LIST", "FORM", "DETAIL"
+//         recordId: data.recordId,
+//         dataTable: incomingTable
+//     }
+// }
 
 
 // --------- CSS ---------------
@@ -220,8 +253,6 @@ export const InfoUIDetailField_unique = "field_name";
 //   Komponente
 // --------------
 
-
-// infoui.js
 export class InfoUIComponent {
     /**
      * 
@@ -1530,130 +1561,54 @@ export class UiController {
 
 
 
-// ==========================================
-//   Beispiel APP
-// ---------------
-
-// // app.js (Spezifischer Business-Anwendungsfall)
-// import { UiController, UiColumn, InfoUITable } from "./infoui.js";
-// import { DataTable } from "./infotable.js";
-
-// const container = document.getElementById("app-container");
-// const controller = new UiController(container);
-
-// // Beispiel-Daten
-// const kundenDaten = new DataTable("kunden", [
-//     ["gsid", "name", "ort"],
-//     ["1", "Müller GmbH", "Wien"],
-//     ["2", "Gruber AG", "Salzburg"]
-// ]);
-
-// const ansprechpartnerDaten = new DataTable("partner", [
-//     ["gsid", "name", "funktion"],
-//     ["p1", "Max Mustermann", "Einkauf"],
-//     ["p2", "Anna Rossi", "Geschäftsführung"]
-// ]);
-
-// // SPALTE 1 bauen (Mit ZWEI vertikalen Tabellen untereinander)
-// const col1 = new UiColumn("Kundenstamm", 0);
-
-// const t1 = new InfoUITable("kunden_master", "Firmen", kundenDaten);
-// t1.add_col("gsid", "ID");
-// t1.add_col("name", "Name");
-// col1.addComponent(t1);
-
-// const t2 = new InfoUITable("kunden_kontakte", "Ansprechpartner", ansprechpartnerDaten);
-// t2.add_col("name", "Name");
-// t2.add_col("funktion", "Rolle");
-// col1.addComponent(t2);
-
-// // Spalte an den Controller übergeben -> Rendert automatisch alles inklusive globaler Event-Links
-// controller.addColumn(col1);
-
-// // Logische Custom Events abfangen
-// container.addEventListener("row-select", (e) => {
-//     const { tableId, recordId } = e.detail;
-//     console.log(`app.js hat die Auswahl mitbekommen: ${tableId} -> ${recordId}`);
-//     // Hier folgt dein sync.send(...) für den WebSocket
-// });
-
-// -------  2. Beispiel --------------------
-
-// // kunden_app.js (Beispiel für einen konkreten Anwendungsfall)
-// import { UiController, UiColumn, InfoUITable, InfoUIForm, RealtimeSync } from "./infoui.js";
-
-// const container = document.getElementById("app-container");
-// const controller = new UiController(container);
-// const sync = new RealtimeSync("ws://localhost:3000/socket", controller);
-// sync.connect();
-
-// // 1. Definition der UI-Komponenten für diese App
-// const kundenTabelle = new InfoUITable("kunden_master", "Kundenliste");
-// kundenTabelle.add_col("gsid", "ID", 0);
-// kundenTabelle.add_col("name", "Firmenname", 1);
-// kundenTabelle.add_col("ort", "Stadt", 2);
-
-// const kundenForm = new InfoUIForm("kunden_form", "Kundendetails");
-// kundenForm.add_field("name", "Firmenname", "input_text", 0);
-// kundenForm.add_field("ort", "Stadt", "input_text", 1);
-
-// // Spalten definieren
-// const spalte1 = new UiColumn("Stammdaten", 0);
-// spalte1.addComponent(kundenTabelle);
-// controller.addColumn(spalte1); // Zeigt die erste leere/wartende Spalte an
-
-// // 2. REAKTION AUF DATEN VOM SERVER (Über RealtimeSync geleitet)
-// window.addEventListener("sync-data-received", (e) => {
-//     const { tableName, targetType, dataTable } = e.detail;
-
-//     // Wenn es die Kundenliste ist -> Tabelle befüllen und rendern
-//     if (tableName === "kunden" && targetType === "LIST") {
-//         kundenTabelle.updateData(dataTable);
-//     }
-
-//     // Wenn ein einzelner Kunde geladen wurde -> Formular dynamisch in Spalte 2 öffnen
-//     if (tableName === "kunden" && targetType === "FORM") {
-//         const clientObj = dataTable.getObject(1); // Hole Zeile 1 als Objekt
-//         kundenForm.dataObject = clientObj; // Dem Formular die Daten geben
-
-//         // Prüfen, ob Spalte 2 schon offen ist, ansonsten neu hinzufügen
-//         let spalte2 = controller.columns[1];
-//         if (!spalte2) {
-//             spalte2 = new UiColumn("Bearbeiten", 1);
-//             spalte2.addComponent(kundenForm);
-//             controller.addColumn(spalte2);
-//         } else {
-//             // Wenn Spalte schon offen, nur Inhalt aktualisieren
-//             kundenForm.domElement.innerHTML = kundenForm.render();
-//         }
-//     }
-// });
-
-// // 3. REAKTION AUF AKTIONEN AUS DER UI (Tastatur / Maus)
-// container.addEventListener("row-edit", (e) => {
-//     const { tableId, recordId } = e.detail;
-
-//     if (tableId === "kunden_master") {
-//         // Sende Datenanforderung für das Formular an den Server
-//         sync.send({
-//             type: "GET_DATA",
-//             tableName: "kunden",
-//             recordId: recordId,
-//             targetType: "FORM"
-//         });
-//     }
-// });
-
-
-// ==========================================
-
-
 // HTML-Template: Ein einziger flexibler Container für unendlich anbaubare Spalten nach rechts
 const base_html = `
 <div id="app-container" style="display: flex; flex-direction: row; overflow-x: auto; width: 100vw; height: 100vh; gap: 10px; padding: 10px; box-sizing: border-box;">
   <!-- Spalten werden hier dynamisch per JS eingehängt -->
 </div>
 `;
+
+const app_html = `
+<f-row class="width: 100vw, height: 100vh">
+  <f-item id="left_menu" class="width:280px;"></f-item>
+  <f-item w-fit style="overflow-x: auto;">
+    <f-row gap-s class="app-container">
+      <!-- Dynamische Spalten(Views) -->
+    </f-row>
+  </f-item>
+</f-row>
+`;
+
+    //   <f-item data-col-index="0" class="app-column">
+    //     <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
+    //       ${title}
+    //     </div>
+    //     <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px;">
+    //       <!-- Tabelle -->
+    //       <div class="ui-view-container" data-target-type="LIST" data-table-id="${tableId}" tabindex="0">
+    //         <table class="pure-table">
+    //           <thead><tr></tr></thead>
+    //           <tbody><tr></tr></tbody>
+    //         </table>
+    //       </div>
+
+    //       <!-- Formular -->
+    //       <div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">
+    //         <!-- Input -->
+    //         <div class="form-group" data-focusable="true">
+    //           <label>${field.label}</label>
+    //           <input type="text" data-field="${field.field_name}" value="${value}">
+    //         </div>
+    //         <!-- Button -->
+    //         <button class="ui-btn" data-focusable="true" data-module="${field.action_module || ''}" data-function="${field.action_function || ''}">
+    //           ${field.label}
+    //         </button>
+    //       </div>
+    //     </div>        
+    //   </f-item>
+
+
+
 
 // RealtimeSync.js - Wiederverwendbares Client-Modul
 export class RealtimeSync {
@@ -1928,8 +1883,8 @@ export class InfoRouter {
 }
 
 // ==========================================
-//   Schema
-// ------------
+//   UI Schema
+// -------------
 
 export const infoUISchema = new Schema("infoUISchema");
 
@@ -1996,7 +1951,7 @@ infoUIForm_form.add_field("action_function");
 infoUIForm_form.setSelectOptions("ui_element", InfoUIInputType_values);
 
 
-//-------  Schema ---------
+//-------  Schema Komponenten ---------
 
 // ObjektTypen
 export const infoUISchema_typelist = new InfoUITable("schema_typelist", "Schema Type List");
@@ -2033,3 +1988,121 @@ infoUISchema_simpletypelist.add_col("min_exclusive");
 infoUISchema_simpletypelist.add_col("max_exclusive");
 infoUISchema_simpletypelist.add_col("max_inclusive");
 
+
+
+// ==========================================
+//   Beispiel APP
+// ---------------
+
+// // app.js (Spezifischer Business-Anwendungsfall)
+// import { UiController, UiColumn, InfoUITable } from "./infoui.js";
+// import { DataTable } from "./infotable.js";
+
+// const container = document.getElementById("app-container");
+// const controller = new UiController(container);
+
+// // Beispiel-Daten
+// const kundenDaten = new DataTable("kunden", [
+//     ["gsid", "name", "ort"],
+//     ["1", "Müller GmbH", "Wien"],
+//     ["2", "Gruber AG", "Salzburg"]
+// ]);
+
+// const ansprechpartnerDaten = new DataTable("partner", [
+//     ["gsid", "name", "funktion"],
+//     ["p1", "Max Mustermann", "Einkauf"],
+//     ["p2", "Anna Rossi", "Geschäftsführung"]
+// ]);
+
+// // SPALTE 1 bauen (Mit ZWEI vertikalen Tabellen untereinander)
+// const col1 = new UiColumn("Kundenstamm", 0);
+
+// const t1 = new InfoUITable("kunden_master", "Firmen", kundenDaten);
+// t1.add_col("gsid", "ID");
+// t1.add_col("name", "Name");
+// col1.addComponent(t1);
+
+// const t2 = new InfoUITable("kunden_kontakte", "Ansprechpartner", ansprechpartnerDaten);
+// t2.add_col("name", "Name");
+// t2.add_col("funktion", "Rolle");
+// col1.addComponent(t2);
+
+// // Spalte an den Controller übergeben -> Rendert automatisch alles inklusive globaler Event-Links
+// controller.addColumn(col1);
+
+// // Logische Custom Events abfangen
+// container.addEventListener("row-select", (e) => {
+//     const { tableId, recordId } = e.detail;
+//     console.log(`app.js hat die Auswahl mitbekommen: ${tableId} -> ${recordId}`);
+//     // Hier folgt dein sync.send(...) für den WebSocket
+// });
+
+// -------  2. Beispiel --------------------
+
+// // kunden_app.js (Beispiel für einen konkreten Anwendungsfall)
+// import { UiController, UiColumn, InfoUITable, InfoUIForm, RealtimeSync } from "./infoui.js";
+
+// const container = document.getElementById("app-container");
+// const controller = new UiController(container);
+// const sync = new RealtimeSync("ws://localhost:3000/socket", controller);
+// sync.connect();
+
+// // 1. Definition der UI-Komponenten für diese App
+// const kundenTabelle = new InfoUITable("kunden_master", "Kundenliste");
+// kundenTabelle.add_col("gsid", "ID", 0);
+// kundenTabelle.add_col("name", "Firmenname", 1);
+// kundenTabelle.add_col("ort", "Stadt", 2);
+
+// const kundenForm = new InfoUIForm("kunden_form", "Kundendetails");
+// kundenForm.add_field("name", "Firmenname", "input_text", 0);
+// kundenForm.add_field("ort", "Stadt", "input_text", 1);
+
+// // Spalten definieren
+// const spalte1 = new UiColumn("Stammdaten", 0);
+// spalte1.addComponent(kundenTabelle);
+// controller.addColumn(spalte1); // Zeigt die erste leere/wartende Spalte an
+
+// // 2. REAKTION AUF DATEN VOM SERVER (Über RealtimeSync geleitet)
+// window.addEventListener("sync-data-received", (e) => {
+//     const { tableName, targetType, dataTable } = e.detail;
+
+//     // Wenn es die Kundenliste ist -> Tabelle befüllen und rendern
+//     if (tableName === "kunden" && targetType === "LIST") {
+//         kundenTabelle.updateData(dataTable);
+//     }
+
+//     // Wenn ein einzelner Kunde geladen wurde -> Formular dynamisch in Spalte 2 öffnen
+//     if (tableName === "kunden" && targetType === "FORM") {
+//         const clientObj = dataTable.getObject(1); // Hole Zeile 1 als Objekt
+//         kundenForm.dataObject = clientObj; // Dem Formular die Daten geben
+
+//         // Prüfen, ob Spalte 2 schon offen ist, ansonsten neu hinzufügen
+//         let spalte2 = controller.columns[1];
+//         if (!spalte2) {
+//             spalte2 = new UiColumn("Bearbeiten", 1);
+//             spalte2.addComponent(kundenForm);
+//             controller.addColumn(spalte2);
+//         } else {
+//             // Wenn Spalte schon offen, nur Inhalt aktualisieren
+//             kundenForm.domElement.innerHTML = kundenForm.render();
+//         }
+//     }
+// });
+
+// // 3. REAKTION AUF AKTIONEN AUS DER UI (Tastatur / Maus)
+// container.addEventListener("row-edit", (e) => {
+//     const { tableId, recordId } = e.detail;
+
+//     if (tableId === "kunden_master") {
+//         // Sende Datenanforderung für das Formular an den Server
+//         sync.send({
+//             type: "GET_DATA",
+//             tableName: "kunden",
+//             recordId: recordId,
+//             targetType: "FORM"
+//         });
+//     }
+// });
+
+
+// ==========================================
