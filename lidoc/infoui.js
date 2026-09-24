@@ -135,7 +135,7 @@ export const InfoUITableCol_unique = "column_name";
  * Input Typen
  * @typedef {"input_text"|"input_number"|"input_range"|"input_date"|"checkbox"|"select"|"button"|"textarea"} InfoUIInputType
  */
-export const InfoUIInputType_values = ["input_text","input_number","input_range","input_date","checkbox","select","button","textarea"];
+export const InfoUIInputType_values = ["input_text", "input_number", "input_range", "input_date", "checkbox", "select", "button", "textarea"];
 
 /**
  * Formular einstellungen
@@ -262,6 +262,9 @@ export class InfoUIComponent {
         this.id = id;
         /** @type {HTMLElement|null} */
         this.domElement = null; // Wird beim Rendern besetzt
+
+        /** @type {Object<string,function>} */
+        this.fu = {}; // wird von der APP überschrieben
     }
 
     /** Wird von Komponenten überschrieben */
@@ -411,7 +414,13 @@ export class InfoUITable extends InfoUIComponent {
 
             html += `<tr data-record-id="${recordId}">`;
             for (let j = 0; j < columns.length; j++) {
-                const value = row[colIndexes[j]];
+                const format = columns[i].format;
+                let value = row[colIndexes[j]];
+                
+                // Formatierung
+                if (format && typeof this.fu[format] == "function") {
+                    value = this.fu[format](value);
+                }
 
                 // Spalte anzeigen todo: Ausrichtung/Formatierung ????
                 html += `<td>${value}</td>`;
@@ -535,7 +544,7 @@ export class InfoUITable extends InfoUIComponent {
         if (tbody) {
             this.activeRowIdx = Array.from(tbody.rows).indexOf(row);
             this.activeColIdx = cell.cellIndex;
-            
+
             this.updateVisualFocus();
 
             // Row-Select Event abfeuern (wie bei Space)
@@ -565,7 +574,7 @@ export class InfoUITable extends InfoUIComponent {
         if (tbody) {
             this.activeRowIdx = Array.from(tbody.rows).indexOf(row);
             this.activeColIdx = cell.cellIndex;
-            
+
             this.updateVisualFocus();
 
             // Row-Select Event abfeuern (wie bei Space)
@@ -744,7 +753,7 @@ export class InfoUIForm extends InfoUIComponent {
                         const opt_value = Array.isArray(optionsList[i]) ? optionsList[i][1] : optionsList[i];
                         optionsHtml += `<option value="${opt_value}" ${currentVal == opt_value ? 'selected' : ''}>${opt_key}</option>`;
                     };
-                } 
+                }
                 // 2. Priorität: Fallback auf dein infoSchema Enum
                 else if (schema && field.field_name) {
                     const enumObj = schema.getEnum(field.field_name) || schema.getEnum("InfoUIInputType"); // Dynamisch passend
@@ -761,7 +770,7 @@ export class InfoUIForm extends InfoUIComponent {
                     <label>${field.label}</label>
                     <select name="${field.field_name}" data-field="${field.field_name}">${optionsHtml}</select>
                 </div>`;
-                
+
             case "button":
                 // Wir nutzen 'action_function' als sprechenden Event-Namen (z.B. "addSchema")
                 const actionName = field.action_function || field.field_name;
@@ -836,7 +845,7 @@ export class InfoUIForm extends InfoUIComponent {
      */
     setSelectOptions(fieldName, options) {
         this.dynamicOptions.set(fieldName, options);
-        
+
         // Falls das Formular bereits im DOM ist, rendern wir es neu
         if (this.domElement) {
             this.domElement.innerHTML = this.render();
@@ -1020,7 +1029,7 @@ export class InfoUIForm extends InfoUIComponent {
         // Wenn Enter auf einem Button gedrückt wird -> Aktion auslösen
         if (e.key === "Enter" && target.tagName.toLowerCase() === "button") {
             e.preventDefault();
-            
+
             const actionName = target.getAttribute("data-action");
             if (actionName) {
                 this.domElement?.dispatchEvent(new CustomEvent("form-action", {
@@ -1511,13 +1520,13 @@ export class UiController {
             if (clickedColDom && clickedCompDom) {
                 const colIdx = parseInt(clickedColDom.getAttribute("data-col-index") || "", 10);
                 const colInstance = this.columns[colIdx];
-                
+
                 if (colInstance) {
                     const compIdx = colInstance.components.findIndex(c => c.domElement === clickedCompDom);
                     if (compIdx !== -1) {
                         // 1. Fokus visuell umschalten (wie gehabt)
                         this.switchFocus(colIdx, compIdx);
-                        
+
                         // 2. MAGISCHE DELEGATION: Event an die Komponente weiterreichen
                         const comp = colInstance.components[compIdx];
                         if (comp) {
@@ -1539,13 +1548,13 @@ export class UiController {
             if (clickedColDom && clickedCompDom) {
                 const colIdx = parseInt(clickedColDom.getAttribute("data-col-index") || "", 10);
                 const colInstance = this.columns[colIdx];
-                
+
                 if (colInstance) {
                     const compIdx = colInstance.components.findIndex(c => c.domElement === clickedCompDom);
                     if (compIdx !== -1) {
                         // 1. Fokus visuell umschalten (wie gehabt)
                         this.switchFocus(colIdx, compIdx);
-                        
+
                         // 2. MAGISCHE DELEGATION: Event an die Komponente weiterreichen
                         const comp = colInstance.components[compIdx];
                         if (comp) {
@@ -1579,33 +1588,33 @@ const app_html = `
 </f-row>
 `;
 
-    //   <f-item data-col-index="0" class="app-column">
-    //     <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
-    //       ${title}
-    //     </div>
-    //     <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px;">
-    //       <!-- Tabelle -->
-    //       <div class="ui-view-container" data-target-type="LIST" data-table-id="${tableId}" tabindex="0">
-    //         <table class="pure-table">
-    //           <thead><tr></tr></thead>
-    //           <tbody><tr></tr></tbody>
-    //         </table>
-    //       </div>
+//   <f-item data-col-index="0" class="app-column">
+//     <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
+//       ${title}
+//     </div>
+//     <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px;">
+//       <!-- Tabelle -->
+//       <div class="ui-view-container" data-target-type="LIST" data-table-id="${tableId}" tabindex="0">
+//         <table class="pure-table">
+//           <thead><tr></tr></thead>
+//           <tbody><tr></tr></tbody>
+//         </table>
+//       </div>
 
-    //       <!-- Formular -->
-    //       <div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">
-    //         <!-- Input -->
-    //         <div class="form-group" data-focusable="true">
-    //           <label>${field.label}</label>
-    //           <input type="text" data-field="${field.field_name}" value="${value}">
-    //         </div>
-    //         <!-- Button -->
-    //         <button class="ui-btn" data-focusable="true" data-module="${field.action_module || ''}" data-function="${field.action_function || ''}">
-    //           ${field.label}
-    //         </button>
-    //       </div>
-    //     </div>        
-    //   </f-item>
+//       <!-- Formular -->
+//       <div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">
+//         <!-- Input -->
+//         <div class="form-group" data-focusable="true">
+//           <label>${field.label}</label>
+//           <input type="text" data-field="${field.field_name}" value="${value}">
+//         </div>
+//         <!-- Button -->
+//         <button class="ui-btn" data-focusable="true" data-module="${field.action_module || ''}" data-function="${field.action_function || ''}">
+//           ${field.label}
+//         </button>
+//       </div>
+//     </div>        
+//   </f-item>
 
 
 
@@ -1768,6 +1777,13 @@ export class RealtimeSync {
             if (event.code === 4001) {
                 console.warn("Session abgelaufen! Zeige Login-Maske.");
 
+                // Wenn ein Hash existiert (z.B. "#api.schema=xxx"), sichern wir ihn im Speicher
+                // todo: Aktuelles merken
+                if (window.location.hash) {
+                    // für Redirekt nach dem Login (dort weitermachen bevor die Session abgelaufen ist)
+                    sessionStorage.setItem("spa_redirect_hash", window.location.hash);
+                }
+
                 // Seite neu laden. Da das Cookie ein Session-Cookie ist 
                 // und der Server das Token gelöscht hat, landet der User automatisch auf der Login-Seite.
                 window.location.reload();
@@ -1889,30 +1905,30 @@ export class InfoRouter {
 export const infoUISchema = new Schema("infoUISchema");
 
 // Enums
-infoUISchema.setEnum({name: "InfoUIInputType", values: InfoUIInputType_values});
+infoUISchema.setEnum({ name: "InfoUIInputType", values: InfoUIInputType_values });
 
 // InfoUITableCol
-infoUISchema.setDataType({name: "InfoUITableCol", art: "object", id: "column_name"});
+infoUISchema.setDataType({ name: "InfoUITableCol", art: "object", id: "column_name" });
 infoUISchema.addProperty("InfoUITableCol", "column_name");
 infoUISchema.addProperty("InfoUITableCol", "display_name");
-infoUISchema.addProperty("InfoUITableCol", "position", {prop_type: "int"});
-infoUISchema.addProperty("InfoUITableCol", "format", {min: 0});
+infoUISchema.addProperty("InfoUITableCol", "position", { prop_type: "int" });
+infoUISchema.addProperty("InfoUITableCol", "format", { min: 0 });
 
 // InfoUIFormField
-infoUISchema.setDataType({name: "InfoUIFormField", art: "object", id: "field_name"});
+infoUISchema.setDataType({ name: "InfoUIFormField", art: "object", id: "field_name" });
 infoUISchema.addProperty("InfoUIFormField", "field_name");
 infoUISchema.addProperty("InfoUIFormField", "label");
-infoUISchema.addProperty("InfoUIFormField", "position", {prop_type: "int"});
-infoUISchema.addProperty("InfoUIFormField", "ui_element", {prop_type: "InfoUIInputType", min: 0});
-infoUISchema.addProperty("InfoUIFormField", "action_module", {min: 0});
-infoUISchema.addProperty("InfoUIFormField", "action_function", {min: 0});
+infoUISchema.addProperty("InfoUIFormField", "position", { prop_type: "int" });
+infoUISchema.addProperty("InfoUIFormField", "ui_element", { prop_type: "InfoUIInputType", min: 0 });
+infoUISchema.addProperty("InfoUIFormField", "action_module", { min: 0 });
+infoUISchema.addProperty("InfoUIFormField", "action_function", { min: 0 });
 
 // InfoUIFormField
-infoUISchema.setDataType({name: "InfoUIDetailField", art: "object", id: "field_name"});
+infoUISchema.setDataType({ name: "InfoUIDetailField", art: "object", id: "field_name" });
 infoUISchema.addProperty("InfoUIDetailField", "field_name");
 infoUISchema.addProperty("InfoUIDetailField", "label");
-infoUISchema.addProperty("InfoUIDetailField", "position", {prop_type: "int"});
-infoUISchema.addProperty("InfoUIDetailField", "format", {min: 0});
+infoUISchema.addProperty("InfoUIDetailField", "position", { prop_type: "int" });
+infoUISchema.addProperty("InfoUIDetailField", "format", { min: 0 });
 
 
 // ==========================================

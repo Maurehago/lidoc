@@ -9,15 +9,15 @@
     <link rel="icon" href="/img/icon.png">
     <link rel="stylesheet" type="text/css" href="/lib/flex/flex.css" />
     <link rel="stylesheet" type="text/css" href="/css/page.css" />
-    <link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />
+    <!--<link rel="stylesheet" type="text/css" href="/lib/prism/prism.css" />-->
 
-    <script src="/lib/prism/prism.js"></script>
+    <!--<script src="/lib/prism/prism.js"></script>-->
     <!-- <script src="/lib/prism/prism_foxpro.js"></script> <!-- OPTIONAL für Foxpro Code -->
 </head>
 
 <body>
-    <f-row class="width: 100vw, height: 100vh">
-        <f-item id="left_menu" class="width:280px;"></f-item>
+    <f-row style="width: 100vw; height: 100vh">
+        <f-item id="left_menu" style="width:280px;"></f-item>
         <f-item w-fit style="overflow-x: auto;">
             <f-row gap-s class="app-container">
                 <!-- Dynamische Spalten(Views) -->
@@ -30,6 +30,9 @@
 <script type="module">
     // @ts-check
 
+    // App.Javascript ausbessern
+    import { init } from "./app.js";
+    init();
 </script>
 
 </html>

@@ -128,6 +128,77 @@ async function loadOrInitializeConfig() {
     return freshConfig;
 }
 
+
+// Hilfsfunktion zum Generieren des HTML-Formulars
+function renderLoginForm(errorMessage = "", nextUrl = "/", reason = "") {
+    let infoMessage = "";
+
+    if (reason === "timeout") {
+        infoMessage = "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
+    } else if (reason === "logout") {
+        infoMessage = "Du hast dich erfolgreich abgemeldet.";
+    }
+
+    return `
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <title>Login</title>
+        <style>
+            body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }
+            .login-card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+            .form-group { margin-bottom: 1rem; }
+            label { display: block; margin-bottom: .5rem; font-weight: bold; }
+            input { width: 100%; padding: .5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+            button { width: 100%; padding: .75rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+            button:hover { background: #0056b3; }
+            .error { color: #dc3545; background: #fdf2f2; border: 1px solid #fde2e2; padding: .75rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
+            .info { color: #004085; background: #cce5ff; border: 1px solid #b8daff; padding: .75rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
+        </style>
+    </head>
+    <body>
+        <div class="login-card">
+            <h2>Anmelden</h2>
+            
+            ${infoMessage ? `<div class="info">${infoMessage}</div>` : ''}
+            ${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}
+            
+            <!-- Formular sendet ganz normal per POST an /login -->
+            <form method="POST" action="/login" id="loginForm">
+                <!-- Das Feld wird primär vom Server befüllt (z.B. '/') -->
+                <input type="hidden" name="next" id="nextUrlField" value="${nextUrl}">
+
+                <div class="form-group">
+                    <label for="username">Benutzername</label>
+                    <input type="text" id="username" name="username" required autofocus>
+                </div>
+                <button type="submit">Einloggen</button>
+            </form>
+        </div>
+
+        <script>
+            // MAGIE FÜR HASH-ROUTING:
+            // Da der Server den Hash nicht kennt, liest dieses Skript im Browser
+            // beim Laden der Seite den sessionStorage aus.
+            const savedHash = sessionStorage.getItem("spa_redirect_hash");
+            if (savedHash) {
+                const field = document.getElementById("nextUrlField");
+                // Wir hängen den geretteten Hash an die Ziel-URL an (z.B. /#api.schema=xxx)
+                field.value = field.value + savedHash;
+                // Danach löschen wir ihn, um die Session sauber zu halten
+                sessionStorage.removeItem("spa_redirect_hash");
+            }
+        </script>
+    </body>
+    </html>
+    `;
+}
+
+
+
+
+
 // 3. SERVER CLASS IMPLEMENTIERUNG
 export class RealtimeServer {
     /**
@@ -280,55 +351,96 @@ export class RealtimeServer {
 
                 // 1. Erlaube den Zugriff auf die Login-Seite und statische Assets immer ohne Prüfung
                 if (url.pathname === "/login" && req.method === "GET") {
-                    // Hier lieferst du deine normalen Login-Dateien aus...
-                    // Pfad für Bun.file vorbereiten (Punkt voranstellen für relativen Pfad)
-                    const file = Bun.file("./_login.html");
+                    // URL merken
+                    const nextUrl = url.searchParams.get("next") || "/";
 
-                    // 3. Prüfen, ob die Datei existiert, und ausliefern
-                    if (await file.exists()) {
-                        return new Response(file);
-                    }
-
-                    // 4. Fallback, falls die Datei nicht existiert
-                    return new Response("Login Not Found", { status: 404 });
-                }
-
-                // Prüfen auf aktiven user
-                if (!currentToken || Date.now() < currentToken.exp) {
-                    console.log(`Anonyme Anfrage auf ${url.pathname} - Leite um zu /login.html`);
-
-                    // REDIRECT: Status 302 und Location-Header
-                    return new Response(null, { status: 302, headers: { "Location": "/login" } });
+                    // Formular Rendern
+                    return new Response(renderLoginForm("", nextUrl), {
+                        headers: { "Content-Type": "text/html; charset=utf-8" }
+                    });
                 }
 
                 // HTTP-Endpunkt zum EINLOGGEN und Cookie setzen
                 if (url.pathname === "/login" && req.method === "POST") {
-                    // todo: hier kommt irgendwann die Benutzer Prüfung rein
-                    const body = await req.json();
+                    try {
+                        const contentType = req.headers.get("content-type") || "";
+                        let username = "";
+                        let nextUrl = "/"; // Fallback, falls nichts übergeben wurde
 
-                    /** @type {Token} */
-                    const token = {
-                        gsid: getGSID()
-                        , userId: getGSID() // todo: wird Später vom Benutzer gelesen
-                        , username: body.username || "lokaler_benutzer"
-                        , exp: Date.now() + this.sessionTimeout
+                        // 1. Daten auslesen (unterstützt nun Formulare und JSON)
+                        if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+                            const formData = await req.formData();
+                            username = formData.get("username")?.toString().trim() || "";
+                            nextUrl = formData.get("next")?.toString() || "/";
+                        } else if (contentType.includes("application/json")) {
+                            const body = await req.json();
+                            username = body.username?.trim() || "";
+                            nextUrl = body.next || "/";
+                        }
+
+                        // Validierung
+                        if (!username) {
+                            return new Response(renderLoginForm("Bitte Benutzernamen eingeben.", nextUrl), {
+                                status: 400,
+                                headers: { "Content-Type": "text/html; charset=utf-8" }
+                            });
+                        }
+
+                        // Token im Server hinterlegen (Session erstellen)
+                        const token = {
+                            gsid: getGSID(),
+                            userId: getGSID(),
+                            username: username,
+                            exp: Date.now() + this.sessionTimeout
+                        };
+                        this.tokens.set(token.gsid, token);
+
+                        console.log(`Login erfolgreich für ${username}. Leite weiter an: ${nextUrl}`);
+
+                        // ERFOLG: Der Server schickt den Browser per Redirect exakt an die gewünschte Client-Route!
+                        //return Response.redirect(new URL(nextUrl, req.url), 303);
+                        return new Response(null, {
+                            status: 303, // 303 See Other zwingt den Browser nach einem POST zu einem sauberen GET-Request
+                            headers: {
+                                "Location": new URL(nextUrl, req.url).toString(),
+                                "Set-Cookie": `auth_token=${token.gsid}; Path=/; HttpOnly; SameSite=Strict` // "; Secure" hinzufügen in Echtsystemen 
+                            }
+                        });
+
+                    } catch (error) {
+                        console.error("Login-Fehler:", error);
+                        return new Response(renderLoginForm("Ein interner Fehler ist aufgetreten.", "/"), {
+                            status: 500,
+                            headers: { "Content-Type": "text/html; charset=utf-8" }
+                        });
+                    }
+                }
+
+                // Prüfen auf aktiven user
+                if (!currentToken || Date.now() > currentToken.exp) {
+                    // Altes Token aufräumen, falls abgelaufen vorhanden
+                    if (tokenGsid) this.tokens.delete(tokenGsid);
+
+                    // Wir merken uns den Pfad (z.B. / oder /index.html)
+                    const originalTarget = url.pathname + url.search;
+
+                    console.log(`Anonyme oder abgelaufene Anfrage auf ${originalTarget} - Leite um zu /login`);
+
+                    // Erstelle die Ziel-URL für den Login
+                    const redirectUrl = new URL("/login", req.url);
+
+                    // Übergib den Pfad als "next"-Parameter, damit das Formular weiß, wo es hin soll
+                    redirectUrl.searchParams.set("next", originalTarget);
+
+                    // Übergib den Grund, falls das Token im Speicher existierte, aber abgelaufen war
+                    if (currentToken && Date.now() > currentToken.exp) {
+                        redirectUrl.searchParams.set("reason", "timeout");
                     }
 
-                    // Token Merken
-                    this.tokens.set(token.gsid, token);
-
-                    return new Response(JSON.stringify({ success: true }), {
-                        status: 200,
-                        headers: {
-                            "Content-Type": "application/json",
-                            // Hier setzen wir das sichere Cookie!
-                            // HIER: Max-Age weglassen -> Es wird ein Session-Cookie!
-                            "Set-Cookie": `auth_token=${token.gsid}; Path=/; HttpOnly; Secure; SameSite=Strict`
-                        }
-                    });
-
-                    //return new Response("Nicht gefunden", { status: 404 });
+                    // Nativer, stabiler Browser-Redirect (302)
+                    return Response.redirect(redirectUrl, 302);
                 }
+
 
                 // WebSocket Upgrade Handshake
                 if (url.pathname === "/socket") {
@@ -409,9 +521,9 @@ export class RealtimeServer {
                         type: "INITIAL_STATE"
                         //locks: Object.fromEntries(this.activeLocks), // Aktuelle Sperren als Objekt
                         //id: "root_column",
-                        ,targetType: "MENU"
+                        , targetType: "MENU"
                         //title: `${currentConfig.appName} - Hauptmenü`,
-                        ,rows: startMenuRows
+                        , rows: startMenuRows
                         , payload: currentConfig
                     }
 
