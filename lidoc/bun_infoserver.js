@@ -278,8 +278,8 @@ export class RealtimeServer {
                     // const driverInstance = new FirebirdDriver(driverCfg.id, driverCfg.name, driverCfg.connectionString);
                     // this.activeDrivers.set(driverCfg.id, driverInstance);
                 }
-                else if (driverCfg.type === "JSON_FILES") {
-                    console.log(`JSON-Dateien-Verzeichnis wird überwacht/initialisiert: ${driverCfg.connectionString}`);
+                else if (driverCfg.type === "FOLDER") {
+                    console.log(`Dateien-Verzeichnis wird überwacht/initialisiert: ${driverCfg.connectionString}`);
                 }
 
             } catch (err) {

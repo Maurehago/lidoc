@@ -194,9 +194,9 @@ export const InfoUIDetailField_unique = "field_name";
  * Diese Struktur wird in der lokalen config.json persistiert.
  * @typedef {Object} DriverConfig
  * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
- * @property {"SQLITE" | "FIREBIRD" | "JSON_FILES" | "HTML_FRAGMENTS"} type - Die technologische Art des Treibers
+ * @property {"SQLITE"|"FIREBIRD"|"FOLDER"} type - Die technologische Art des Treibers
  * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
- * @property {string} connectionString - Pfad zur Datei (SQLite/JSON), Server-Verbindungsdaten (Firebird), Pfad ("JSON_FILES"|"HTML_FRAGMENTS")
+ * @property {string} connectionString - Pfad zur Datei (SQLite), Server-Verbindungsdaten (Firebird), Pfad ("FOLDER")
  */
 
 /**
