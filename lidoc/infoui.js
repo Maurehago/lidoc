@@ -1104,7 +1104,7 @@ export class InfoRouter {
     get_hashData() {
         // darf nicht in den Daten stehen "#","/","&", "=", "," -> sind Trennzeichen
         // key beginnt mit: "api." = Fetch API, "ws." = Websocket typ "GET_DATA", "LOCK_DATA", "SAVE_DATA", "DEL_DATA"  ("ws.get.adresse","ws.lock.adresse", "ws.save.adresse", "ws.del.adresse")
-        // domain.de/#?api.menu=/menu/menu1&api.content=/forms/form1&ws.addresse=id:456,name:hallo&ws.bestellungen=gsid:25
+        // domain.de/#?api.menu=/menu/menu1&api.content=/forms/form1&ws.get.addresse=id:456,name:hallo&ws.get.bestellungen=gsid:25
         const hash = window.location.hash;
         const hashString = hash.includes("?") ? hash.split("?")[1] : "";
         if (!hashString) {return;}
@@ -1112,13 +1112,13 @@ export class InfoRouter {
         // In parts "key=value" aufsplitten
         const parts = hashString.split("&");
         const api_list = []; // [["menu", "/menu/menu1"], ["content","/forms/form1"]]
-        const ws_list = []; // [ ["addresse", {id: "456", name: "hallo"}], ["bestellungen": {gsid: "25"}] ]
+        const ws_list = []; // [ ["get.addresse", {id: "456", name: "hallo"}], ["get.bestellungen": {gsid: "25"}] ]
 
         // alle Parts durchgehen
         for (let i = 0; i < parts.length; i++) {
             const key_value = parts[i].split("=");
             
-            // wenn UI - startet mit "ui."
+            // wenn UI - startet mit "api."
             if (key_value[0].startsWith("api.")) {
                 api_list.push([key_value[0].substring(4), key_value[1]]);
             }
