@@ -263,7 +263,7 @@ export function parseXSD(xsdString) {
                 // todo: Kind Elemente in DataTyp.oneOfProperties[] einfügen
 
                 // ein neuen Typ erstellen
-                newTypeName = XSD.setDataType({ art: "choice" });
+                newTypeName = XSD.setDataType({ art: "multi" });
 
                 // Typ bei Property setzen
                 if (propID) {
@@ -557,7 +557,7 @@ export function parseXSD(xsdString) {
                     newTypeName = XSD.setDataType({ name: getGSID() });
 
                     // mit aktuellen Type verlinken
-                    XSD.linkSimpleType(typeName, newTypeName);
+                    XSD.addMultiType(typeName, newTypeName);
                 } else {
                     // neuen Simplen Typ anlegen
                     newTypeName = XSD.setSimpleType({ name: getGSID() });
@@ -591,7 +591,7 @@ export function parseXSD(xsdString) {
                 //newTypeName = getGSID();
                 let memberTypes = cleanNamespace(elm.getAttribute("memberTypes"));
                 if (memberTypes) {
-                    XSD.linkSimpleType(typeName, memberTypes.split(" "));
+                    XSD.addMultiType(typeName, memberTypes.split(" "));
                 }
                 checkChildren = true;
                 break;
