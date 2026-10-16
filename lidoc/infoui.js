@@ -3,7 +3,7 @@
 // =========================================================================
 // @ts-check
 
-import { DataTable } from "./infotable.js";
+import { DataTable, getGSID } from "./infotable.js";
 import { Schema, InfoSchema } from "./infoschema.js";
 
 // ===================================
@@ -249,6 +249,9 @@ export const InfoUIDetailField_unique = "field_name";
  */
 
 
+/** @typedef {"on-error"|"on-init"|"on-lock-update"|"on-data"|"on-lock-denied"|"on-lock-released"|"on-save"|"on-data-changed"|"on-delete"} WebSocketEvents */
+
+
 // ============================================
 //   Komponente
 // --------------
@@ -263,9 +266,58 @@ export class InfoUIComponent {
         /** @type {HTMLElement|null} */
         this.domElement = null; // Wird beim Rendern besetzt
 
+        /** @type {Object<string,Array<function>>} */
+        this.listeners = {}; // wird von der APP überschrieben
+
         /** @type {Object<string,function>} */
-        this.fu = {}; // wird von der APP überschrieben
+        this.formaters = {}; // wird von der APP überschrieben
     }
+
+    /**
+     * Registriert eine Eventfunktion
+     * @param {string} actionName - Name des Events
+     * @param {function} callback - Callback Funktion die für dieses Event ausgeführt wird
+     */
+    on(actionName, callback) {
+        if (!this.listeners[actionName]) this.listeners[actionName] = [];
+        this.listeners[actionName].push(callback);
+    }
+
+    /**
+     * Ruft die Registrieren Funktionen auf wenn vorhanden
+     * @param {string} actionName - Name des Events
+     */
+    trigger(actionName) {
+        if (this.listeners[actionName]) {
+            for (let i = 0; i < this.listeners[actionName].length; i++) {
+                if (typeof this.listeners[actionName][i] == "function") {
+                    typeof this.listeners[actionName][i](this);
+                }
+            }
+        }
+    }
+
+    /**
+     * Gibt einen Formatierten Wert zurück
+     * @param {string} formatName - Name der Formatierung
+     * @param {any} value - Wert der Formatiert wird
+     * @returns {any} Formatierter Wert
+     * @example
+    const AppFormatters = {  
+        currency: (val) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(val),  
+        date: (val) => new Intl.DateTimeFormat('de-DE').format(new Date(val)),  
+        uppercase: (val) => String(val).toUpperCase()  
+    };  
+     */
+    getFormat(formatName, value) {
+        if (this.formaters[formatName] && typeof this.formaters[formatName] == "function") {
+            return this.formaters[formatName](value);
+        }
+        return value;
+    }
+
+
+
 
     /** Wird von Komponenten überschrieben */
     render() { return ""; }
@@ -418,8 +470,8 @@ export class InfoUITable extends InfoUIComponent {
                 let value = row[colIndexes[j]];
                 
                 // Formatierung
-                if (format && typeof this.fu[format] == "function") {
-                    value = this.fu[format](value);
+                if (format) {
+                    value = this.getFormat(format, value);
                 }
 
                 // Spalte anzeigen todo: Ausrichtung/Formatierung ????
@@ -488,40 +540,38 @@ export class InfoUITable extends InfoUIComponent {
         if (e.key === "ArrowDown" && this.activeRowIdx < maxRows - 1) {
             this.activeRowIdx++; e.preventDefault();
             this.updateVisualFocus();
+            this.trigger("row-select");
         }
         if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
             this.activeRowIdx--; e.preventDefault();
             this.updateVisualFocus();
+            this.trigger("row-select");
         }
 
         // Horizontale Navigation (Zellen-Fokus)
         if (e.key === "ArrowRight" && this.activeColIdx < maxCols - 1) {
             this.activeColIdx++; e.preventDefault();
             this.updateVisualFocus();
+            this.trigger("cell-select");
         }
         if (e.key === "ArrowLeft" && this.activeColIdx > 0) {
             this.activeColIdx--; e.preventDefault();
             this.updateVisualFocus();
+            this.trigger("cell-select");
         }
 
         // Auswahl (Leertaste)
         if (e.key === " ") { // "Space" im Web-API ist ein Leerzeichen-String
             e.preventDefault();
             const activeRow = tbody.rows[this.activeRowIdx];
-            this.domElement?.dispatchEvent(new CustomEvent("row-select", {
-                bubbles: true,
-                detail: { tableId: this.id, recordId: activeRow?.getAttribute("data-record-id") }
-            }));
+            this.trigger("row-select");
         }
 
         // Ausführen / Editieren (Enter)
         if (e.key === "Enter") {
             e.preventDefault();
             const activeRow = tbody.rows[this.activeRowIdx];
-            this.domElement?.dispatchEvent(new CustomEvent("row-edit", {
-                bubbles: true,
-                detail: { tableId: this.id, recordId: activeRow?.getAttribute("data-record-id") }
-            }));
+            this.trigger("row-edit");
         }
     }
 
@@ -546,12 +596,7 @@ export class InfoUITable extends InfoUIComponent {
             this.activeColIdx = cell.cellIndex;
 
             this.updateVisualFocus();
-
-            // Row-Select Event abfeuern (wie bei Space)
-            this.domElement?.dispatchEvent(new CustomEvent("row-select", {
-                bubbles: true,
-                detail: { tableId: this.id, recordId: row.getAttribute("data-record-id") }
-            }));
+            this.trigger("row-select");
         }
     }
 
@@ -576,12 +621,7 @@ export class InfoUITable extends InfoUIComponent {
             this.activeColIdx = cell.cellIndex;
 
             this.updateVisualFocus();
-
-            // Row-Select Event abfeuern (wie bei Space)
-            this.domElement?.dispatchEvent(new CustomEvent("row-edit", {
-                bubbles: true,
-                detail: { tableId: this.id, recordId: row.getAttribute("data-record-id") }
-            }));
+            this.trigger("row-edit");
         }
     }
 }
@@ -1032,14 +1072,15 @@ export class InfoUIForm extends InfoUIComponent {
 
             const actionName = target.getAttribute("data-action");
             if (actionName) {
-                this.domElement?.dispatchEvent(new CustomEvent("form-action", {
-                    bubbles: true,
-                    detail: {
-                        formId: this.id,
-                        action: actionName,
-                        values: this.getValues() // Schickt direkt alle aktuellen Formulardaten mit!
-                    }
-                }));
+                this.trigger(actionName);
+                // this.domElement?.dispatchEvent(new CustomEvent("form-action", {
+                //     bubbles: true,
+                //     detail: {
+                //         formId: this.id,
+                //         action: actionName,
+                //         values: this.getValues() // Schickt direkt alle aktuellen Formulardaten mit!
+                //     }
+                // }));
             }
             return;
         }
@@ -1076,16 +1117,16 @@ export class InfoUIForm extends InfoUIComponent {
         if (target.tagName.toLowerCase() === "button" && target.hasAttribute("data-action")) {
             e.preventDefault();
             const actionName = target.getAttribute("data-action");
-
             if (actionName) {
-                this.domElement?.dispatchEvent(new CustomEvent("form-action", {
-                    bubbles: true,
-                    detail: {
-                        formId: this.id,
-                        action: actionName,
-                        values: this.getValues()
-                    }
-                }));
+                this.trigger(actionName);
+                // this.domElement?.dispatchEvent(new CustomEvent("form-action", {
+                //     bubbles: true,
+                //     detail: {
+                //         formId: this.id,
+                //         action: actionName,
+                //         values: this.getValues()
+                //     }
+                // }));
             }
         }
     }
@@ -1270,9 +1311,11 @@ export class InfoUIDatail extends InfoUIComponent {
 
         //fields.forEach(field => {
         for (let i = 0; i < fields.length; i++) {
-            // todo: formate Festlegen (fields[i].format)
-            const val = this.dataObject[fields[i].field_name];
-
+            const format = fields[i].format;
+            let val = this.dataObject[fields[i].field_name];
+            if (format) {
+                val = this.getFormat(format, val);
+            }
             // Input HTML zusammenbauen
             html += `<tr><th>${fields[i].label}</th><td>${val}</td></tr>`;
         };
@@ -1312,10 +1355,12 @@ export class InfoUIDatail extends InfoUIComponent {
         if (e.key === "ArrowDown") {
             container.scrollTop += 30;
             e.preventDefault();
+            this.trigger("row-select");
         }
         if (e.key === "ArrowUp") {
             container.scrollTop -= 30;
             e.preventDefault();
+            this.trigger("row-select");
         }
     }
 }
@@ -1632,11 +1677,44 @@ export class RealtimeSync {
 
         /** @type {DataTable<any>|null} - Layout Definitionen vom Server */
         this.uiLayoutTable = null;
+
+        // Lokaler Event-Speicher für Netzwerk-Events
+        /** @type {Object<string,Array<function>>} */
+        this.listeners = {};
+
+        /** Datenabfragen Promices merken */
+        this.pendingRequests = new Map();
     }
 
     /** Gesperrte Datensätze */
     lockedData = new Map();
 
+    /**
+     * Registriert eine CallbackFunktion für ein Event
+     * @param {WebSocketEvents} actionName - Name des Events
+     * @param {function} callback - CallBack Funktion die bei diesem Event aufgerufen wird
+     */
+    on(actionName, callback) {
+        if (!this.listeners[actionName]) this.listeners[actionName] = [];
+        this.listeners[actionName].push(callback);
+    }
+
+    /**
+     * Löst ein Event aus
+     * @param {WebSocketEvents} actionName - Event Funktion
+     * @param {any} eventData - Event Daten
+     */
+    trigger(actionName, eventData) {
+        if (this.listeners[actionName]) {
+            for (let i = 0; i < this.listeners[actionName].length; i++) {
+                if (typeof this.listeners[actionName][i] === "function") {
+                    // Wichtig: Wir übergeben die Daten und optional 'this' als target
+                    //this.listeners[actionName][i]({ ...eventData, target: this });
+                    this.listeners[actionName][i](eventData);
+                }
+            }
+        }
+    }
 
     /**
      * Stellt eine Verbindung mit dem Server her
@@ -1654,6 +1732,7 @@ export class RealtimeSync {
                 case "ERROR":
                     // TODO: Fehler anzeigen
                     console.error(data.payload);
+                    this.trigger("on-error", data);
                     break;
 
                 case "INITIAL_STATE":
@@ -1663,9 +1742,10 @@ export class RealtimeSync {
                     }
 
                     // Melde der App, dass der Initialzustand (z.B. Hauptmenü-Daten) da ist
-                    window.dispatchEvent(new CustomEvent("sync-initial-state", {
-                        detail: { rows: data.rows, idColName: data.idColName }
-                    }));
+                    this.trigger("on-init", data);
+                    // window.dispatchEvent(new CustomEvent("sync-initial-state", {
+                    //     detail: { rows: data.rows, idColName: data.idColName }
+                    // }));
 
                     // if (data.rows) {
                     //     // Das Hauptmenü kommt vom Server. Da es im DataTable-Format vorliegt,
@@ -1690,23 +1770,26 @@ export class RealtimeSync {
 
                 case "LOCK_UPDATED":
                     // Optional: Sperr-Status im UI visualisieren (z.B. Zeile rot färben)
+                    this.trigger("on-lock-update", data);
                     break;
 
                 case "DATA":
-                    if (!data.rows) return;
+                    //if (!data.rows) return;
 
                     // Verwandle die Array-of-Arrays Zeilen in ein echtes DataTable-Objekt
-                    const incomingTable = new DataTable(data.tableName || "", data.rows, data.idColName);
+                    //const incomingTable = new DataTable(data.tableName || "", data.rows, data.idColName);
 
-                    // CUSTOM EVENT
-                    window.dispatchEvent(new CustomEvent("sync-data-received", {
-                        detail: {
-                            tableName: data.tableName,
-                            targetType: data.targetType, // "LIST", "FORM", "DETAIL"
-                            recordId: data.recordId,
-                            dataTable: incomingTable
-                        }
-                    }));
+                    this.trigger("on-data", data);
+
+                    // // CUSTOM EVENT
+                    // window.dispatchEvent(new CustomEvent("sync-data-received", {
+                    //     detail: {
+                    //         tableName: data.tableName,
+                    //         targetType: data.targetType, // "LIST", "FORM", "DETAIL"
+                    //         recordId: data.recordId,
+                    //         dataTable: incomingTable
+                    //     }
+                    // }));
 
 
                     // // Je nach data.targetType die Antwort-Daten verarbeiten
@@ -1742,14 +1825,17 @@ export class RealtimeSync {
                     break;
 
                 case "LOCK_DENIED":
+                    this.trigger("on-lock-denied", data);
                     alert("Datensatz wird gerade von einem anderen Benutzer bearbeitet!");
                     break;
 
                 case "LOCK_RELEASED_CONFIRMED":
+                    this.trigger("on-lock-released", data);
                     break;
 
                 case "SAVE_SUCCESS":
                     console.log("Erfolgreich gespeichert!");
+                    this.trigger("on-save", data);
                     // Optional: Dem Controller sagen, er soll den Fokus zurück auf die Tabelle legen
                     break;
 
@@ -1757,9 +1843,11 @@ export class RealtimeSync {
                     // Ein anderer Nutzer hat Daten geändert. 
                     // Hier können Sie prüfen, ob die geänderte Tabelle gerade offen ist, 
                     // und sie im Hintergrund neu anfordern oder updaten.
+                    this.trigger("on-data-changed", data);
                     break;
 
                 case "DELETE_SUCCESS":
+                    this.trigger("on-delete", data);
                     break;
 
                 default:
@@ -1821,6 +1909,62 @@ export class RealtimeSync {
             console.error("WebSocket ist nicht offen. Nachricht verworfen:", data.type);
         }
     }
+
+    // todo: Asynchrone Requests
+    
+    /**
+     * Sendet eine Anfrage und gibt ein Promise zurück, das auflöst,
+     * sobald der Server mit der passenden requestId antwortet.
+     */
+    async requestData(driverId, tableName, quest = null) {
+        const requestId = getGSID();
+
+        const message = {
+            type: "GET_DATA",
+            requestId,
+            driverId,
+            tableName,
+            quest
+        };
+
+        // Wir senden ab und geben ein Promise zurück
+        return new Promise((resolve, reject) => {
+            // Wir merken uns, wie wir das Promise auflösen können, wenn die Antwort kommt
+            this.pendingRequests.set(requestId, { resolve, reject });
+            
+            // Timeout einbauen, damit die UI nicht ewig einfriert, falls der Server abstürzt
+            setTimeout(() => {
+                if (this.pendingRequests.has(requestId)) {
+                    this.pendingRequests.delete(requestId);
+                    reject(new Error(`Timeout bei Anfrage ${requestId}`));
+                }
+            }, 10000); // 10 Sekunden Timeout
+
+            this.ws.send(JSON.stringify(message));
+        });
+    }
+
+    // Wird von ws.onmessage aufgerufen
+    handleIncomingMessage(jsonString) {
+        const message = JSON.parse(jsonString);
+        
+        // 1. Prüfen, ob diese Nachricht zu einer aktiven Anfrage gehört
+        if (message.requestId && this.pendingRequests.has(message.requestId)) {
+            const deferred = this.pendingRequests.get(message.requestId);
+            this.pendingRequests.delete(message.requestId); // Anfrage erledigt, löschen
+            
+            // Promise auflösen und die Daten direkt zurückgeben!
+            deferred.resolve(message.payload); 
+            return;
+        }
+
+        // 2. Fallback für echte Push-Nachrichten vom Server (ohne vorherige Anfrage)
+        switch(message.type) {
+            case "BROADCAST_UPDATE":
+                this.trigger("global-update", message.payload);
+                break;
+        }
+    }    
 }
 
 
