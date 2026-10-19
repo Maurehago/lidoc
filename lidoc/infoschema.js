@@ -7,7 +7,7 @@
 // Datum Typen: date, time, datetime, range
 
 // export * from "./infotable.js";
-import { DataTable, getGSID, isNumber } from "./infotable.js";
+import { DataTable, getGSID, isNumber } from "./infodata.js";
 
 // ==========================================
 //   Typen

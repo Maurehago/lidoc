@@ -7,6 +7,7 @@ import { join } from "path";
 import { mkdir } from "fs/promises";
 import { InfoSchema } from "./infoschema.js";
 import { InfoUITableCol_fields, InfoUIFormField_fields } from "./infoui.js";
+import { DBDriver } from "./infodata.js"
 
 //import { JsonFileDriver } from "./db_drivers.js";
 
@@ -16,7 +17,7 @@ import { InfoUITableCol_fields, InfoUIFormField_fields } from "./infoui.js";
 
 /**
  * DatenTypen vom Schema
- * @import {ApplicationConfig, ClientServerMessage, Token, DBDriverInterface, DriverConfig} from "./infoui.js"
+ * @import {ApplicationConfig, ClientServerMessage, Token, DriverConfig} from "./infodata.js"
  */
 
 
@@ -121,7 +122,6 @@ async function loadOrInitializeConfig() {
         , defaultDriverId: null
         , infoTables: [[...InfoUITableCol_fields]]
         , infoForms: [[...InfoUIFormField_fields]]
-        , appSchema: new InfoSchema()
     };
 
     await saveApplicationConfig(freshConfig);
@@ -219,7 +219,7 @@ export class RealtimeServer {
         /** 
          * Instanziierte und aktive Treiber im Speicher des Servers.
          * Key ist die driverId aus der Konfiguration.
-         * @type {Map<string,DBDriverInterface>} 
+         * @type {Map<string,DBDriver>} 
          */
         this.activeDrivers = new Map();
 
@@ -523,7 +523,6 @@ export class RealtimeServer {
                         //id: "root_column",
                         , targetType: "MENU"
                         //title: `${currentConfig.appName} - Hauptmenü`,
-                        , rows: startMenuRows
                         , payload: currentConfig
                     }
 
@@ -569,10 +568,10 @@ export class RealtimeServer {
                             ? `${msg.driverId}_${msg.tableName}_${msg.recordId}`
                             : "";
 
-                        const { type, driverId, tableName, recordId, idColName, targetType, payload, rows } = msg;
+                        const { type, requestId, driverId, tableName, recordId, quest, targetType, payload } = msg;
 
                         /** @type {ClientServerMessage} */
-                        const answer = { type: "ERROR", driverId, tableName, recordId, idColName };
+                        const answer = { type: "ERROR", requestId, driverId, tableName, recordId, targetType };
 
                         switch (msg.type) {
 
@@ -592,26 +591,26 @@ export class RealtimeServer {
                                     break;
                                 }
 
-                                // Fall B: Ein Treiber wurde gewählt -> Frage dessen Tabellenliste oder Menütabelle ab
-                                if (targetType === "DRIVER_MAIN") {
-                                    const driver = this.activeDrivers.get(driverId || "");
-                                    if (!driver) {
-                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
-                                        break;
-                                    }
+                                // // Fall B: Ein Treiber wurde gewählt -> Frage dessen Tabellenliste oder Menütabelle ab
+                                // if (targetType === "DRIVER_MAIN") {
+                                //     const driver = this.activeDrivers.get(driverId || "");
+                                //     if (!driver) {
+                                //         ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
+                                //         break;
+                                //     }
 
-                                    // Der Treiber liefert uns die Tabellenübersicht
-                                    // (Entweder per Datei-Scan oder aus einer systeminternen Menütabelle)
-                                    // Format: [ ["TableName", "Beschreibung"], ["kunden", "Kundenkartei"] ]
-                                    const tablesList = await driver.getTables();
+                                //     // Der Treiber liefert uns die Tabellenübersicht
+                                //     // (Entweder per Datei-Scan oder aus einer systeminternen Menütabelle)
+                                //     // Format: [ ["TableName", "Beschreibung"], ["kunden", "Kundenkartei"] ]
+                                //     const tablesList = await driver.getTables();
 
-                                    answer.type = "DATA";
-                                    answer.targetType = "LIST";
-                                    answer.rows = tablesList;
+                                //     answer.type = "DATA";
+                                //     answer.targetType = "LIST";
+                                //     answer.rows = tablesList;
 
-                                    ws.send(JSON.stringify(answer));
-                                    break;
-                                }
+                                //     ws.send(JSON.stringify(answer));
+                                //     break;
+                                // }
 
                                 // Fall C: Eine Tabelle wurde gewählt -> Hole Datensätze oder Datensatz
                                 if (driverId && tableName) {
@@ -625,18 +624,18 @@ export class RealtimeServer {
                                     let tableRows;
 
                                     // Wenn datensatz ID  && !recordId
-                                    if (recordId != undefined) {
-                                        tableRows = await driver.getRecord(tableName, recordId, idColName || "gsid");
+                                    if (recordId != undefined && quest) {
+                                        tableRows = await driver.getRecord(tableName, quest);
                                     } else {
                                         // Hole das komplette Daten-Array über den Treiber
-                                        tableRows = await driver.getRows(tableName);
+                                        tableRows = await driver.getRows(tableName, quest);
                                     }
 
                                     ///** @type {ClientServerMessage} */
                                     //const answer = { type: "DATA", targetType: "LIST", rows: tableRows };
                                     answer.type = "DATA";
                                     answer.targetType = "LIST";
-                                    answer.rows = tableRows;
+                                    answer.payload = {[tableName]: tableRows};
 
                                     // Der Server gibt das Array unverändert an den Client weiter.
                                     // Der Client speichert es in seiner lokalen InfoTable zum Filtern und Sortieren.
@@ -670,7 +669,7 @@ export class RealtimeServer {
 
                                 // Jetzt holen wir den aktuellen Zustand GENAU DIESES einen Datensatzes frisch vom Treiber
                                 const driver = this.activeDrivers.get(driverId);
-                                if (driver) {
+                                if (driver && quest) {
                                     // Sperre im Server-Arbeitsspeicher (In-Memory) registrieren
                                     /** @type {LockData} */
                                     const newLock = {
@@ -684,12 +683,12 @@ export class RealtimeServer {
                                     server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
 
                                     // Daten lesen
-                                    const singleRecordRows = await driver.getRecord(tableName, recordId, idColName || "gsid");
+                                    const singleRecordRows = await driver.getRecord(tableName, quest);
 
                                     // Antwort zusammenstellen
                                     answer.type = "DATA";
                                     answer.targetType = "FORM";
-                                    answer.rows = singleRecordRows;
+                                    answer.payload = {[tableName]: singleRecordRows};
 
                                     // Dem anfragenden Client grünes Licht geben und das Daten-Array für sein Formular senden
                                     ws.send(JSON.stringify(answer));
@@ -714,6 +713,8 @@ export class RealtimeServer {
                                 }
                                 break;
                             }
+
+                            //  todo: AB HIER WEITER AUSBESSERN
 
                             // =================================================================
                             //   DATEN MODIFIKATION & SPEICHERUNG (Delta-Handling)

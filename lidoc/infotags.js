@@ -3,7 +3,7 @@
 // ================================
 // @ts-check
 
-import { DataTable } from "./infotable.js";
+import { DataTable } from "./infodata.js";
 
 // =====================================
 //   Typen

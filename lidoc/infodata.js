@@ -4,6 +4,93 @@
 // @ts-check
 
 
+// ----------- Daten DatenTypen ---------------------
+
+
+/**
+ * Eine einzelne Datenzeile. Kann primitive Werte oder Binärdaten enthalten.
+ * @typedef {Array<string | number | bigint | boolean | Uint8Array | null>} DataRow
+ */
+
+/**
+ * Das universelle, zweidimensionale Tabellenformat für alle Treiber und Schichten.
+ * Die ERSTE Zeile (Index 0) enthält IMMER die Spaltennamen (Header).
+ * @typedef {Array<DataRow>} DataRows
+ */
+
+
+// ----------- APP DatenTypen ---------------------
+
+/**
+ * @typedef {Object} Token
+ * @property {string} gsid - Eindeutige Session ID
+ * @property {string} userId - ID des Users
+ * @property {string} username - Name des Benutzers
+ * @property {number} exp - Gültigkeitszeitraum
+ */
+
+/**
+ * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
+ * Diese Struktur wird in der lokalen config.json persistiert.
+ * @typedef {Object} DriverConfig
+ * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
+ * @property {"SQLITE"|"FIREBIRD"|"FOLDER"} type - Die technologische Art des Treibers
+ * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
+ * @property {string} connectionString - Pfad zur Datei (SQLite), Server-Verbindungsdaten (Firebird), Pfad ("FOLDER")
+ */
+
+/**
+ * Die globale Konfigurationsdatei der Anwendung, abgelegt im Benutzer-Appdata-Ordner.
+ * @typedef {Object} ApplicationConfig
+ * @property {string} appName - Der Name der App (aus Startparameter oder Default)
+ * @property {boolean} isNewSystem - Flag; "true" wenn das System im Zustand "NULL" ist (keine Treiber konfiguriert)
+ * @property {Array<DriverConfig>} drivers - Liste aller vom Benutzer eingerichteten Datenquellen
+ * @property {string | null} defaultDriverId - Optionaler Standard-Treiber, der beim Start direkt geöffnet wird
+ * @property {DataRows} infoTables - Liste mit allen InfoTables
+ * @property {DataRows} infoForms - Liste mit Formularen
+ */
+
+/**
+ * Alle erlaubten MessageTypen für das System.
+ * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
+ * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
+ * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
+ * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
+ */
+
+/**
+ * Ziel Typen für die Verarbeitung der Messages
+ * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
+ */
+
+
+/**
+ * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
+ * server:"INITIAL_STATE" -> client // bei erster Verbindung
+ * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
+ * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
+ *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
+ * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
+ *                          server:"LOCK_RELEASED_CONFIRMED" -> client
+ * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * @typedef {Object} ClientServerMessage
+ * @property {MessageType} type - Aktionstyp
+ * @property {string} [requestId] - Eindeutige ID der Nachricht wird an den Server geschickt, und dieser sendet diese wieder zurück damit der Client diese zuordnen kann????
+ * @property {string} [driverId] - Ziel-Treiber für die Aktion
+ * @property {string} [tableName] - Ziel-Tabelle für die Aktion
+ * @property {string} [recordId] - Eindeutige ID des Datensatzes. Wird für Datensatzsperren verendet
+ * @property {Object<string,any>} [quest] - Optional Abfrage Bedingung. z.B.: { gsid: "jagfdgg" }
+ * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
+ * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
+ */
+
+
+// ----------- Lokale DatenTypen ---------------------
+
+
 /** 
  * Callback Funktion die für alle Datensätze ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
@@ -32,6 +119,13 @@
  * @typedef {Object} RowInfo
  * @property {string} id - Die ID des Datensatzes oder der Spalte
  * @property {number} index - Die Position des Datensatzes oder der Spalte
+ */
+
+
+/**
+ * @typedef {Object} SQLQuery
+ * @property {string} sql - WHERE Bedingung ohne "WHERE" am Beginn
+ * @property {Array<any>} params - Parameterwerte für die sql-Query
  */
 
 
@@ -73,139 +167,257 @@ export function isClass(obj) {
 }
 
 
-// /**
-//  * Bindet eine KlassenInstanz an einen Datensatz (Array mit Werten)
-//  * @template T
-//  * @param {Object<string,any>} instance - Klassen Instanz Objekt
-//  * @param {Array<any>} rowArray - DatenZeile
-//  * @param {number} rowIndex - DatenZeile
-//  * @param {DataTable<T>} list - Spalten Index Objekt
-//  * @returns {any} mit Settern und Gettern verbessertes Instanz-Objekt
-//  */
-// export function bindRow(instance, rowArray, rowIndex, list) {
-//     instance._row = rowArray;
-//     instance._rowIndex = rowIndex;
-//     instance._columnIndex = list.columnIndex;
-//     instance._changes = new Set(); // Set mit Spaltennamen, dessen Werte geändert worden sind
-//     instance._isNew = false; // Standardmäßig existiert der Datensatz schon in der DB
-//     instance._isDeleted = false; // Wenn Datensatz als gelöscht markiert ist
-//     instance._list = list;
+//const ALLOWED_TABLES = ["users", "banned_users", "posts"]; // Schutz für Unter-Selects
+//const ALLOWED_COLUMNS = ["id", "user_id", "name", "role", "age", "status", "reason"];
+const ALLOWED_OPERATORS = ["=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN"];
 
-//     /**
-//      * Fragt ab ob dieser Datensatz bearbeitet worden ist
-//      * @returns {boolean} true wenn der Datensatz bearbeitet worden ist
-//      */
-//     instance.isChanged = function () {
-//         return this._changes.size > 0;
-//     };
 
-//     /**
-//      * Löscht alle Änderungs-Marker von dem Datensatz
-//      */
-//     instance.commitChanges = function () {
-//         this._changes.clear(); // Nach dem Server-Sync einfach die Änderungs-Flags löschen
-//     };
-
-//     // Alle bekannten Spalten durchgehen
-//     for (let i = 0; i < list.columnIndex.length; i++) {
-//         const colName = list.columnIndex[i];
-//         Object.defineProperty(instance, colName, {
-//             get() {
-//                 // Liest IMMER direkt aus dem echten, flachen Array
-//                 return this._row[this._index[colName]];
-//             },
-//             set(val) {
-//                 const oldVal = this._row[this._index[colName]];
-//                 if (val !== oldVal) {
-//                     // Schreibe SOFORT direkt in das originale Roh-Array
-//                     this._row[this._index[colName]] = val;
-//                     // Markiere die Spalte als "changed" Bearbeitet
-//                     this._changes.add(colName);
-//                     this._list._changed.add(this._rowIndex);
-//                 }
-//             },
-//             configurable: true,
-//             enumerable: true
-//         });
-//     };
-
-//     // Hilfsmethode, um alle Felder auszugeben, die nicht 'null' sind (für den Insert-Payload)
-//     instance.getPopulatedFields = function () {
-//         const colList = [];
-//         for (let i = 0; i < instance._index; i++) {
-//             if (instance[instance._index[i]] !== null) {
-//                 colList.push(instance._index[i]);
-//             }
-//         }
-//         return colList;
-//     };
-
-//     return instance;
-// }
-
-// =======================================
+// ===================================
 //   Klassen
 // -------------
 
-// /**
-//  * Eine Daten Modell Klasse von der alle Daten Modelle für die Datentabelle erben müssen
-//  * @class
-//  * @example
-//  * class Customer extends DataRow {
-//  *   gsid = "";
-//  *   name = "";
-//  *   city = "";
-//  *   constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
-//  *}
-//  */
-// export class DataRow {
-//     /** @type {Array<any>} Die rohe Datenzeile (Referenz) */
-//     _row = [];
 
-//     /** @type {Object.<string, number>} Das Spalten-Index-Mapping */
-//     _index = {};
+/**
+ * Basis Klasse für Daten Treiber. Muss Überschieben werden.
+ * @class DBDriver
+ */
+export class DBDriver {
+    id = ""; // Entspricht DriverConfig.id
+    type = ""; // Entspricht DriverConfig.type
+    name = ""; // Name des Teibers???
 
-//     /** @type {Set<string>} Set der geänderten Spaltennamen */
-//     _changes = new Set();
+    /** 
+     * Regular Expression für Gültige Tabellennamen
+     * @example
+     * tableNameRegex = /^(?!sqlite_)[a-z_][a-z0-9_]*$/; // SQLite Tabellen  
+     * if (!tableNameRegex.test(tableName)) throw new Error("Table not allowed!");  
+     */
+    tableNameRegex = /^(?!sqlite_)[a-z_][a-z0-9_]*$/;
 
-//     /** @type {boolean} Flag, ob der Datensatz brandneu auf dem Client ist */
-//     _isNew = false;
 
-//     /** @returns {boolean} */
-//     isChanged() { return false; }
+    /**
+     * Erstellt aus einer Quest-Abfrage eine SQL-Abfrage (ohne WHERE am Beginn)  
+     * OPERATORS: "=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN"  
+     * Objekte {} == AND  
+     * Arrays [] == OR  
+     * @param {Object<string,any>} quest - Abfrage Filter
+     * @returns {SQLQuery}
+     * @example
+     * SELECT * FROM users WHERE (status = ? AND (role = ? OR (age >= ? AND name LIKE ?)))  
+     * {
+     *      status: "active",
+     *      _or: [
+     *          { role: "admin" },
+     *          { 
+     *              age: { ">=": 60 }, 
+     *              name: { "LIKE": "Hugo%" } 
+     *          }
+     *      ]
+     * }
+     * oder
+     * 
+     * SELECT * FROM users WHERE (status = ? AND role IN (?, ?) AND id NOT IN (SELECT user_id FROM banned_users WHERE reason = ?))
+     * {  
+     *     status: "active",  
+     *     role: { "IN": ["admin", "moderator"] },  
+     *     id: {  
+     *         "NOT IN": {  
+     *             subSelect: {  
+     *                 table: "banned_users",  
+     *                 column: "user_id",  
+     *                 where: { reason: "spam" }  
+     *             }  
+     *         }  
+     *     }  
+     * }
+     */
+    quest_to_query(quest) {
+        const clauses = [];
+        const params = [];
 
-//     /** @returns {void} */
-//     commitChanges() { }
+        // FALL 1: Array -> OR
+        if (Array.isArray(quest)) {
+            //for (const subFilter of quest) {
+            for (let i = 0; i < quest.length; i++) {
+                const parsed = this.quest_to_query(quest[i]);
+                if (parsed.sql) {
+                    clauses.push(parsed.sql);
+                    params.push(...parsed.params);
+                }
+            }
+            return {
+                sql: clauses.length > 1 ? `(${clauses.join(" OR ")})` : clauses.join(" OR "),
+                params
+            };
+        }
 
-//     /** @returns {Array<string>} */
-//     getPopulatedFields() { return []; }
-// }
+        // FALL 2: Objekt -> AND
+        if (quest && typeof quest === "object") {
+            const keys = Object.keys(quest);
+            //for (const key in quest) {
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
 
-// ======== Info zu Coumn Mapping ===============
-// const infoTable = [
-//     ["id", "name", "spalte5"], // Zeile 0
-//     [1, "Max", "Wert A"],      // Zeile 1
-//     [2, "Anna", "Wert B"]      // Zeile 2
-// ];
+                // ODER-Brücke (_or)
+                if (key === "_or" && Array.isArray(quest[key])) {
+                    const parsed = this.quest_to_query(quest[key]);
+                    if (parsed.sql) {
+                        clauses.push(parsed.sql);
+                        params.push(...parsed.params);
+                    }
+                    continue;
+                }
 
-// // Mapping erstellen (Spaltenname -> Index-Nummer)
-// const columnMapping = {};
-// infoTable[0].forEach((name, index) => { columnMapping[name] = index; });
-// // columnMapping ist jetzt: { id: 0, name: 1, spalte5: 2 }
+                // NICHT-Brücke (_not)
+                if (key === "_not" && typeof quest[key] === "object") {
+                    const parsed = this.quest_to_query(quest[key]);
+                    if (parsed.sql) {
+                        clauses.push(`NOT (${parsed.sql})`);
+                        params.push(...parsed.params);
+                    }
+                    continue;
+                }
 
-// // DEINE SYNTAX: Holt die Index-Nummern heraus
-// const { id, name, spalte5 } = columnMapping;
+                // Sicherheits-Check für Spaltennamen
+                //if (!ALLOWED_COLUMNS.includes(key)) {
+                //    throw new Error(`Ungültiger Spaltenname: ${key}`);
+                //}
 
-// // Anwendung:
-// const zeile = infoTable[1]; // Wir nehmen die Zeile von Max
+                const val = quest[key];
 
-// console.log(zeile[id]);     // Gibt 1 aus
-// console.log(zeile[name]);   // Gibt "Max" aus
+                // Kurzform für Gleichheit mit null
+                if (val === null) {
+                    clauses.push(`${key} IS NULL`);
+                    continue;
+                }
 
-// // Werte ändern funktioniert genauso:
-// zeile[name] = "hallo";
-// console.log(infoTable[1]);  // Ausgabe: [1, "hallo", "Wert A"]
+                // Behandlung von Operatoren-Objekten
+                if (val && typeof val === "object") {
+                    const operators = Object.keys(val);
+                    for (const op of operators) {
+                        if (!ALLOWED_OPERATORS.includes(op)) {
+                            throw new Error(`Ungültiger Operator: ${op}`);
+                        }
 
+                        const innerVal = val[op];
+
+                        // NEU: Spezialbehandlung für IN / NOT IN
+                        if (op === "IN" || op === "NOT IN") {
+
+                            // Variante A: Normales Array von Werten (z.B. ["admin", "moderator"])
+                            if (Array.isArray(innerVal)) {
+                                if (innerVal.length === 0) {
+                                    // Ein leeres IN-Array wirft in SQL Fehler, daher fangen wir es logisch ab
+                                    clauses.push(op === "IN" ? "1=0" : "1=1");
+                                } else {
+                                    const placeholders = innerVal.map(() => "?").join(", ");
+                                    clauses.push(`${key} ${op} (${placeholders})`);
+                                    params.push(...innerVal);
+                                }
+                            }
+
+                            // Variante B: Unter-Select (z.B. { subSelect: { table: '...', ... } })
+                            else if (innerVal && typeof innerVal === "object" && innerVal.subSelect) {
+                                const sub = innerVal.subSelect;
+
+                                // Sicherheits-Checks für das Unter-Select
+                                if (!this.tableNameRegex.test(sub.table)) throw new Error(`Ungültige Tabelle im Subselect: ${sub.table}`);
+                                //if (!ALLOWED_COLUMNS.includes(sub.column)) throw new Error(`Ungültige Spalte im Subselect: ${sub.column}`);
+
+                                // Rekursiver Aufruf für die WHERE-Bedingung des Unter-Selects!
+                                const subParsed = this.quest_to_query(sub.where || {});
+
+                                clauses.push(`${key} ${op} (SELECT ${sub.column} FROM ${sub.table} WHERE ${subParsed.sql})`);
+                                params.push(...subParsed.params);
+                            } else {
+                                throw new Error(`Ungültiger Wert für Operator ${op}. Erwartet wird ein Array oder ein subSelect-Objekt.`);
+                            }
+                        }
+                        // Alle anderen Operatoren (=, >=, IS NULL, etc.)
+                        else {
+                            if (innerVal === null) {
+                                if (op === "=" || op === "IS") clauses.push(`${key} IS NULL`);
+                                else if (op === "!=" || op === "IS NOT") clauses.push(`${key} IS NOT NULL`);
+                                else throw new Error(`Operator ${op} kann nicht mit null verwendet werden.`);
+                            } else {
+                                clauses.push(`${key} ${op} ?`);
+                                params.push(innerVal);
+                            }
+                        }
+                    }
+                }
+                // Normale Gleichheit
+                else {
+                    clauses.push(`${key} = ?`);
+                    params.push(val);
+                }
+            }
+
+            return {
+                sql: clauses.length > 1 ? `(${clauses.join(" AND ")})` : clauses.join(" AND "),
+                params
+            };
+        }
+
+        return { sql: "1=1", params: [] };
+    }
+
+    // // --- Testlauf ---
+
+    // const meinUltimativerFilter = {
+    //     status: "active",
+    //     role: { "IN": ["admin", "moderator"] },
+    //     id: {
+    //         "NOT IN": {
+    //             subSelect: {
+    //                 table: "banned_users",
+    //                 column: "user_id",
+    //                 where: { reason: "spam" }
+    //             }
+    //         }
+    //     }
+    // };
+
+    // const { sql, params } = quest_to_query(meinUltimativerFilter);
+    // console.log("Generiertes SQL:\n", `SELECT * FROM users WHERE ${sql}`);
+    // console.log("\nParameter dazu:\n", params);
+
+
+    // --- FUNKTIONEN sollen überschrieben werden
+
+    /**
+     * Gibt alle Datensätze oder nur die von der Abfrage zurück
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Object<string,any>} [quest] - Optionale Abfrage
+     * @returns {Promise<DataRows>}
+     */
+    async getRows(tableName, quest) { return []; }
+
+    /**
+     * Gibt einen Datensatz mit angegebener ID zurück
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Object<string,any>} quest - Abfrage für eindeutigen Datensatz.
+     * @returns {Promise<DataRows>}
+     */
+    async getRecord(tableName, quest) { return []; }
+
+    /**
+     * Speichert die Daten oder legt diese neu an. Die ID-Spalten müssen den Datensatz eindeutig Identifizieren.
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Array<Array<any>>} deltaRows - geänderte Daten. In der ersten Zeile stehen die Spaltennamen.
+     * @param {Array<string>} idCols - Name der ID-Spalten
+     * @returns {Promise<boolean>} true wenn erfolgreich
+     */
+    async saveRows(tableName, deltaRows, idCols) { return true; }
+
+    /**
+     * Löscht Datensätze von der Abfrage
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Object<string,any>} quest - Optionale Abfrage
+     * @returns {Promise<boolean>}
+     */
+    async deleteRows(tableName, quest) { return false; }
+}
 
 
 
@@ -326,7 +538,7 @@ export class DataTable {
      */
     getRowInfo(id) {
         /** @type {RowInfo} */
-        const rowInfo = {id: "", index: -1};
+        const rowInfo = { id: "", index: -1 };
 
         // Wenn ID des Datensatzen
         if (typeof id == "string") {
@@ -393,13 +605,13 @@ export class DataTable {
      * @param {Array<Array<any>>} newRows - Neue Datenzeilen, in 1. Zeile müssen die Spaltennamen stehen
      */
     mergeRows(newRows) {
-        if (!Array.isArray(newRows)) {return;}
+        if (!Array.isArray(newRows)) { return; }
 
         // 1. Zeile mit Feldnamen
         const colIndexes = this.getColIndex(newRows[0]);
 
         // Alle Zeilen durchgehen
-        for (let i = 1; i< newRows.length; i++) {
+        for (let i = 1; i < newRows.length; i++) {
             const newRow = newRows[i];
             const id = this.getID(newRow);
 
@@ -407,7 +619,7 @@ export class DataTable {
             let row = this.getRow(id);
             if (!row) {
                 row = new Array(this.columns.length);
-                const newIndex = this.rows.push(row) -1;
+                const newIndex = this.rows.push(row) - 1;
                 this.rowMap.set(id, newIndex);
             }
 
@@ -546,13 +758,13 @@ export class DataTable {
             colIndex = this.columnIndex[col];
         } else {
             colIndex = col;
-        } 
-        
+        }
+
         // Nur wenn Spalte vorhanden
         if (colIndex != undefined && colIndex >= 0 && colIndex < this.columns.length) {
             // Wert übernehmen
             this.rows[rowIndex][colIndex] = value;
-            
+
             // als Geändert markieren
             this._changed.set(rowInfo.id, rowIndex);
         }
@@ -652,7 +864,7 @@ export class DataTable {
             }
             return row;
         }
-        
+
 
         const oldValue = this.rows[rowIndex][col];
         if (oldValue instanceof Set) {
@@ -692,8 +904,8 @@ export class DataTable {
         }
 
         // gelöschte Datensätze mit selber ID nicht mehr anlegen
-        if (this._deleted.has(id)) { return;} 
-        
+        if (this._deleted.has(id)) { return; }
+
         /** @type {Array<string>} neue Spalten */
         const newColNames = [...Object.keys(obj)];
         const colIds = this.getColIndex(newColNames);
@@ -1091,7 +1303,7 @@ export class DataTable {
             return;
         }
 
-        const readOnlyTable = this.readOnly();        
+        const readOnlyTable = this.readOnly();
 
         for (let i = 0; i < indexList.length; i++) {
             const rowIndex = indexList[i];

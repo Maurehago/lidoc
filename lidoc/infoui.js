@@ -3,7 +3,7 @@
 // =========================================================================
 // @ts-check
 
-import { DataTable, getGSID } from "./infotable.js";
+import { DataTable, getGSID } from "./infodata.js";
 import { Schema, InfoSchema } from "./infoschema.js";
 
 // ===================================
@@ -109,16 +109,8 @@ import { Schema, InfoSchema } from "./infoschema.js";
 //   Typen
 // -------------
 
-/**
- * Eine einzelne Datenzeile. Kann primitive Werte oder Binärdaten enthalten.
- * @typedef {Array<string | number | bigint | boolean | Uint8Array | null>} DataRow
- */
-
-/**
- * Das universelle, zweidimensionale Tabellenformat für alle Treiber und Schichten.
- * Die ERSTE Zeile (Index 0) enthält IMMER die Spaltennamen (Header).
- * @typedef {Array<DataRow>} DataRows
- */
+/** @typedef {import('./infodata.js').DataRows} DataRows */
+/** @typedef {import('./infodata.js').ClientServerMessage} ClientServerMessage */
 
 /**
  * Tabellen einstellungen
@@ -163,90 +155,6 @@ export const InfoUIDetailField_fields = ["field_name", "label", "position", "for
 export const InfoUIDetailField_unique = "field_name";
 
 
-// ----------- Datenbank (Treiber) Datentypen
-
-/**
- * Definiert die Schnittstelle, die JEDER Datenbank- oder Dateitreiber implementieren MUSS.
- * @typedef {Object} DBDriverInterface
- * @property {string} id - Entspricht DriverConfig.id
- * @property {string} type - Entspricht DriverConfig.type
- * @property {string} name - Name des Teibers
- * @property {() => Promise<DataRows>} getTables - Holt alle Tabellen aus der Datenbank
- * @property {(tableName: string) => Promise<DataRows>} getRows - Holt alle Zeilen einer Tabelle inkl. Header
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<DataRows>} getRecord - Holt genau eine Zeile + Header für die Detailansicht
- * @property {(tableName: string, deltaRows: DataRows, idColName: string) => Promise<boolean>} saveRows - Schreibt nur die geänderten Spalten (Delta-Array) in die DB
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<boolean>} deleteRow - Löscht einen spezifischen Datensatz aus der Tabelle
- * @property {(newSchemaJson: string) => Promise<{success: boolean, message: string}>} [migrateSchema] - Optional: Führt Tabellen-Migrationen bei Schema-Updates aus
- */
-
-// ----------- APP DatenTypen ---------------------
-
-/**
- * @typedef {Object} Token
- * @property {string} gsid - Eindeutige Session ID
- * @property {string} userId - ID des Users
- * @property {string} username - Name des Benutzers
- * @property {number} exp - Gültigkeitszeitraum
- */
-
-/**
- * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
- * Diese Struktur wird in der lokalen config.json persistiert.
- * @typedef {Object} DriverConfig
- * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
- * @property {"SQLITE"|"FIREBIRD"|"FOLDER"} type - Die technologische Art des Treibers
- * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
- * @property {string} connectionString - Pfad zur Datei (SQLite), Server-Verbindungsdaten (Firebird), Pfad ("FOLDER")
- */
-
-/**
- * Die globale Konfigurationsdatei der Anwendung, abgelegt im Benutzer-Appdata-Ordner.
- * @typedef {Object} ApplicationConfig
- * @property {string} appName - Der Name der App (aus Startparameter oder Default)
- * @property {boolean} isNewSystem - Flag; "true" wenn das System im Zustand "NULL" ist (keine Treiber konfiguriert)
- * @property {Array<DriverConfig>} drivers - Liste aller vom Benutzer eingerichteten Datenquellen
- * @property {string | null} defaultDriverId - Optionaler Standard-Treiber, der beim Start direkt geöffnet wird
- * @property {DataRows} infoTables - Liste mit allen InfoTables
- * @property {DataRows} infoForms - Liste mit Formularen
- * @property {InfoSchema} appSchema - Schema für die Anwendung
- */
-
-/**
- * Alle erlaubten MessageTypen für das System.
- * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
- * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
- * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
- * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
- */
-
-/**
- * Ziel Typen für die Verarbeitung der Messages
- * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
- */
-
-
-/**
- * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
- * server:"INITIAL_STATE" -> client // bei erster Verbindung
- * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
- * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
- *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
- * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
- *                          server:"LOCK_RELEASED_CONFIRMED" -> client
- * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * @typedef {Object} ClientServerMessage
- * @property {MessageType} type - Aktionstyp
- * @property {string} [driverId] - Ziel-Treiber für die Aktion
- * @property {string} [tableName] - Ziel-Tabelle für die Aktion
- * @property {string} [recordId] - Ziel-Datensatz-ID (falls anwendbar)
- * @property {string} [idColName] - Name der Primärschlüssel-Spalte (Standard meist "gsid")
- * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
- * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
- * @property {DataRows} [rows] - Das Datenpaket (entweder gesamte Tabelle oder Delta-Array bei SAVE)
- */
 
 
 /** @typedef {"on-error"|"on-init"|"on-lock-update"|"on-data"|"on-lock-denied"|"on-lock-released"|"on-save"|"on-data-changed"|"on-delete"} WebSocketEvents */
@@ -468,7 +376,7 @@ export class InfoUITable extends InfoUIComponent {
             for (let j = 0; j < columns.length; j++) {
                 const format = columns[i].format;
                 let value = row[colIndexes[j]];
-                
+
                 // Formatierung
                 if (format) {
                     value = this.getFormat(format, value);
@@ -1728,6 +1636,17 @@ export class RealtimeSync {
             const data = JSON.parse(event.data);
             console.log("vom Server: ", data);
 
+            // Prüfen, ob diese Nachricht zu einer aktiven Anfrage gehört
+            if (data.requestId && this.pendingRequests.has(data.requestId)) {
+                const deferred = this.pendingRequests.get(data.requestId);
+                this.pendingRequests.delete(data.requestId); // Anfrage erledigt, löschen
+
+                // Promise auflösen und die Daten direkt zurückgeben!
+                deferred.resolve(data);
+                return;
+            }
+
+
             switch (data.type) {
                 case "ERROR":
                     // TODO: Fehler anzeigen
@@ -1841,8 +1760,8 @@ export class RealtimeSync {
 
                 case "DATA_MUTATED":
                     // Ein anderer Nutzer hat Daten geändert. 
-                    // Hier können Sie prüfen, ob die geänderte Tabelle gerade offen ist, 
-                    // und sie im Hintergrund neu anfordern oder updaten.
+                    // Hier prüfen, ob die geänderte Tabelle gerade offen ist, 
+                    // und ob im Hintergrund neu anfordern oder updaten.
                     this.trigger("on-data-changed", data);
                     break;
 
@@ -1911,27 +1830,31 @@ export class RealtimeSync {
     }
 
     // todo: Asynchrone Requests
-    
+
     /**
      * Sendet eine Anfrage und gibt ein Promise zurück, das auflöst,
      * sobald der Server mit der passenden requestId antwortet.
+     * @param {string} driverId - Name des DatenTreibers
+     * @param {string} tableName - Name der Daten Tabelle/Datei
+     * @param {Object<string,any>} [quest] - Anfrage, Daten Einschränkung
      */
-    async requestData(driverId, tableName, quest = null) {
+    async requestData(driverId, tableName, quest) {
         const requestId = getGSID();
 
+        /** @type {ClientServerMessage} */
         const message = {
-            type: "GET_DATA",
-            requestId,
-            driverId,
-            tableName,
-            quest
+            type: "GET_DATA"
+            , requestId
+            , driverId
+            , tableName
+            , quest
         };
 
         // Wir senden ab und geben ein Promise zurück
         return new Promise((resolve, reject) => {
             // Wir merken uns, wie wir das Promise auflösen können, wenn die Antwort kommt
             this.pendingRequests.set(requestId, { resolve, reject });
-            
+
             // Timeout einbauen, damit die UI nicht ewig einfriert, falls der Server abstürzt
             setTimeout(() => {
                 if (this.pendingRequests.has(requestId)) {
@@ -1940,31 +1863,36 @@ export class RealtimeSync {
                 }
             }, 10000); // 10 Sekunden Timeout
 
-            this.ws.send(JSON.stringify(message));
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(message));
+            } else {
+                console.error("WebSocket ist nicht offen. Nachricht verworfen:", message.type);
+                 reject(new Error(`WebSocket ist nicht offen. Nachricht verworfen: ${message.type}`));
+            }
         });
     }
 
-    // Wird von ws.onmessage aufgerufen
-    handleIncomingMessage(jsonString) {
-        const message = JSON.parse(jsonString);
-        
-        // 1. Prüfen, ob diese Nachricht zu einer aktiven Anfrage gehört
-        if (message.requestId && this.pendingRequests.has(message.requestId)) {
-            const deferred = this.pendingRequests.get(message.requestId);
-            this.pendingRequests.delete(message.requestId); // Anfrage erledigt, löschen
-            
-            // Promise auflösen und die Daten direkt zurückgeben!
-            deferred.resolve(message.payload); 
-            return;
-        }
+    // // Wird von ws.onmessage aufgerufen
+    // handleIncomingMessage(jsonString) {
+    //     const message = JSON.parse(jsonString);
 
-        // 2. Fallback für echte Push-Nachrichten vom Server (ohne vorherige Anfrage)
-        switch(message.type) {
-            case "BROADCAST_UPDATE":
-                this.trigger("global-update", message.payload);
-                break;
-        }
-    }    
+    //     // 1. Prüfen, ob diese Nachricht zu einer aktiven Anfrage gehört
+    //     if (message.requestId && this.pendingRequests.has(message.requestId)) {
+    //         const deferred = this.pendingRequests.get(message.requestId);
+    //         this.pendingRequests.delete(message.requestId); // Anfrage erledigt, löschen
+
+    //         // Promise auflösen und die Daten direkt zurückgeben!
+    //         deferred.resolve(message.payload);
+    //         return;
+    //     }
+
+    //     // 2. Fallback für echte Push-Nachrichten vom Server (ohne vorherige Anfrage)
+    //     switch (message.type) {
+    //         case "BROADCAST_UPDATE":
+    //             this.trigger("global-update", message.payload);
+    //             break;
+    //     }
+    // }
 }
 
 

@@ -3,7 +3,7 @@
 // =======================
 // @ts-check
 
-import { getGSID } from "./infotable.js";
+import { getGSID } from "./infodata.js";
 import { Schema } from "./infoschema.js";
 
 
