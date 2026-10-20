@@ -82,6 +82,7 @@
  * @property {string} [driverId] - Ziel-Treiber für die Aktion
  * @property {string} [tableName] - Ziel-Tabelle für die Aktion
  * @property {string} [recordId] - Eindeutige ID des Datensatzes. Wird für Datensatzsperren verendet
+ * @property {Array<string>} [idFields] - Felder die einen Datensatz eindeutig identifizieren
  * @property {Object<string,any>} [quest] - Optional Abfrage Bedingung. z.B.: { gsid: "jagfdgg" }
  * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
  * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)

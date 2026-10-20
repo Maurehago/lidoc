@@ -311,12 +311,14 @@ export class RealtimeServer {
     /**
      * Gibt eine Message zum zurücksenden eines Fehlers zurück.
      * @param {string} message - Fehlermeldung
+     * @param {string|undefined} requestId - Fehlermeldung
      * @returns {ClientServerMessage}
      */
-    getErrorMessage(message) {
+    getErrorMessage(message, requestId) {
         /** @type {ClientServerMessage} */
         return {
             type: "ERROR"
+            , requestId
             , payload: { message }
         };
     }
@@ -529,13 +531,17 @@ export class RealtimeServer {
                     ws.send(JSON.stringify(init_data));
                 },
                 message: async (ws, message) => {
+                    /** @type {ClientServerMessage} */
+                    const msg = JSON.parse(message.toString());
+
                     try {
+
                         // Prüfen, ob die Datenstruktur des Nutzers überhaupt existiert
                         if (!ws.data || !ws.data.userId) {
                             /** @type {ClientServerMessage} */
-                            const msg = this.getErrorMessage("No Login.");
+                            const errmsg = this.getErrorMessage("No Login.", msg.requestId);
 
-                            ws.send(JSON.stringify(msg));
+                            ws.send(JSON.stringify(errmsg));
                             ws.close(4001, "Nicht authentifiziert");
                             return;
                         }
@@ -543,9 +549,9 @@ export class RealtimeServer {
                         // Prüfen, ob die Session-Zeit (exp) abgelaufen ist
                         if (Date.now() > ws.data.exp) {
                             /** @type {ClientServerMessage} */
-                            const msg = this.getErrorMessage("Session Timeout.");
+                            const errmsg = this.getErrorMessage("Session Timeout.", msg.requestId);
 
-                            ws.send(JSON.stringify(msg));
+                            ws.send(JSON.stringify(errmsg));
                             ws.close(4001, "Session abgelaufen");
                             return;
                         }
@@ -556,8 +562,6 @@ export class RealtimeServer {
                         // Aktualisiert sowohl ws.data als auch den Eintrag in this.tokens (Referenz)
                         ws.data.exp = newExpiration;
 
-                        /** @type {ClientServerMessage} */
-                        const msg = JSON.parse(message.toString());
                         console.log(`Aktion [${msg.type}] angefordert von [${ws.data.username}]`);
 
                         // Frisch geladene Konfiguration für eventuelle Abgleiche holen
@@ -568,7 +572,7 @@ export class RealtimeServer {
                             ? `${msg.driverId}_${msg.tableName}_${msg.recordId}`
                             : "";
 
-                        const { type, requestId, driverId, tableName, recordId, quest, targetType, payload } = msg;
+                        const { type, requestId, driverId, tableName, recordId, idFields, quest, targetType, payload } = msg;
 
                         /** @type {ClientServerMessage} */
                         const answer = { type: "ERROR", requestId, driverId, tableName, recordId, targetType };
@@ -576,7 +580,7 @@ export class RealtimeServer {
                         switch (msg.type) {
 
                             // =================================================================
-                            //   DATENABFRAGE (Pass-Through)
+                            //   DATENABFRAGE
                             // =================================================================
                             case "GET_DATA": {
                                 // Fall A: Der Client möchte das Ersteinrichtungs-Formular aufrufen
@@ -617,7 +621,7 @@ export class RealtimeServer {
                                     const driver = this.activeDrivers.get(driverId);
 
                                     if (!driver) {
-                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
+                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`, requestId)));
                                         break;
                                     }
 
@@ -650,7 +654,7 @@ export class RealtimeServer {
                             // =================================================================
                             case "REQUEST_LOCK": {
                                 if (!lockKey || !driverId || !tableName || !recordId) {
-                                    ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.")));
+                                    ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.", requestId)));
                                     break;
                                 }
 
@@ -708,7 +712,7 @@ export class RealtimeServer {
                                         server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
 
                                         // Benutzer Informieren das die Sperre aufgehoben ist
-                                        ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED" }));
+                                        ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED", requestId }));
                                     }
                                 }
                                 break;
@@ -721,32 +725,32 @@ export class RealtimeServer {
                             // =================================================================
                             case "SAVE_DATA": {
                                 // Sonderfall: Speichern der globalen Optionen (Zustand: NULL überwinden)
-                                if (msg.tableName === "save_driver_wizard" && rows) {
-                                    const headers = rows[0];
-                                    const values = rows[1];
-                                    /** @type {DriverConfig} */
-                                    // @ts-ignore
-                                    const newDriverCfg = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
+                                // if (msg.tableName === "save_driver_wizard" && rows) {
+                                //     const headers = rows[0];
+                                //     const values = rows[1];
+                                //     /** @type {DriverConfig} */
+                                //     // @ts-ignore
+                                //     const newDriverCfg = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
 
-                                    currentConfig.drivers.push(newDriverCfg);
-                                    currentConfig.isNewSystem = false; // Zustand NULL ist beendet
+                                //     currentConfig.drivers.push(newDriverCfg);
+                                //     currentConfig.isNewSystem = false; // Zustand NULL ist beendet
 
-                                    // Persistieren in der lokalen Benutzerdatei
-                                    await saveApplicationConfig(currentConfig);
-                                    // Treiber zur Laufzeit frisch hochfahren
-                                    await this.initializeConfiguredDrivers();
+                                //     // Persistieren in der lokalen Benutzerdatei
+                                //     await saveApplicationConfig(currentConfig);
+                                //     // Treiber zur Laufzeit frisch hochfahren
+                                //     await this.initializeConfiguredDrivers();
 
-                                    ws.send(JSON.stringify({ type: "SYSTEM_RELOAD_REQUIRED", text: "Treiber eingerichtet! Benutzeroberfläche wird neu aufgebaut." }));
-                                    break;
-                                }
+                                //     ws.send(JSON.stringify({ type: "SYSTEM_RELOAD_REQUIRED", text: "Treiber eingerichtet! Benutzeroberfläche wird neu aufgebaut." }));
+                                //     break;
+                                // }
 
                                 // Regulärer Fall: Datenzeilen-Änderung in einer echten Datenbank
-                                if (!driverId || !tableName || !rows) break;
+                                if (!driverId || !tableName || !payload || !idFields) break;
 
                                 // Concurrency Check: Hat der User die Sperre noch?
                                 const currentLock = this.activeLocks.get(lockKey);
                                 if (currentLock && currentLock.username !== ws.data.username) {
-                                    ws.send(JSON.stringify(this.getErrorMessage("Speichern fehlgeschlagen: Du hast die Bearbeitungsrechte zwischenzeitlich verloren.")));
+                                    ws.send(JSON.stringify(this.getErrorMessage("Speichern fehlgeschlagen: Du hast die Bearbeitungsrechte zwischenzeitlich verloren.", requestId)));
                                     break;
                                 }
 
@@ -754,7 +758,7 @@ export class RealtimeServer {
                                 if (driver) {
                                     // Der Server reicht das Delta-Array [ [Header], [Nur ID & Geänderte Zellen] ] an den Treiber weiter.
                                     // Der Treiber validiert intern und führt das physische UPDATE/INSERT aus.
-                                    const success = await driver.saveRows(tableName, rows, idColName || "gsid");
+                                    const success = await driver.saveRows(tableName, payload[tableName], idFields);
 
                                     if (success) {
                                         // Nach dem erfolgreichen Schreiben heben wir das Lock sofort auf
@@ -769,7 +773,7 @@ export class RealtimeServer {
                                         answer.payload = { message: "Daten erfolgreich geschrieben." };
                                         ws.send(JSON.stringify(answer));
                                     } else {
-                                        ws.send(JSON.stringify(this.getErrorMessage("Der Datenbanktreiber hat das Speichern abgelehnt (Validierungsfehler).")));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Der Datenbanktreiber hat das Speichern abgelehnt (Validierungsfehler).", requestId)));
                                     }
                                 }
                                 break;
@@ -779,13 +783,13 @@ export class RealtimeServer {
                             // 4. LÖSCH-OPERATION (Data Purge)
                             // =================================================================
                             case "DELETE_DATA": {
-                                if (!lockKey || !driverId || !tableName || !recordId) break;
+                                if (!lockKey || !driverId || !tableName || !quest) break;
 
                                 // Datensatz darf nicht von jemand anderem gesperrt sein
                                 if (this.activeLocks.has(lockKey)) {
                                     const currentLock = this.activeLocks.get(lockKey);
                                     if (currentLock && currentLock.username !== ws.data.username) {
-                                        ws.send(JSON.stringify(this.getErrorMessage("Löschen verweigert: Der Datensatz wird gerade von einem anderen Benutzer editiert.")));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Löschen verweigert: Der Datensatz wird gerade von einem anderen Benutzer editiert.", requestId)));
                                         break;
                                     }
                                 }
@@ -793,7 +797,7 @@ export class RealtimeServer {
                                 const driver = this.activeDrivers.get(driverId);
                                 if (driver) {
                                     // Löschbefehl an den Treiber übergeben
-                                    const success = await driver.deleteRow(tableName, recordId, idColName || "gsid");
+                                    const success = await driver.deleteRows(tableName, quest);
 
                                     if (success) {
                                         // Eine eventuelle eigene Sperre sofort löschen
@@ -806,18 +810,18 @@ export class RealtimeServer {
                                         answer.payload = { message: "Datensatz permanent entfernt." };
                                         ws.send(JSON.stringify(answer));
                                     } else {
-                                        ws.send(JSON.stringify(this.getErrorMessage("Der Treiber konnte den Datensatz nicht löschen.")));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Der Treiber konnte den Datensatz nicht löschen.", requestId)));
                                     }
                                 }
                                 break;
                             }
                             default:
-                                ws.send(JSON.stringify(this.getErrorMessage(`Aktionstyp '${msg.type}' wird vom Server nicht unterstützt.`)));
+                                ws.send(JSON.stringify(this.getErrorMessage(`Aktionstyp '${msg.type}' wird vom Server nicht unterstützt.`, requestId)));
                                 break;
                         }
                     } catch (err) {
                         console.error("Fehler im WebSocket-Handler:", err);
-                        ws.send(JSON.stringify(this.getErrorMessage("Interner Serverfehler bei der Verarbeitung der Nachricht.")));
+                        ws.send(JSON.stringify(this.getErrorMessage("Interner Serverfehler bei der Verarbeitung der Nachricht.", msg.requestId)));
 
                     }
                     //console.log(`Nachricht empfangen von ${ws.data.userId}:`, message.toString());
