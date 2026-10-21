@@ -616,6 +616,31 @@ export class RealtimeServer {
                                 //     break;
                                 // }
 
+                                if (payload) {
+                                    // 1. Die Magie: Referenzen im JavaScript auflösen
+                                    /** @type {Object<string,Array<any>>} */
+                                    const answerPayload = {};
+
+                                    // 2. Jede Tabelle nacheinander abfragen (Reihenfolge ist jetzt egal, da alle Daten fertig im JS liegen!)
+                                    //for (const [tableName, config] of Object.entries(cleanPayload)) {
+                                    const tables = Object.keys(payload);
+                                    for (let i = 0; i < tables.length; i++) {
+                                        const tableName = tables[i];
+                                        const config = payload[tableName];
+                                        const driver = this.activeDrivers.get(config.driverId);
+                                        if (driver) {
+                                            // Treiber erhält die vollständig ausformulierte Quest mit EXISTS-Kette
+                                            answerPayload[tableName] = await driver.getRows(tableName, config.quest);
+                                        }
+                                    }
+
+                                    answer.type = "DATA";
+                                    answer.targetType = "LIST";
+                                    answer.payload = answerPayload; // Schickt { customers: [...], customers_interests: [...], interests: [...] }
+                                    ws.send(JSON.stringify(answer));
+                                    break;
+                                }
+
                                 // Fall C: Eine Tabelle wurde gewählt -> Hole Datensätze oder Datensatz
                                 if (driverId && tableName) {
                                     const driver = this.activeDrivers.get(driverId);
@@ -639,7 +664,7 @@ export class RealtimeServer {
                                     //const answer = { type: "DATA", targetType: "LIST", rows: tableRows };
                                     answer.type = "DATA";
                                     answer.targetType = "LIST";
-                                    answer.payload = {[tableName]: tableRows};
+                                    answer.payload = { [tableName]: tableRows };
 
                                     // Der Server gibt das Array unverändert an den Client weiter.
                                     // Der Client speichert es in seiner lokalen InfoTable zum Filtern und Sortieren.
@@ -692,7 +717,7 @@ export class RealtimeServer {
                                     // Antwort zusammenstellen
                                     answer.type = "DATA";
                                     answer.targetType = "FORM";
-                                    answer.payload = {[tableName]: singleRecordRows};
+                                    answer.payload = { [tableName]: singleRecordRows };
 
                                     // Dem anfragenden Client grünes Licht geben und das Daten-Array für sein Formular senden
                                     ws.send(JSON.stringify(answer));
@@ -717,8 +742,6 @@ export class RealtimeServer {
                                 }
                                 break;
                             }
-
-                            //  todo: AB HIER WEITER AUSBESSERN
 
                             // =================================================================
                             //   DATEN MODIFIKATION & SPEICHERUNG (Delta-Handling)

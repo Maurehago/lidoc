@@ -85,7 +85,7 @@
  * @property {Array<string>} [idFields] - Felder die einen Datensatz eindeutig identifizieren
  * @property {Object<string,any>} [quest] - Optional Abfrage Bedingung. z.B.: { gsid: "jagfdgg" }
  * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
- * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
+ * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
  */
 
 
@@ -170,7 +170,7 @@ export function isClass(obj) {
 
 //const ALLOWED_TABLES = ["users", "banned_users", "posts"]; // Schutz für Unter-Selects
 //const ALLOWED_COLUMNS = ["id", "user_id", "name", "role", "age", "status", "reason"];
-const ALLOWED_OPERATORS = ["=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN"];
+const ALLOWED_OPERATORS = ["=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN", "EXISTS", "NOT EXISTS"];
 
 
 // ===================================
@@ -198,7 +198,7 @@ export class DBDriver {
 
     /**
      * Erstellt aus einer Quest-Abfrage eine SQL-Abfrage (ohne WHERE am Beginn)  
-     * OPERATORS: "=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN"  
+     * OPERATORS: "=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN", "EXISTS", "NOT EXISTS"
      * Objekte {} == AND  
      * Arrays [] == OR  
      * @param {Object<string,any>} quest - Abfrage Filter
@@ -232,9 +232,13 @@ export class DBDriver {
      *     }  
      * }
      */
-    quest_to_query(quest) {
+    quest_to_query(quest, depth = 0) {
         const clauses = [];
         const params = [];
+
+        // Aktueller Alias für diese Ebene (Haupttabelle = "t", Sub-Ebenen = "s0", "s1"...)
+        const currentAlias = depth === 0 ? "t" : `s${depth - 1}`;
+
 
         // FALL 1: Array -> OR
         if (Array.isArray(quest)) {
@@ -259,6 +263,49 @@ export class DBDriver {
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
 
+                // Join Handler
+                if (key === "_join" && typeof quest[key] === "object") {
+                    const joinCfg = quest[key];
+                    const type = joinCfg.type || "EXISTS"; // EXISTS oder NOT EXISTS
+                    const subTable = joinCfg.table;
+                    const subAlias = `s${depth}`; // Eindeutiger Alias für das Subselect
+
+                    // ON-Bedingungen für das EXISTS bauen (Verbindung von aktueller Tabelle zur Untertabelle)
+                    const joinConditions = [];
+                    const refKeys = Object.keys(joinCfg.refs);
+                    for (let j = 0; j < refKeys.length; j++) {
+                        joinConditions.push(`${currentAlias}.${refKeys[j]} = ${subAlias}.${joinCfg.refs[refKeys[j]]}`);
+                    }
+
+                    // Wo-Klausel für das Subselect vorbereiten
+                    const subClauses = [...joinConditions];
+                    const subParams = [];
+
+                    // Wenn im Join ein direktes "quest" (Quest-Objekt) liegt
+                    if (joinCfg.quest) {
+                        const parsedWhere = this.quest_to_query(joinCfg.quest, depth + 1);
+                        if (parsedWhere.sql) {
+                            subClauses.push(parsedWhere.sql);
+                            subParams.push(...parsedWhere.params);
+                        }
+                    }
+
+                    // REKURSION: Wenn der Join tiefer geschachtelt ist (für n:n über Zwischentabellen)
+                    if (joinCfg.parentJoin) {
+                        const parsedParent = this.quest_to_query({ _join: joinCfg.parentJoin }, depth + 1);
+                        if (parsedParent.sql) {
+                            subClauses.push(parsedParent.sql);
+                            subParams.push(...parsedParent.params);
+                        }
+                    }
+
+                    // Das vollständige EXISTS-Statement zusammensetzen
+                    clauses.push(`${type} (SELECT 1 FROM ${subTable} ${subAlias} WHERE ${subClauses.join(" AND ")})`);
+                    params.push(...subParams);
+                    continue;
+                }
+
+
                 // ODER-Brücke (_or)
                 if (key === "_or" && Array.isArray(quest[key])) {
                     const parsed = this.quest_to_query(quest[key]);
@@ -279,6 +326,7 @@ export class DBDriver {
                     continue;
                 }
 
+
                 // Sicherheits-Check für Spaltennamen
                 //if (!ALLOWED_COLUMNS.includes(key)) {
                 //    throw new Error(`Ungültiger Spaltenname: ${key}`);
@@ -286,62 +334,45 @@ export class DBDriver {
 
                 const val = quest[key];
 
-                // Kurzform für Gleichheit mit null
-                if (val === null) {
-                    clauses.push(`${key} IS NULL`);
-                    continue;
-                }
-
                 // Behandlung von Operatoren-Objekten
                 if (val && typeof val === "object") {
                     const operators = Object.keys(val);
                     for (const op of operators) {
+                        // @ts-ignore
                         if (!ALLOWED_OPERATORS.includes(op)) {
                             throw new Error(`Ungültiger Operator: ${op}`);
                         }
 
                         const innerVal = val[op];
 
-                        // NEU: Spezialbehandlung für IN / NOT IN
                         if (op === "IN" || op === "NOT IN") {
-
-                            // Variante A: Normales Array von Werten (z.B. ["admin", "moderator"])
                             if (Array.isArray(innerVal)) {
                                 if (innerVal.length === 0) {
-                                    // Ein leeres IN-Array wirft in SQL Fehler, daher fangen wir es logisch ab
                                     clauses.push(op === "IN" ? "1=0" : "1=1");
                                 } else {
                                     const placeholders = innerVal.map(() => "?").join(", ");
-                                    clauses.push(`${key} ${op} (${placeholders})`);
+                                    clauses.push(`${currentAlias}.${key} ${op} (${placeholders})`);
                                     params.push(...innerVal);
                                 }
                             }
-
-                            // Variante B: Unter-Select (z.B. { subSelect: { table: '...', ... } })
                             else if (innerVal && typeof innerVal === "object" && innerVal.subSelect) {
                                 const sub = innerVal.subSelect;
-
-                                // Sicherheits-Checks für das Unter-Select
                                 if (!this.tableNameRegex.test(sub.table)) throw new Error(`Ungültige Tabelle im Subselect: ${sub.table}`);
-                                //if (!ALLOWED_COLUMNS.includes(sub.column)) throw new Error(`Ungültige Spalte im Subselect: ${sub.column}`);
 
-                                // Rekursiver Aufruf für die WHERE-Bedingung des Unter-Selects!
-                                const subParsed = this.quest_to_query(sub.where || {});
-
-                                clauses.push(`${key} ${op} (SELECT ${sub.column} FROM ${sub.table} WHERE ${subParsed.sql})`);
+                                const subParsed = this.quest_to_query(sub.where || {}, depth + 1);
+                                clauses.push(`${currentAlias}.${key} ${op} (SELECT sub.${sub.column} FROM ${sub.table} sub WHERE ${subParsed.sql})`);
                                 params.push(...subParsed.params);
                             } else {
                                 throw new Error(`Ungültiger Wert für Operator ${op}. Erwartet wird ein Array oder ein subSelect-Objekt.`);
                             }
                         }
-                        // Alle anderen Operatoren (=, >=, IS NULL, etc.)
                         else {
                             if (innerVal === null) {
-                                if (op === "=" || op === "IS") clauses.push(`${key} IS NULL`);
-                                else if (op === "!=" || op === "IS NOT") clauses.push(`${key} IS NOT NULL`);
+                                if (op === "=" || op === "IS") clauses.push(`${currentAlias}.${key} IS NULL`);
+                                else if (op === "!=" || op === "IS NOT") clauses.push(`${currentAlias}.${key} IS NOT NULL`);
                                 else throw new Error(`Operator ${op} kann nicht mit null verwendet werden.`);
                             } else {
-                                clauses.push(`${key} ${op} ?`);
+                                clauses.push(`${currentAlias}.${key} ${op} ?`);
                                 params.push(innerVal);
                             }
                         }
@@ -349,16 +380,78 @@ export class DBDriver {
                 }
                 // Normale Gleichheit
                 else {
-                    clauses.push(`${key} = ?`);
+                    clauses.push(`${currentAlias}.${key} = ?`);
                     params.push(val);
                 }
             }
 
-            return {
-                sql: clauses.length > 1 ? `(${clauses.join(" AND ")})` : clauses.join(" AND "),
-                params
-            };
-        }
+        //     // Behandlung von Operatoren-Objekten
+        //     if (val && typeof val === "object") {
+        //         const operators = Object.keys(val);
+        //         for (const op of operators) {
+        //             if (!ALLOWED_OPERATORS.includes(op)) {
+        //                 throw new Error(`Ungültiger Operator: ${op}`);
+        //             }
+
+        //             const innerVal = val[op];
+
+        //             // NEU: Spezialbehandlung für IN / NOT IN
+        //             if (op === "IN" || op === "NOT IN") {
+
+        //                 // Variante A: Normales Array von Werten (z.B. ["admin", "moderator"])
+        //                 if (Array.isArray(innerVal)) {
+        //                     if (innerVal.length === 0) {
+        //                         // Ein leeres IN-Array wirft in SQL Fehler, daher fangen wir es logisch ab
+        //                         clauses.push(op === "IN" ? "1=0" : "1=1");
+        //                     } else {
+        //                         const placeholders = innerVal.map(() => "?").join(", ");
+        //                         clauses.push(`${key} ${op} (${placeholders})`);
+        //                         params.push(...innerVal);
+        //                     }
+        //                 }
+
+        //                 // Variante B: Unter-Select (z.B. { subSelect: { table: '...', ... } })
+        //                 else if (innerVal && typeof innerVal === "object" && innerVal.subSelect) {
+        //                     const sub = innerVal.subSelect;
+
+        //                     // Sicherheits-Checks für das Unter-Select
+        //                     if (!this.tableNameRegex.test(sub.table)) throw new Error(`Ungültige Tabelle im Subselect: ${sub.table}`);
+        //                     //if (!ALLOWED_COLUMNS.includes(sub.column)) throw new Error(`Ungültige Spalte im Subselect: ${sub.column}`);
+
+        //                     // Rekursiver Aufruf für die WHERE-Bedingung des Unter-Selects!
+        //                     const subParsed = this.quest_to_query(sub.where || {});
+
+        //                     clauses.push(`${key} ${op} (SELECT ${sub.column} FROM ${sub.table} WHERE ${subParsed.sql})`);
+        //                     params.push(...subParsed.params);
+        //                 } else {
+        //                     throw new Error(`Ungültiger Wert für Operator ${op}. Erwartet wird ein Array oder ein subSelect-Objekt.`);
+        //                 }
+        //             }
+        //             // Alle anderen Operatoren (=, >=, IS NULL, etc.)
+        //             else {
+        //                 if (innerVal === null) {
+        //                     if (op === "=" || op === "IS") clauses.push(`${key} IS NULL`);
+        //                     else if (op === "!=" || op === "IS NOT") clauses.push(`${key} IS NOT NULL`);
+        //                     else throw new Error(`Operator ${op} kann nicht mit null verwendet werden.`);
+        //                 } else {
+        //                     clauses.push(`${key} ${op} ?`);
+        //                     params.push(innerVal);
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     // Normale Gleichheit
+        //     else {
+        //         clauses.push(`${key} = ?`);
+        //         params.push(val);
+        //     }
+        // }
+
+        return {
+            sql: clauses.length > 1 ? `(${clauses.join(" AND ")})` : clauses.join(" AND "),
+            params
+        };
+    }
 
         return { sql: "1=1", params: [] };
     }
@@ -382,6 +475,43 @@ export class DBDriver {
     // const { sql, params } = quest_to_query(meinUltimativerFilter);
     // console.log("Generiertes SQL:\n", `SELECT * FROM users WHERE ${sql}`);
     // console.log("\nParameter dazu:\n", params);
+
+
+    // /**
+    //  * Verarbeitet die neue flache Payload-Struktur für Multi-Tabellen-Abfragen.
+    //  * @param {Object} payloadTables - Das von Ihnen entworfene Objekt
+    //  * @returns {Promise<Object>} - Die flachen Daten pro Tabelle für den Client
+    //  */
+    // async getMultiRows(payloadTables) {
+    //     const result = {};
+    //     const tableNames = Object.keys(payloadTables);
+
+    //     for (const tableName of tableNames) {
+    //         const config = payloadTables[tableName];
+    //         let finalQuest = { ...config.quest };
+
+    //         // Wenn eine Bindung zu einer übergeordneten Tabelle existiert
+    //         if (config.bindTo) {
+    //             const { parentTable, refs } = config.bindTo;
+    //             const parentConfig = payloadTables[parentTable];
+
+    //             if (parentConfig && refs) {
+    //                 // Wir lagern die EXISTS-Logik in einen speziellen Query-Operator aus,
+    //                 // den Ihre quest_to_query-Methode versteht.
+    //                 finalQuest["_exists_join"] = {
+    //                     parentTable: parentTable,
+    //                     refs: refs, // z.B. { customer_id: "id" } oder { firma: "firma", ... }
+    //                     parentQuest: parentConfig.quest || {}
+    //                 };
+    //             }
+    //         }
+
+    //         // Aufruf Ihrer bestehenden Datenbank-Abfrage
+    //         result[tableName] = await this.getRows(tableName, finalQuest);
+    //     }
+
+    //     return result;
+    // }
 
 
     // --- FUNKTIONEN sollen überschrieben werden
