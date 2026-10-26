@@ -7,8 +7,7 @@
 // Datum Typen: date, time, datetime, range
 
 // export * from "./infotable.js";
-import { DataTable, getGSID, isNumber } from "./infotable.js";
-
+import { DataTable, getGSID, isNumber } from "./infodata.js";
 
 // ==========================================
 //   Typen
@@ -22,180 +21,47 @@ import { DataTable, getGSID, isNumber } from "./infotable.js";
  * @property {Array<ValidError>} [propValids] - Liste mit FehlerObjekten für jede Property 
  */
 
-/**
- * Eine einzelne Datenzeile. Kann primitive Werte oder Binärdaten enthalten.
- * @typedef {Array<string | number | bigint | boolean | Uint8Array | null>} DataRow
- */
-
-/**
- * Das universelle, zweidimensionale Tabellenformat für alle Treiber und Schichten.
- * Die ERSTE Zeile (Index 0) enthält IMMER die Spaltennamen (Header).
- * @typedef {Array<DataRow>} DataRows
- */
-
-
-// ----------- Datenbank (Treiber) Datentypen
-
-/**
- * Definiert die Schnittstelle, die JEDER Datenbank- oder Dateitreiber implementieren MUSS.
- * @typedef {Object} DBDriverInterface
- * @property {string} id - Entspricht DriverConfig.id
- * @property {string} type - Entspricht DriverConfig.type
- * @property {string} name - Name des Teibers
- * @property {() => Promise<DataRows>} getTables - Holt alle Tabellen aus der Datenbank
- * @property {(tableName: string) => Promise<DataRows>} getRows - Holt alle Zeilen einer Tabelle inkl. Header
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<DataRows>} getRecord - Holt genau eine Zeile + Header für die Detailansicht
- * @property {(tableName: string, deltaRows: DataRows, idColName: string) => Promise<boolean>} saveRows - Schreibt nur die geänderten Spalten (Delta-Array) in die DB
- * @property {(tableName: string, recordId: string, idColName: string) => Promise<boolean>} deleteRow - Löscht einen spezifischen Datensatz aus der Tabelle
- * @property {(newSchemaJson: string) => Promise<{success: boolean, message: string}>} [migrateSchema] - Optional: Führt Tabellen-Migrationen bei Schema-Updates aus
- */
-
-
-// ----------  UI Datentypen ------------------
-
-
-/**
- * Tabellen einstellungen
- * @typedef {object} InfoTableUI
- * @property {string} gsid - ID des Datensatzes
- * @property {string} table_id - Name der Tabelle
- * @property {string} column_name - Name der Spalte
- * @property {string} display_name - Anzeige Text
- * @property {number} position - Spalten Position
- * @property {string} format - Darstellungs-Format
-*/
-export const InfoTableUI_fields = ["gsid", "table_id", "column_name", "display_name", "position", "format"];
-export const InfoTableUI_unique = "gsid";
-
-// Beispiel:
-// ```json
-// [
-//   ["table_id", "column_name", "display_name", "position", "format"],
-//   ["kundenTabelle", "gsid", "Kundennummer", 1, "text"],
-//   ["kundenTabelle", "nachname", "Nachname", 2, "text"],
-//   ["kundenTabelle", "vorname", "Vorname", 3, "text"]
-// ]
-// ```
-
-/**
- * Formular einstellungen
- * @typedef {object} InfoFormUI
- * @property {string} gsid - ID des Datensatzes
- * @property {string} form_id - Name des Formulares
- * @property {string} field_name - Name des Datenfeldes
- * @property {string} label - Anzeige/Überschrift/Text(bei Buttons)
- * @property {number} position - Position des Feldes
- * @property {string} ui_element - Typ des Input elementes oder "button"
- * @property {string} action_module - Modul Name welches die Funktionalität bereit stellt
- * @property {string} action_function - Name der Funktion im Modul
- */
-export const InfoFormUI_fields = ["gsid", "form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"];
-export const InfoFormUI_unique = "gsid";
-
-// Beispiel
-// ```json
-// [
-//   ["form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"],
-//   ["kundenForm", "vorname", "Vorname des Kunden", 1, "input_text", null, null],
-//   ["kundenForm", "nachname", "Nachname des Kunden", 2, "input_text", null, null],
-//   ["kundenForm", "save_btn", "Speichern", 3, "button", "./modules/kunden_actions.js", "speichern"],
-//   ["kundenForm", "delete_btn", "Löschen", 4, "button", "./modules/kunden_actions.js", "loeschen"]
-// ]
-// ```
-
-
-// ----------- APP DatenTypen ---------------------
-
-/**
- * @typedef {Object} Token
- * @property {string} gsid - Eindeutige Session ID
- * @property {string} userId - ID des Users
- * @property {string} username - Name des Benutzers
- * @property {number} exp - Gültigkeitszeitraum
- */
-
-/**
- * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
- * Diese Struktur wird in der lokalen config.json persistiert.
- * @typedef {Object} DriverConfig
- * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
- * @property {"SQLITE" | "FIREBIRD" | "JSON_FILES" | "HTML_FRAGMENTS"} type - Die technologische Art des Treibers
- * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
- * @property {string} connectionString - Pfad zur Datei (SQLite/JSON), Server-Verbindungsdaten (Firebird), Pfad ("JSON_FILES"|"HTML_FRAGMENTS")
- */
-
-/**
- * Die globale Konfigurationsdatei der Anwendung, abgelegt im Benutzer-Appdata-Ordner.
- * @typedef {Object} ApplicationConfig
- * @property {string} appName - Der Name der App (aus Startparameter oder Default)
- * @property {boolean} isNewSystem - Flag; "true" wenn das System im Zustand "NULL" ist (keine Treiber konfiguriert)
- * @property {Array<DriverConfig>} drivers - Liste aller vom Benutzer eingerichteten Datenquellen
- * @property {string | null} defaultDriverId - Optionaler Standard-Treiber, der beim Start direkt geöffnet wird
- * @property {DataRows} infoTables - Liste mit allen InfoTables
- * @property {DataRows} infoForms - Liste mit Formularen
- * @property {InfoSchema} appSchema - Schema für die Anwendung
- */
-
-/**
- * Alle erlaubten MessageTypen für das System.
- * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
- * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
- * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
- * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
- */
-
-/**
- * Ziel Typen für die Verarbeitung der Messages
- * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
- */
-
-
-/**
- * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
- * server:"INITIAL_STATE" -> client // bei erster Verbindung
- * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
- * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
- *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
- * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
- *                          server:"LOCK_RELEASED_CONFIRMED" -> client
- * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
- *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
- * @typedef {Object} ClientServerMessage
- * @property {MessageType} type - Aktionstyp
- * @property {string} [driverId] - Ziel-Treiber für die Aktion
- * @property {string} [tableName] - Ziel-Tabelle für die Aktion
- * @property {string} [recordId] - Ziel-Datensatz-ID (falls anwendbar)
- * @property {string} [idColName] - Name der Primärschlüssel-Spalte (Standard meist "gsid")
- * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
- * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. komplettes Config-JSON oder Schema-JSON)
- * @property {DataRows} [rows] - Das Datenpaket (entweder gesamte Tabelle oder Delta-Array bei SAVE)
- */
-
-
 // =============== SCHEMA ================
+
+/** @typedef {"string"|"number"|"bigint"|"boolean"} SimpleTypeArt */
+/** @typedef {"string"|"number"|"bigint"|"boolean"|"enum"|"multi"|"object"|"group"} DataTypeArt */
+export const SimpleTypeArt_names = ["string", "number", "bigint", "boolean"];
+export const DataTypeArt_names = ["string", "number", "bigint", "boolean", "enum", "multi", "object", "group"];
+
+/**
+ * AssertType (Neu für XSD 1.1 Asserts)
+ * @typedef {Object} AssertType
+ * @property {string} gsid - Eindeutige ID des Asserts
+ * @property {string} object_name - Name des ObjectType (complexType), an dem der Assert hängt
+ * @property {string} test - Der XPath-Ausdruck der Assert-Bedingung (z.B. "sum(PmtInf/CtrlSum) = GrpHdr/CtrlSum")
+ * @property {string|undefined} [message] - Optionale Fehlermeldung aus der Dokumentation
+ */
+export const AssertType_fields = ["gsid", "object_name", "test", "message"];
+export const AssertType_unique = "gsid";
+
+
 
 /**
  * EnumType
  * @typedef {Object} EnumType
- * @property {string} name - Name des EnumTypes == SchemaType.name
- * @property {Set<any>} values - WertListe für den EnumTyp
+ * @property {string} name - Name des EnumTypes == DataType.name
+ * @property {Array<any>} values - WertListe für den EnumTyp
  * @property {string|Array<string>|undefined} [more_enums] - Name einer Property oder Liste mit Properties die den Typ weiterer Enum Einträge im Objekt erlaubt
 */
 export const EnumType_fields = ["name", "values", "more_enums"];
 export const EnumTyp_unique = "name";
 
 
+
 /**
  * SimpleType
  * @typedef {Object} SimpleType
- * @property {string} name - Name des Datentypes
- * @property {"string"|"number"|"bigint"|"boolean"} art - Default: "string" - BasisTyp
+ * @property {string} name - Name des Datentypes. Muss mit DataType.name übereinstimmen
+ * @property {SimpleTypeArt} art - Default: "string" - BasisTyp
  * @property {number|undefined} [length] - exakte Länge (für string, number(anzahl der zeichen ohne Vorzeichen), object?)
  * @property {number|undefined} [min_length] - Minimale Anzahl Zeichen (für string)
  * @property {number|undefined} [max_length] - Maximale Anzahl Zeichen (für string)
- * @property {string|undefined} [pattern] - Regular Expression (für string)
+ * @property {string|Array<string>|undefined} [pattern] - Regular Expression (für string)
  * @property {string|undefined} [whitespace] - wie wird mit Leerzeichen umgegangen (für string)
  * @property {"camelCase"|"PascalCase"|"snake_case"|"lower"|"upper"|undefined} [casing] - (für string)
  * @property {number|undefined} [decimals] - Anzahl der Dezimalstellen (für number)
@@ -254,26 +120,34 @@ export const UniqueType_unique = "gsid";
  * PropertyType
  * @typedef {Object} PropertyType
  * @property {string} gsid - Eindeutiger Datensatz
- * @property {string} object_name - Name des ObjektTypes zu dem diese Eigenschaft gehört
+ * @property {string} object_name - Name des ObjektTypes zu dem diese Eigenschaft gehört. DataType.name
  * @property {string} name - Eindeutiger Spalten/Eigenschaftsname
  * @property {number} pos - Feld/Spalten Position im Objekt ????
  * @property {string} [prop_type] - Default: "string" - Name des Types der Eigenschaft
+ * @property {boolean} [is_list] - Default: false, wenn max -1 oder größer 1 kann die Property nur der "prop_type" sein oder eine Liste von "prop_type"n. true: ist immer eine Liste.
  * @property {number} [min] - Default: 1(erforderlich) - Minimales vorkommen der Spalte. 0: diese Spalte ist optional, -1: Spalte is Auswahlspalte 
  * @property {number} [max] - Default: 1(nur ein mal) -  größer 1: Ist eine Liste mit maximal n Eigenschaften, -1: ist eine unendliche Liste 
  * @property {any|undefined} [default] - Optional: Standardwert der Eigenschaft
  * @property {any|undefined} [fix] - Optional: Fixer Wert der Eigenschaft
 */
-export const PropType_fields = ["gsid", "object_name", "name", "pos", "prop_type", "min", "max", "default", "fix"];
+export const PropType_fields = ["gsid", "object_name", "name", "pos", "prop_type", "is_list", "min", "max", "default", "fix"];
 export const PropType_unique = "gsid";
 
 
+//* @property {"string"|"number"|"bigint"|"boolean"|"multi"|"enum"|"object"|"ref"|"unique"|"group"|"choice"|"assert"} art - Um welchen Art von Typ es sich handelt
 /**
  * DataType
+ * "string"|"number"|"bigint"|"boolean": SimpleType -> gleicher name
+ * "enum": EnumType -> gleicher name
+ * "object": Objekt hat Properties und Attribute -> DataType.name == PropertyType.object_name
+ * "multi": Auswahlmöglichkeit von verschiedenen Typen(Datatype.multi_types). Nur eine der Typen von der Liste multi_types möglich
+ * "group": Alle Propperties(PropertyTyp) von dieser Gruppe werden zu den bestehenden Properties von einem Object hinzugefügt
+ * "assert": XPath Bedingung. Momentan nur Erfassung und keine Prüfung.
  * @typedef {Object} DataType
  * @property {string} name - ID/Name des Types
- * @property {"string"|"number"|"bigint"|"boolean"|"multi"|"enum"|"object"|"ref"|"unique"|"group"|"choice"} art - Um welchen Art von Typ es sich handelt
+ * @property {DataTypeArt} art - Um welchen Art von Typ es sich handelt.
  * @property {string|undefined} [base_name] - Optional: Erweitert diesen "base" ObjektTypen
- * @property {Array<string>|undefined} [simple_types] - Optional: Liste von Simplen Typen (ein oder Mehrere einschränkungen)
+ * @property {Array<string>|undefined} [multi_types] - Optional: Liste von Simplen Typen (ein oder Mehrere einschränkungen)
  * @property {string|Array<string>|undefined} [id] - Name einer Property oder Liste mit Properties die die Eindeutige ID eines Objektes/Datensatzes(object) ergeben
  * @property {string|Array<string>|undefined} [more_attributes] - Name einer Property oder Liste mit Properties die den Typ weiterer Attribute im Objekt erlaubt
  * @property {string|Array<string>|undefined} [more_properties] - Name einer Property oder Liste mit Properties die den Typ weiterer Properties im Objekt erlaubt
@@ -319,6 +193,7 @@ export class InfoSchema {
         this.enums = [[...EnumType_fields]];
         this.refs = [[...RefType_fields]];
         this.infos = [[...InfoText_fields]];
+        this.asserts = [[...AssertType_fields]]; // XML Schema 1.1
     }
     /** @type {"infoSchema"} */
     infotype = "infoSchema";
@@ -340,6 +215,8 @@ export class InfoSchema {
     refs = [];
     /** @type {Array<Array<any>>} */
     infos = [];
+    /** @type {Array<Array<any>>}  XML-Schema 1.1*/
+    asserts = []; // Neu hinzugefügt    
 };
 
 
@@ -391,6 +268,9 @@ export class Schema {
     /** @type {DataTable<InfoText>} Liste mit InformationsTexten */
     #infoList = new DataTable("infos", [InfoText_fields], InfoText_unique);
 
+    /** @type {DataTable<AssertType>} Liste mit Asserts */
+    #assertList = new DataTable("asserts", [AssertType_fields], AssertType_unique);
+
 
     // Tabellen (ReadOnly) für Listen Funktionen
     get dataTypes() { return this.#dataTypeList.readOnly(); }
@@ -400,7 +280,7 @@ export class Schema {
     get enums() { return this.#enumList.readOnly(); }
     get refs() { return this.#refList.readOnly(); }
     get infos() { return this.#infoList.readOnly(); }
-
+    get asserts() { return this.#assertList.readOnly(); } // XML 1.1
 
     /**
      * Neues Leeres TypeObjekt
@@ -421,7 +301,7 @@ export class Schema {
     setDataType(options, info) {
         if (!options.name) { options.name = getGSID(); }
         if (info) {
-            this.setInfo({type_name: options.name, text: info});
+            this.setInfo({ type_name: options.name, text: info });
         }
         return this.#dataTypeList.setObject(options) || options.name;
     }
@@ -438,13 +318,74 @@ export class Schema {
 
 
     /**
-     * Fügt einen zusätzlichen SimpleTyp im Schema hinzu. (Existiert der SimpleType schon wird kein Neuer hinzugefügt)
+     * Neues Leeres AssertObjekt (XML 1.1)
+     * @param {string} [id] - Optional neue ID
+     * @returns {Partial<AssertType>}
+     */
+    newAssert(id) {
+        return this.#assertList.newObject(id);
+    }
+
+    /**
+     * Registriert einen Assert im Schema (XML 1.1)
+     * @param {Partial<AssertType>} options - Eigenschaften des Asserts
+     * @returns {string|undefined} ID wenn erfolgreich
+     */
+    setAssert(options) {
+        if (!options.gsid) { options.gsid = getGSID(); }
+
+        return this.#assertList.setObject(options);
+    }
+
+
+    /**
+     * Fügt einen zusätzlichen AuswahlTyp im Schema hinzu. (Existiert der SimpleType schon wird kein Neuer hinzugefügt)
      * @param {string} type_name - Name(id) des Types
-     * @param {string|Array<string>} simple_type_name - Name(id) des hinzufügenden simplen Datentypes
+     * @param {string|Array<string>} multi_type_name - Name(id) des hinzufügenden simplen Datentypes
      * @returns {string|number|undefined} ID oder Datensatz Position wenn erfolgreich 
      */
-    linkSimpleType(type_name, simple_type_name) {
-        return this.#dataTypeList.addCellArrayValue(type_name, "simple_types", simple_type_name);
+    addMultiType(type_name, multi_type_name) {
+        const dataType = this.#dataTypeList.getObject(type_name);
+        if (!dataType || type_name == multi_type_name) { return; }
+
+        /** @type {Array<string>|undefined} */
+        const multiList = dataType.multi_types;
+        if (!multiList) {
+            if (Array.isArray(multi_type_name)) {
+                return this.#dataTypeList.setCellValue(type_name, "multi_types", multi_type_name);
+            } else {
+                return this.#dataTypeList.setCellValue(type_name, "multi_types", [multi_type_name]);
+            }
+        }
+
+        let is_add = false;
+
+        /**
+         * Hilfsfunktion
+         * @param {string} name - Name der eingefügt wird
+         */
+        function add_type_name(name) {
+            if (Array.isArray(multiList)) {
+                // nicht hinzufügen wenn schon vorhanden
+                if (multiList.indexOf(name) > -1 || name == type_name) {
+                    return;
+                }
+                multiList.push(name);
+                is_add = true;
+            }
+        }
+
+        if (Array.isArray(multi_type_name)) {
+            for (let i = 0; i < multi_type_name.length; i++) {
+                add_type_name(multi_type_name[i]);
+            }
+        } else {
+            add_type_name(multi_type_name);
+        }
+
+        if (is_add) {
+            return this.#dataTypeList.setCellValue(type_name, "multi_types", multiList);
+        }
     }
 
 
@@ -493,11 +434,21 @@ export class Schema {
         this.#dataTypeList.setObject({ name: options.name, art: options.art || "string" });
 
         if (info) {
-            this.setInfo({type_name: options.name, text: info});
+            this.setInfo({ type_name: options.name, text: info });
         }
 
         // DatenTyp setzen
         return this.#simpleTypeList.setObject(options) || "";
+    }
+
+
+    /**
+     * Fügt einen Pattern einem Simplen Typ hinzu
+     * @param {string} type_name - Name des simplen Types
+     * @param {string} pattern - Pattern welches gesetzt werden soll
+     */
+    setSimpleTypePattern(type_name, pattern) {
+        return this.#simpleTypeList.addCellArrayValue(type_name, "pattern", pattern);
     }
 
 
@@ -523,7 +474,7 @@ export class Schema {
 
     /**
      * Registriert einen InfoText zu einem Typ
-     * @param {Partial<InfoText>} options - Setzt einen Infotext zu einem Typ oder TypeItem
+     * @param {Partial<InfoText>} options - Setzt einen Infotext zu einem Typ oder Property
      * @returns {string|undefined} ID wenn erfolgreich
      */
     setInfo(options) {
@@ -576,7 +527,7 @@ export class Schema {
             options.pos = 0;
         } else {
             let pos = 1;
-            let props = this.#propList.findAll({object_name});
+            let props = this.#propList.findAll({ object_name });
             for (let i = 0; i < props.length; i++) {
                 if (props[i].pos > pos) {
                     pos = props[i].pos;
@@ -595,7 +546,7 @@ export class Schema {
 
         // info anlegen
         if (info) {
-            this.setInfo({prop_gsid: options.gsid, text: info});
+            this.setInfo({ prop_gsid: options.gsid, text: info });
         }
 
         // Eigenschaft anlegen
@@ -606,7 +557,7 @@ export class Schema {
     /**
      * Ändert eine Bestehende Property. GSID muss in den optionen angegeben werden.  
      * Es wird kein Objekttyp angelegt.
-     * @param {Partial<PropertyType>} options - Setzt einen Infotext zu einem Typ oder TypeItem
+     * @param {Partial<PropertyType>} options - Geänderte Property Optionen
      * @returns {string} ID wenn erfolgreich
      */
     setProperty(options) {
@@ -657,7 +608,7 @@ export class Schema {
         this.#dataTypeList.setObject({ name: options.name, art: "enum" });
 
         if (info) {
-            this.setInfo({type_name: options.name, text: info});
+            this.setInfo({ type_name: options.name, text: info });
         }
 
         // EnumTyp setzen
@@ -679,15 +630,13 @@ export class Schema {
 
         // Wen kein Enum Objekt
         if (!obj) {
-            obj = { name: enum_name, values: new Set() };
+            obj = { name: enum_name, values: [] };
         }
 
         if (Array.isArray(value)) {
-            for (let i = 0; i < value.length; i++) {
-                obj.values.add(value[i]);
-            }
+            obj.values.concat(value);
         } else {
-            obj.values.add(value);
+            obj.values.push(value);
         }
 
         // Objekt in der Liste ablegen
@@ -723,9 +672,6 @@ export class Schema {
     setRef(options) {
         if (!options.gsid) { options.gsid = getGSID(); }
 
-        // DatenTyp ausbessern
-        this.#dataTypeList.setObject({ name: options.gsid, art: "ref" });
-
         return this.#refList.setObject(options);
     }
 
@@ -757,9 +703,6 @@ export class Schema {
      */
     setUnique(options) {
         if (!options.gsid) { options.gsid = getGSID(); }
-
-        // DatenTyp ausbessern
-        this.#dataTypeList.setObject({ name: options.gsid, art: "unique" });
 
         return this.#uniqueList.setObject(options);
     }
@@ -800,8 +743,23 @@ export class Schema {
                 return { valid: false, error: `Mindestens ${simpleType.min_length} Zeichen benötigt.` };
             if (simpleType.max_length && value.length > simpleType.max_length)
                 return { valid: false, error: `Maximal ${simpleType.max_length} Zeichen erlaubt.` };
-            if (simpleType.pattern && !new RegExp(simpleType.pattern).test(value))
-                return { valid: false, error: `Format entspricht nicht dem Muster.` };
+            if (simpleType.length && value.length != simpleType.length)
+                return { valid: false, error: `Fixe Länge ${simpleType.length} Zeichen erlaubt.` };
+            if (simpleType.pattern) {
+                let answer = false;
+                if (Array.isArray(simpleType.pattern)) {
+                    for (let i = 0; i < simpleType.pattern.length; i++) {
+                        if (new RegExp(simpleType.pattern[i]).test(value)) {
+                            answer = true;
+                            break;
+                        }
+                    }
+                } else {
+                    answer = new RegExp(simpleType.pattern).test(value);
+                }
+                if (answer == false)
+                    return { valid: false, error: `Format entspricht nicht dem Muster.` };
+            }
             // if (typeof dataType.min_inclusive === "string" && value < dataType.min_inclusive)
             //     return { valid: false, error: `Wert muss größer oder gleich ${dataType.min_inclusive} sein.` };
             // if (typeof dataType.max_inclusive === "string" && value > dataType.max_inclusive)
@@ -854,57 +812,81 @@ export class Schema {
         if (!dataType) return { valid: true }; // Basis-Fall
 
         /** @type {ValidError} */
-        let validObj = {valid: true};
+        let validObj = { valid: true };
 
         // auf "string", "number", "bigint", "boolean" prüfen
-        if (["string","number","bigint","boolean"].indexOf(dataType.art) >= 0) {
+        if (["string", "number", "bigint", "boolean"].indexOf(dataType.art) >= 0) {
             // string
             if (typeof value == "string" && dataType.art != "string") {
-                 return { valid: false, error: `Wert muss string sein.` };
+                return { valid: false, error: `Wert muss string sein.` };
             }
 
             // number
             if (typeof value == "number" && dataType.art != "number") {
-                 return { valid: false, error: `Wert muss number sein.` };
+                return { valid: false, error: `Wert muss number sein.` };
             }
 
             // bigint
             if (typeof value == "bigint" && dataType.art != "bigint") {
-                 return { valid: false, error: `Wert muss bigint sein.` };
+                return { valid: false, error: `Wert muss bigint sein.` };
             }
 
             // boolean
             if (typeof value == "boolean" && dataType.art != "boolean") {
-                 return { valid: false, error: `Wert muss boolean sein.` };
+                return { valid: false, error: `Wert muss boolean sein.` };
             }
 
             // Details vom Simpletyp prüfen
             validObj = this.validateSimple(typeID, value);
-            if (validObj.valid == false) {return validObj;}      
+            if (validObj.valid == false) { return validObj; }
         }
 
         if (dataType.art == "multi") {
-            const simpleTypes = [...dataType?.simple_types || ["string"]];
+            const multiTypes = [...dataType?.multi_types || ["string"]];
 
-            for (let i = 0; i < simpleTypes.length; i++) {
-                validObj = this.validateSimple(simpleTypes[i], value);
-                if (validObj.valid == true) {return validObj;} // todo: es mus ja nur ein Wert richtig sein?
+            for (let i = 0; i < multiTypes.length; i++) {
+                validObj = this.validateDataType(multiTypes[i], value);
+                if (validObj.valid == true) { return validObj; } // todo: es mus ja nur ein Wert richtig sein?
             }
-            return {valid: false, error: `kein gültiger Wert. ${simpleTypes}`};
+            return { valid: false, error: `kein gültiger Wert. ${multiTypes}` };
         }
 
         // 3. Validierung gegen Enums
         if (dataType.art == "enum") {
             // Enum lesen
             let obj = this.#enumList.getObject(typeID);
-            const validEnum = obj?.values.has(value);
-            if (!validEnum) return { valid: false, error: `Ungültiger Auswahlwert.` };
+
+            const validEnum = obj?.values.includes(value);
+            if (!validEnum) {
+                // Auf mor_enums prüfen
+                if (obj?.more_enums) {
+                    if (Array.isArray(obj.more_enums)) {
+                        // zusätzliche Liste durchgehen
+                        for (let i = 0; i < obj.more_enums.length; i++) {
+                            // es braucht nur einer gültig sein
+                            if (this.validateDataType(obj.more_enums[i], value).valid == true) {
+                                return { valid: true };
+                            }
+                        }
+                    } else {
+                        // wenn zusätzlicher gültig
+                        if (this.validateDataType(obj.more_enums, value).valid == true) {
+                            return { valid: true };
+                        }
+                    }
+                }
+                return { valid: false, error: `Ungültiger Auswahlwert.` };
+            }; // wenn nicht in der Liste
+
+            // Details vom Simpletyp prüfen
+            validObj = this.validateSimple(typeID, value);
+            if (validObj.valid == false) { return validObj; }
         }
 
-         if (["object","multi","ref","group","choice"].indexOf(dataType.art) >= 0) {
+        if (["object", "multi", "group"].indexOf(dataType.art) >= 0) {
             return this.validateObject(typeID, value);
-         }
-         
+        }
+
         return { valid: true };
     }
 
@@ -920,15 +902,26 @@ export class Schema {
         const dataType = this.#dataTypeList.getObject(typeName);
         if (!dataType) return { valid: true }; // Basis-Fall
 
+        // Bei "multi" alle 
+        if (dataType.art == "multi") {
+            const multiTypes = [...dataType?.multi_types || ["string"]];
+            let validObj = { valid: true };
+            for (let i = 0; i < multiTypes.length; i++) {
+                validObj = this.validateProperty(multiTypes[i], propertyName, value);
+                if (validObj.valid == true) { return validObj; } // todo: es mus ja nur ein Wert richtig sein?
+            }
+            return validObj;
+        }
+
         // Muss Objekt sein
-        if (["object","multi","ref","group","choice"].indexOf(dataType.art) < 0) {
-            return {valid: false, error: `${typeName} ist kein Objekt!`};
+        if (["object", "group"].indexOf(dataType.art) < 0) {
+            return { valid: false, error: `${typeName} ist kein ObjektTyp!` };
         }
 
         // Eigenschaften lesen
-        var prop = this.getProperty({object_name: typeName, name: propertyName});
+        var prop = this.getProperty({ object_name: typeName, name: propertyName });
         if (!prop) {
-            return {valid: false, error: `${typeName}.${propertyName} nicht gefunden!`};
+            return { valid: false, error: `${typeName}.${propertyName} nicht gefunden!` };
         }
 
         // Eigenschaft prüfen
@@ -946,15 +939,26 @@ export class Schema {
         const dataType = this.#dataTypeList.getObject(typeName);
         if (!dataType) return { valid: true }; // Basis-Fall
 
+        if (dataType.art == "multi") {
+            const multiTypes = [...dataType?.multi_types || ["string"]];
+            let validObj = { valid: true };
+            for (let i = 0; i < multiTypes.length; i++) {
+                validObj = this.validateObject(multiTypes[i], obj);
+                if (validObj.valid == true) { return validObj; } // todo: es mus ja nur ein Wert richtig sein?
+            }
+            return validObj;
+        }
+
+
         // Muss Objekt sein
-        if (["object","multi","ref","group","choice"].indexOf(dataType.art) < 0) {
-            return {valid: false, error: `${typeName} ist kein Objekt!`};
+        if (["object", "group"].indexOf(dataType.art) < 0) {
+            return { valid: false, error: `${typeName} ist kein ObjektTyp!` };
         }
 
         // Alle propertys lesen
         var props = [...Object.keys(obj)];
         if (props.length <= 0) {
-            return {valid: true };
+            return { valid: true };
         }
 
         var isOk = true;
@@ -964,11 +968,11 @@ export class Schema {
         for (let i = 0; i < props.length; i++) {
             const valid = this.validateProperty(typeName, props[i], obj[props[i]]);
             valid.property = props[i];
-            if (valid.valid == false) {isOk = false;}
+            if (valid.valid == false) { isOk = false; }
             valids.push(valid);
         }
 
-        return {valid: isOk, propValids: valids};
+        return { valid: isOk, propValids: valids };
     }
 
 
@@ -989,6 +993,7 @@ export class Schema {
             , enums: this.#enumList.rows
             , refs: this.#refList.rows
             , infos: this.#infoList.rows
+            , asserts: this.#assertList.rows
         };
         return obj;
     }
@@ -1010,6 +1015,7 @@ export class Schema {
             , enums: this.#enumList.rows
             , refs: this.#refList.rows
             , infos: this.#infoList.rows
+            , asserts: this.#assertList.rows
         };
 
         let schemaString = JSON.stringify(obj);
@@ -1025,7 +1031,7 @@ export class Schema {
     setFromObject(obj) {
         if (!obj || typeof obj != "object") { return; }
         if (obj.infotype != "infoSchema") { return; }
-        
+
         this.#name = obj.name || "";
         this.version = obj.version || "";
 
@@ -1036,7 +1042,7 @@ export class Schema {
         this.#enumList = new DataTable("enums", obj.enums || [EnumType_fields], EnumTyp_unique);
         this.#refList = new DataTable("refs", obj.refs || [RefType_fields], RefType_unique);
         this.#infoList = new DataTable("infos", obj.infos || [InfoText_fields], InfoText_unique);
-
+        this.#assertList = new DataTable("asserts", obj.asserts || [AssertType_fields], AssertType_unique)
         return true;
     }
 
@@ -1082,7 +1088,7 @@ export const infoSchema = new Schema("infoSchema");
 
 // Enums
 infoSchema.setEnum({
-    name: "enu_types", values: new Set([
+    name: "enu_types", values: [
         "string"
         , "number"
         , "bigint"
@@ -1090,38 +1096,36 @@ infoSchema.setEnum({
         , "multi"
         , "enum"
         , "object"
-        , "ref"
-        , "unique"
         , "group"
-        , "choice"
-    ])
+    ]
 });
 
-infoSchema.setEnum({ name: "enu_art", values: new Set(["string", "number", "bigint", "boolean"]) });
+infoSchema.setEnum({ name: "enu_art", values: ["string", "number", "bigint", "boolean"] });
 
 infoSchema.setEnum({
-    name: "enu_casing", values: new Set([
+    name: "enu_casing", values: [
         "camelCase"
         , "PascalCase"
         , "snake_case"
         , "lower"
         , "upper"
-    ])
+    ]
 });
 
-infoSchema.setEnum({ name: "enu_onupdate", values: new Set(["NO", "UPDATE", "NULL", "DEFAULT"]) });
+infoSchema.setEnum({ name: "enu_onupdate", values: ["NO", "UPDATE", "NULL", "DEFAULT"] });
 
-infoSchema.setEnum({ name: "enu_ondelete", values: new Set(["NO", "DELETE", "NULL", "DEFAULT"]) });
+infoSchema.setEnum({ name: "enu_ondelete", values: ["NO", "DELETE", "NULL", "DEFAULT"] });
 
 // String_number Typ
-infoSchema.setDataType({ name: "string_number", art: "multi", simple_types: ["string", "number"] });
+infoSchema.setDataType({ name: "string_number", art: "multi", multi_types: ["string", "number"] });
 
 // EnumType
 infoSchema.setDataType({ name: "EnumType", art: "object", id: "name" });
 infoSchema.addProperty("EnumType", "name");
-infoSchema.addProperty("EnumType", "values", { prop_type: "set" });
-infoSchema.addProperty("EnumType", "moreEnums", { min: 0, max: -1 });
+infoSchema.addProperty("EnumType", "values", { prop_type: "string_number", is_list: true, min: 0, max: -1 });
+infoSchema.addProperty("EnumType", "moreEnums", {is_list: true, min: 0, max: -1 });
 
+infoSchema.setRef({name: "enum_type", object_name: "EnumType", object_props: ["name"], ref_name: "DataType", ref_props: ["name"]});
 
 // SimpleType
 infoSchema.setDataType({ name: "SimpleType", art: "object", id: "name" });
@@ -1139,17 +1143,20 @@ infoSchema.addProperty("SimpleType", "min_exclusive", { prop_type: "string_numbe
 infoSchema.addProperty("SimpleType", "max_exclusive", { prop_type: "string_number", min: 0 });
 infoSchema.addProperty("SimpleType", "max_inclusive", { prop_type: "string_number", min: 0 });
 
+infoSchema.setRef({name: "simple_type", object_name: "SimpleType", object_props: ["name"], ref_name: "DataType", ref_props: ["name"]});
+
 
 // RefType
 infoSchema.setDataType({ name: "RefType", art: "object", id: "gsid" });
 infoSchema.addProperty("RefType", "gsid");
 infoSchema.addProperty("RefType", "name");
 infoSchema.addProperty("RefType", "object_name");
-infoSchema.addProperty("RefType", "object_props", { max: -1 });
+infoSchema.addProperty("RefType", "object_props", {is_list: true, max: -1 });
 infoSchema.addProperty("RefType", "ref_name");
-infoSchema.addProperty("RefType", "ref_props", { max: -1 });
+infoSchema.addProperty("RefType", "ref_props", { is_list: true, max: -1 });
 infoSchema.addProperty("RefType", "on_update", { prop_type: "onupdate" });
 infoSchema.addProperty("RefType", "on_delete", { prop_type: "ondelete" });
+
 
 
 // UniqueType
@@ -1157,7 +1164,8 @@ infoSchema.setDataType({ name: "UniqueType", art: "object", id: "gsid" });
 infoSchema.addProperty("UniqueType", "gsid");
 infoSchema.addProperty("UniqueType", "name");
 infoSchema.addProperty("UniqueType", "object_name");
-infoSchema.addProperty("UniqueType", "props", { max: -1 });
+infoSchema.addProperty("UniqueType", "props", { is_list: false, max: -1 });
+
 
 
 // PropertyType
@@ -1167,20 +1175,23 @@ infoSchema.addProperty("PropertyType", "object_name");
 infoSchema.addProperty("PropertyType", "name");
 infoSchema.addProperty("PropertyType", "pos", { prop_type: "number", min: 0 });
 infoSchema.addProperty("PropertyType", "prop_type", { default: "string", min: 0 });
+infoSchema.addProperty("PropertyType", "is_list", { prop_type: "boolean", min: 0 });
 infoSchema.addProperty("PropertyType", "min", { prop_type: "int", default: 1, min: 0 });
 infoSchema.addProperty("PropertyType", "max", { prop_type: "int", default: 1, min: 0 });
 infoSchema.addProperty("PropertyType", "default", { prop_type: "any", min: 0 });
 infoSchema.addProperty("PropertyType", "fix", { prop_type: "any", min: 0 });
 
+infoSchema.setRef({name: "prop_type", object_name: "PropertyType", object_props: ["object_name"], ref_name: "DataType", ref_props: ["name"]});
 
 // DataTyp
 infoSchema.setDataType({ name: "DataType", art: "object", id: "name" });
 infoSchema.addProperty("DataType", "name");
 infoSchema.addProperty("DataType", "art", { prop_type: "enu_types" });
 infoSchema.addProperty("DataType", "base_name", { min: 0 });
-infoSchema.addProperty("DataType", "id", { min: 0, max: -1 });
-infoSchema.addProperty("DataType", "more_attributes", { min: 0, max: -1 });
-infoSchema.addProperty("DataType", "more_properties", { min: 0, max: -1 });
+infoSchema.addProperty("DataType", "multi_types", { is_list: true, min: 0, max: -1 });
+infoSchema.addProperty("DataType", "id", { is_list: false, min: 0, max: -1 });
+infoSchema.addProperty("DataType", "more_attributes", { is_list: true, min: 0, max: -1 });
+infoSchema.addProperty("DataType", "more_properties", { is_list: true, min: 0, max: -1 });
 
 
 // InfoText
@@ -1191,147 +1202,4 @@ infoSchema.addProperty("InfoText", "prop_gsid", { min: 0 });
 infoSchema.addProperty("InfoText", "lang", { default: "de", min: 0 });
 infoSchema.addProperty("InfoText", "date", { min: 0 });
 infoSchema.addProperty("InfoText", "text");
-
-
-// ==========================
-//   Schema anzeigen
-// --------------------
-
-/**
- * Liefert einen HTML-String für ein Schema zurück (JSDoc-Style)
- * @param {Schema} schema - Info Schema Instanz
- * @returns {string} Vollständiger HTML-String für die Dokumentation
- */
-export function getSchemaHTML(schema) {
-
-    // --- HAUPTFUNKTION FÜR DIE ANZEIGE ---
-    function renderDocumentation() {
-        let html = "";
-
-        // 1. HAUPT-OBJEKTE RENDERN (Alle Datentypen, die die Art "object" haben)
-        // Hier nutzen wir Ihr praktisches Such-Objekt!
-        const hauptObjekte = schema.dataTypes.findAll({ art: "object" });
-
-        hauptObjekte.forEach(typ => {
-            html += createObjectCardHTML(typ);
-        });
-
-        // 2. GLOBALE HILFSTYPEN & ENUMS RENDERN
-        // Wir suchen alle Typen, deren Art NICHT "object" ist (über eine Spalten-Funktion im Such-Objekt)
-        const hilfsTypen = schema.dataTypes.findAll({
-            art: (/** @type {string} */value) => value !== "object"
-        });
-
-        if (hilfsTypen.length > 0) {
-            html += `<div class="footer-section">`;
-            html += `<h2>Globale Hilfstypen & Enums</h2>`;
-            hilfsTypen.forEach(typ => {
-                html += createObjectCardHTML(typ);
-            });
-            html += `</div>`;
-        }
-
-        return html;
-    }
-
-    // --- HILFSFUNKTION: Erstellt eine einzelne JSDoc-Karte ---
-    /**
-     * @param {DataType} typ 
-     * @returns {string} HTML-String der Karte
-     */
-    function createObjectCardHTML(typ) {
-        // Findet alle Eigenschaften, die zu diesem Objektnamen gehören
-        const allProps = schema.properties.findAll({ object_name: typ.name });
-
-        // Trennung in XML-Attribute (@) und normale Properties
-        const attribute = allProps.filter(p => p.name.startsWith("@"));
-        const propertys = allProps.filter(p => !p.name.startsWith("@"));
-
-        let cardHtml = `<div class="object-card" id="type-${typ.name}">`;
-        cardHtml += `<h2>${typ.name} <span class="badge">${typ.art}</span></h2>`;
-
-        // XML-Attribute anzeigen
-        if (attribute.length > 0) {
-            cardHtml += `<div class="section-title">Attributes</div>`;
-            cardHtml += buildJSDocTable(attribute);
-        }
-
-        // Normale Kind-Elemente / Properties anzeigen
-        if (propertys.length > 0) {
-            cardHtml += `<div class="section-title">Properties</div>`;
-            cardHtml += buildJSDocTable(propertys);
-        }
-        // ENUM-WERTE ANZEIGEN: Wenn der Typ ein Enum ist, holen wir die Werte aus schema.enums
-        else if (typ.art === "enum") {
-            cardHtml += `<div class="section-title">Erlaubte Werte (Enum)</div>`;
-
-            // Wir suchen in der Enum-Tabelle nach dem Eintrag für diesen Typen
-            const enumEintrag = schema.enums.find({ name: typ.name });
-
-            if (enumEintrag && enumEintrag.values && enumEintrag.values.size > 0) {
-                cardHtml += `<table class="jsdoc-table enum-table">
-                    <thead><tr><th>Erlaubter Wert</th></tr></thead>
-                    <tbody>`;
-
-                // Da enumEintrag.values ein Set<any> ist, wandeln wir es in ein Array um
-                const werteArray = Array.from(enumEintrag.values);
-                werteArray.forEach(wert => {
-                    cardHtml += `<tr><td class="enum-value">${wert}</td></tr>`;
-                });
-
-                cardHtml += `</tbody></table>`;
-            } else {
-                cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Enum-Werte hinterlegt.</p>`;
-            }
-        }
-        // Wenn es ein reiner SimpleType ohne Properties ist (z.B. ein custom String-Typ)
-        else if (attribute.length === 0) {
-            cardHtml += `<p style="color: #888; font-style: italic; margin-left: 12px;">Keine Eigenschaften definiert (SimpleType / Primitiv).</p>`;
-        }
-
-        cardHtml += `</div>`;
-        return cardHtml;
-    }
-
-    // --- HILFSFUNKTION: Baut die JSDoc Tabelle für Attribute/Properties ---
-    /**
-     * @param {Array<PropertyType>} propListe 
-     * @returns {string} HTML-String der Tabelle
-     */
-    function buildJSDocTable(propListe) {
-        let table = `<table class="jsdoc-table">
-        <thead>
-            <tr><th>Name</th><th>Typ</th><th>Kardinalität</th><th>Details / Fixwert</th></tr>
-        </thead>
-        <tbody>`;
-
-        propListe.forEach(p => {
-            // Prüfen, ob der Typ im Schema existiert -> Dann machen wir einen Klick-Link daraus
-            const typExistiert = schema.dataTypes.has(p.prop_type || "");
-            const typLink = typExistiert
-                ? `<a class="prop-type" href="#type-${p.prop_type}">${p.prop_type}</a>`
-                : `<span style="color: #666;">${p.prop_type}</span>`;
-
-            // Kardinalität leserlich übersetzen
-            let kardinalitaet = `${p.min}..${p.max === -1 ? '*' : p.max}`;
-            if (p.min === 0 && p.max === 1) kardinalitaet += " (Optional)";
-            if (p.min === 1 && p.max === 1) kardinalitaet += " (Erforderlich)";
-
-            table += `<tr>
-                <td class="prop-name">${p.name}</td>
-                <td>${typLink}</td>
-                <td style="color: #666; font-size: 0.9em;">${kardinalitaet}</td>
-                <td style="font-style: italic; color: #555;">${p.fix ? `Fixwert: "${p.fix}"` : (p.default ? `Default: "${p.default}"` : '-')}</td>
-            </tr>`;
-        });
-
-        table += `</tbody></table>`;
-        return table;
-    }
-
-    // Startet den geschützten Ausleseprozess und gibt den HTML-String zurück
-    return renderDocumentation();
-}
-
-// ==============================
 

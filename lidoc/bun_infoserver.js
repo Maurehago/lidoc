@@ -5,7 +5,9 @@
 
 import { join } from "path";
 import { mkdir } from "fs/promises";
-import { InfoSchema, InfoTableUI_fields, InfoFormUI_fields } from "./infoschema.js";
+import { InfoSchema } from "./infoschema.js";
+import { InfoUITableCol_fields, InfoUIFormField_fields } from "./infoui.js";
+import { DBDriver } from "./infodata.js"
 
 //import { JsonFileDriver } from "./db_drivers.js";
 
@@ -15,7 +17,7 @@ import { InfoSchema, InfoTableUI_fields, InfoFormUI_fields } from "./infoschema.
 
 /**
  * DatenTypen vom Schema
- * @import {ApplicationConfig, ClientServerMessage, Token, DBDriverInterface, DriverConfig} from "./infoschema.js"
+ * @import {ApplicationConfig, ClientServerMessage, Token, DriverConfig} from "./infodata.js"
  */
 
 
@@ -118,14 +120,84 @@ async function loadOrInitializeConfig() {
         , isNewSystem: true
         , drivers: []
         , defaultDriverId: null
-        , infoTables: [[...InfoTableUI_fields]]
-        , infoForms: [[...InfoFormUI_fields]]
-        , appSchema: new InfoSchema()
+        , infoTables: [[...InfoUITableCol_fields]]
+        , infoForms: [[...InfoUIFormField_fields]]
     };
 
     await saveApplicationConfig(freshConfig);
     return freshConfig;
 }
+
+
+// Hilfsfunktion zum Generieren des HTML-Formulars
+function renderLoginForm(errorMessage = "", nextUrl = "/", reason = "") {
+    let infoMessage = "";
+
+    if (reason === "timeout") {
+        infoMessage = "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
+    } else if (reason === "logout") {
+        infoMessage = "Du hast dich erfolgreich abgemeldet.";
+    }
+
+    return `
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <title>Login</title>
+        <style>
+            body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }
+            .login-card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+            .form-group { margin-bottom: 1rem; }
+            label { display: block; margin-bottom: .5rem; font-weight: bold; }
+            input { width: 100%; padding: .5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+            button { width: 100%; padding: .75rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+            button:hover { background: #0056b3; }
+            .error { color: #dc3545; background: #fdf2f2; border: 1px solid #fde2e2; padding: .75rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
+            .info { color: #004085; background: #cce5ff; border: 1px solid #b8daff; padding: .75rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
+        </style>
+    </head>
+    <body>
+        <div class="login-card">
+            <h2>Anmelden</h2>
+            
+            ${infoMessage ? `<div class="info">${infoMessage}</div>` : ''}
+            ${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}
+            
+            <!-- Formular sendet ganz normal per POST an /login -->
+            <form method="POST" action="/login" id="loginForm">
+                <!-- Das Feld wird primär vom Server befüllt (z.B. '/') -->
+                <input type="hidden" name="next" id="nextUrlField" value="${nextUrl}">
+
+                <div class="form-group">
+                    <label for="username">Benutzername</label>
+                    <input type="text" id="username" name="username" required autofocus>
+                </div>
+                <button type="submit">Einloggen</button>
+            </form>
+        </div>
+
+        <script>
+            // MAGIE FÜR HASH-ROUTING:
+            // Da der Server den Hash nicht kennt, liest dieses Skript im Browser
+            // beim Laden der Seite den sessionStorage aus.
+            const savedHash = sessionStorage.getItem("spa_redirect_hash");
+            if (savedHash) {
+                const field = document.getElementById("nextUrlField");
+                // Wir hängen den geretteten Hash an die Ziel-URL an (z.B. /#api.schema=xxx)
+                field.value = field.value + savedHash;
+                // Danach löschen wir ihn, um die Session sauber zu halten
+                sessionStorage.removeItem("spa_redirect_hash");
+            }
+        </script>
+    </body>
+    </html>
+    `;
+}
+
+
+
+
 
 // 3. SERVER CLASS IMPLEMENTIERUNG
 export class RealtimeServer {
@@ -147,7 +219,7 @@ export class RealtimeServer {
         /** 
          * Instanziierte und aktive Treiber im Speicher des Servers.
          * Key ist die driverId aus der Konfiguration.
-         * @type {Map<string,DBDriverInterface>} 
+         * @type {Map<string,DBDriver>} 
          */
         this.activeDrivers = new Map();
 
@@ -206,8 +278,8 @@ export class RealtimeServer {
                     // const driverInstance = new FirebirdDriver(driverCfg.id, driverCfg.name, driverCfg.connectionString);
                     // this.activeDrivers.set(driverCfg.id, driverInstance);
                 }
-                else if (driverCfg.type === "JSON_FILES") {
-                    console.log(`JSON-Dateien-Verzeichnis wird überwacht/initialisiert: ${driverCfg.connectionString}`);
+                else if (driverCfg.type === "FOLDER") {
+                    console.log(`Dateien-Verzeichnis wird überwacht/initialisiert: ${driverCfg.connectionString}`);
                 }
 
             } catch (err) {
@@ -239,12 +311,14 @@ export class RealtimeServer {
     /**
      * Gibt eine Message zum zurücksenden eines Fehlers zurück.
      * @param {string} message - Fehlermeldung
+     * @param {string|undefined} requestId - Fehlermeldung
      * @returns {ClientServerMessage}
      */
-    getErrorMessage(message) {
+    getErrorMessage(message, requestId) {
         /** @type {ClientServerMessage} */
         return {
             type: "ERROR"
+            , requestId
             , payload: { message }
         };
     }
@@ -279,55 +353,96 @@ export class RealtimeServer {
 
                 // 1. Erlaube den Zugriff auf die Login-Seite und statische Assets immer ohne Prüfung
                 if (url.pathname === "/login" && req.method === "GET") {
-                    // Hier lieferst du deine normalen Login-Dateien aus...
-                    // Pfad für Bun.file vorbereiten (Punkt voranstellen für relativen Pfad)
-                    const file = Bun.file("./_login.html");
+                    // URL merken
+                    const nextUrl = url.searchParams.get("next") || "/";
 
-                    // 3. Prüfen, ob die Datei existiert, und ausliefern
-                    if (await file.exists()) {
-                        return new Response(file);
-                    }
-
-                    // 4. Fallback, falls die Datei nicht existiert
-                    return new Response("Login Not Found", { status: 404 });
-                }
-
-                // Prüfen auf aktiven user
-                if (!currentToken || Date.now() < currentToken.exp) {
-                    console.log(`Anonyme Anfrage auf ${url.pathname} - Leite um zu /login.html`);
-
-                    // REDIRECT: Status 302 und Location-Header
-                    return new Response(null, { status: 302, headers: { "Location": "/login" } });
+                    // Formular Rendern
+                    return new Response(renderLoginForm("", nextUrl), {
+                        headers: { "Content-Type": "text/html; charset=utf-8" }
+                    });
                 }
 
                 // HTTP-Endpunkt zum EINLOGGEN und Cookie setzen
                 if (url.pathname === "/login" && req.method === "POST") {
-                    // todo: hier kommt irgendwann die Benutzer Prüfung rein
-                    const body = await req.json();
+                    try {
+                        const contentType = req.headers.get("content-type") || "";
+                        let username = "";
+                        let nextUrl = "/"; // Fallback, falls nichts übergeben wurde
 
-                    /** @type {Token} */
-                    const token = {
-                        gsid: getGSID()
-                        , userId: getGSID() // todo: wird Später vom Benutzer gelesen
-                        , username: body.username || "lokaler_benutzer"
-                        , exp: Date.now() + this.sessionTimeout
+                        // 1. Daten auslesen (unterstützt nun Formulare und JSON)
+                        if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+                            const formData = await req.formData();
+                            username = formData.get("username")?.toString().trim() || "";
+                            nextUrl = formData.get("next")?.toString() || "/";
+                        } else if (contentType.includes("application/json")) {
+                            const body = await req.json();
+                            username = body.username?.trim() || "";
+                            nextUrl = body.next || "/";
+                        }
+
+                        // Validierung
+                        if (!username) {
+                            return new Response(renderLoginForm("Bitte Benutzernamen eingeben.", nextUrl), {
+                                status: 400,
+                                headers: { "Content-Type": "text/html; charset=utf-8" }
+                            });
+                        }
+
+                        // Token im Server hinterlegen (Session erstellen)
+                        const token = {
+                            gsid: getGSID(),
+                            userId: getGSID(),
+                            username: username,
+                            exp: Date.now() + this.sessionTimeout
+                        };
+                        this.tokens.set(token.gsid, token);
+
+                        console.log(`Login erfolgreich für ${username}. Leite weiter an: ${nextUrl}`);
+
+                        // ERFOLG: Der Server schickt den Browser per Redirect exakt an die gewünschte Client-Route!
+                        //return Response.redirect(new URL(nextUrl, req.url), 303);
+                        return new Response(null, {
+                            status: 303, // 303 See Other zwingt den Browser nach einem POST zu einem sauberen GET-Request
+                            headers: {
+                                "Location": new URL(nextUrl, req.url).toString(),
+                                "Set-Cookie": `auth_token=${token.gsid}; Path=/; HttpOnly; SameSite=Strict` // "; Secure" hinzufügen in Echtsystemen 
+                            }
+                        });
+
+                    } catch (error) {
+                        console.error("Login-Fehler:", error);
+                        return new Response(renderLoginForm("Ein interner Fehler ist aufgetreten.", "/"), {
+                            status: 500,
+                            headers: { "Content-Type": "text/html; charset=utf-8" }
+                        });
+                    }
+                }
+
+                // Prüfen auf aktiven user
+                if (!currentToken || Date.now() > currentToken.exp) {
+                    // Altes Token aufräumen, falls abgelaufen vorhanden
+                    if (tokenGsid) this.tokens.delete(tokenGsid);
+
+                    // Wir merken uns den Pfad (z.B. / oder /index.html)
+                    const originalTarget = url.pathname + url.search;
+
+                    console.log(`Anonyme oder abgelaufene Anfrage auf ${originalTarget} - Leite um zu /login`);
+
+                    // Erstelle die Ziel-URL für den Login
+                    const redirectUrl = new URL("/login", req.url);
+
+                    // Übergib den Pfad als "next"-Parameter, damit das Formular weiß, wo es hin soll
+                    redirectUrl.searchParams.set("next", originalTarget);
+
+                    // Übergib den Grund, falls das Token im Speicher existierte, aber abgelaufen war
+                    if (currentToken && Date.now() > currentToken.exp) {
+                        redirectUrl.searchParams.set("reason", "timeout");
                     }
 
-                    // Token Merken
-                    this.tokens.set(token.gsid, token);
-
-                    return new Response(JSON.stringify({ success: true }), {
-                        status: 200,
-                        headers: {
-                            "Content-Type": "application/json",
-                            // Hier setzen wir das sichere Cookie!
-                            // HIER: Max-Age weglassen -> Es wird ein Session-Cookie!
-                            "Set-Cookie": `auth_token=${token.gsid}; Path=/; HttpOnly; Secure; SameSite=Strict`
-                        }
-                    });
-
-                    //return new Response("Nicht gefunden", { status: 404 });
+                    // Nativer, stabiler Browser-Redirect (302)
+                    return Response.redirect(redirectUrl, 302);
                 }
+
 
                 // WebSocket Upgrade Handshake
                 if (url.pathname === "/socket") {
@@ -408,22 +523,25 @@ export class RealtimeServer {
                         type: "INITIAL_STATE"
                         //locks: Object.fromEntries(this.activeLocks), // Aktuelle Sperren als Objekt
                         //id: "root_column",
-                        ,targetType: "MENU"
+                        , targetType: "MENU"
                         //title: `${currentConfig.appName} - Hauptmenü`,
-                        ,rows: startMenuRows
                         , payload: currentConfig
                     }
 
                     ws.send(JSON.stringify(init_data));
                 },
                 message: async (ws, message) => {
+                    /** @type {ClientServerMessage} */
+                    const msg = JSON.parse(message.toString());
+
                     try {
+
                         // Prüfen, ob die Datenstruktur des Nutzers überhaupt existiert
                         if (!ws.data || !ws.data.userId) {
                             /** @type {ClientServerMessage} */
-                            const msg = this.getErrorMessage("No Login.");
+                            const errmsg = this.getErrorMessage("No Login.", msg.requestId);
 
-                            ws.send(JSON.stringify(msg));
+                            ws.send(JSON.stringify(errmsg));
                             ws.close(4001, "Nicht authentifiziert");
                             return;
                         }
@@ -431,9 +549,9 @@ export class RealtimeServer {
                         // Prüfen, ob die Session-Zeit (exp) abgelaufen ist
                         if (Date.now() > ws.data.exp) {
                             /** @type {ClientServerMessage} */
-                            const msg = this.getErrorMessage("Session Timeout.");
+                            const errmsg = this.getErrorMessage("Session Timeout.", msg.requestId);
 
-                            ws.send(JSON.stringify(msg));
+                            ws.send(JSON.stringify(errmsg));
                             ws.close(4001, "Session abgelaufen");
                             return;
                         }
@@ -444,8 +562,6 @@ export class RealtimeServer {
                         // Aktualisiert sowohl ws.data als auch den Eintrag in this.tokens (Referenz)
                         ws.data.exp = newExpiration;
 
-                        /** @type {ClientServerMessage} */
-                        const msg = JSON.parse(message.toString());
                         console.log(`Aktion [${msg.type}] angefordert von [${ws.data.username}]`);
 
                         // Frisch geladene Konfiguration für eventuelle Abgleiche holen
@@ -456,15 +572,15 @@ export class RealtimeServer {
                             ? `${msg.driverId}_${msg.tableName}_${msg.recordId}`
                             : "";
 
-                        const { type, driverId, tableName, recordId, idColName, targetType, payload, rows } = msg;
+                        const { type, requestId, driverId, tableName, recordId, idFields, quest, targetType, payload } = msg;
 
                         /** @type {ClientServerMessage} */
-                        const answer = { type: "ERROR", driverId, tableName, recordId, idColName };
+                        const answer = { type: "ERROR", requestId, driverId, tableName, recordId, targetType };
 
                         switch (msg.type) {
 
                             // =================================================================
-                            //   DATENABFRAGE (Pass-Through)
+                            //   DATENABFRAGE
                             // =================================================================
                             case "GET_DATA": {
                                 // Fall A: Der Client möchte das Ersteinrichtungs-Formular aufrufen
@@ -479,23 +595,48 @@ export class RealtimeServer {
                                     break;
                                 }
 
-                                // Fall B: Ein Treiber wurde gewählt -> Frage dessen Tabellenliste oder Menütabelle ab
-                                if (targetType === "DRIVER_MAIN") {
-                                    const driver = this.activeDrivers.get(driverId || "");
-                                    if (!driver) {
-                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
-                                        break;
-                                    }
+                                // // Fall B: Ein Treiber wurde gewählt -> Frage dessen Tabellenliste oder Menütabelle ab
+                                // if (targetType === "DRIVER_MAIN") {
+                                //     const driver = this.activeDrivers.get(driverId || "");
+                                //     if (!driver) {
+                                //         ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
+                                //         break;
+                                //     }
 
-                                    // Der Treiber liefert uns die Tabellenübersicht
-                                    // (Entweder per Datei-Scan oder aus einer systeminternen Menütabelle)
-                                    // Format: [ ["TableName", "Beschreibung"], ["kunden", "Kundenkartei"] ]
-                                    const tablesList = await driver.getTables();
+                                //     // Der Treiber liefert uns die Tabellenübersicht
+                                //     // (Entweder per Datei-Scan oder aus einer systeminternen Menütabelle)
+                                //     // Format: [ ["TableName", "Beschreibung"], ["kunden", "Kundenkartei"] ]
+                                //     const tablesList = await driver.getTables();
+
+                                //     answer.type = "DATA";
+                                //     answer.targetType = "LIST";
+                                //     answer.rows = tablesList;
+
+                                //     ws.send(JSON.stringify(answer));
+                                //     break;
+                                // }
+
+                                if (payload) {
+                                    // 1. Die Magie: Referenzen im JavaScript auflösen
+                                    /** @type {Object<string,Array<any>>} */
+                                    const answerPayload = {};
+
+                                    // 2. Jede Tabelle nacheinander abfragen (Reihenfolge ist jetzt egal, da alle Daten fertig im JS liegen!)
+                                    //for (const [tableName, config] of Object.entries(cleanPayload)) {
+                                    const tables = Object.keys(payload);
+                                    for (let i = 0; i < tables.length; i++) {
+                                        const tableName = tables[i];
+                                        const config = payload[tableName];
+                                        const driver = this.activeDrivers.get(config.driverId);
+                                        if (driver) {
+                                            // Treiber erhält die vollständig ausformulierte Quest mit EXISTS-Kette
+                                            answerPayload[tableName] = await driver.getRows(tableName, config.quest);
+                                        }
+                                    }
 
                                     answer.type = "DATA";
                                     answer.targetType = "LIST";
-                                    answer.rows = tablesList;
-
+                                    answer.payload = answerPayload; // Schickt { customers: [...], customers_interests: [...], interests: [...] }
                                     ws.send(JSON.stringify(answer));
                                     break;
                                 }
@@ -505,25 +646,25 @@ export class RealtimeServer {
                                     const driver = this.activeDrivers.get(driverId);
 
                                     if (!driver) {
-                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
+                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`, requestId)));
                                         break;
                                     }
 
                                     let tableRows;
 
                                     // Wenn datensatz ID  && !recordId
-                                    if (recordId != undefined) {
-                                        tableRows = await driver.getRecord(tableName, recordId, idColName || "gsid");
+                                    if (recordId != undefined && quest) {
+                                        tableRows = await driver.getRecord(tableName, quest);
                                     } else {
                                         // Hole das komplette Daten-Array über den Treiber
-                                        tableRows = await driver.getRows(tableName);
+                                        tableRows = await driver.getRows(tableName, quest);
                                     }
 
                                     ///** @type {ClientServerMessage} */
                                     //const answer = { type: "DATA", targetType: "LIST", rows: tableRows };
                                     answer.type = "DATA";
                                     answer.targetType = "LIST";
-                                    answer.rows = tableRows;
+                                    answer.payload = { [tableName]: tableRows };
 
                                     // Der Server gibt das Array unverändert an den Client weiter.
                                     // Der Client speichert es in seiner lokalen InfoTable zum Filtern und Sortieren.
@@ -538,7 +679,7 @@ export class RealtimeServer {
                             // =================================================================
                             case "REQUEST_LOCK": {
                                 if (!lockKey || !driverId || !tableName || !recordId) {
-                                    ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.")));
+                                    ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.", requestId)));
                                     break;
                                 }
 
@@ -557,7 +698,7 @@ export class RealtimeServer {
 
                                 // Jetzt holen wir den aktuellen Zustand GENAU DIESES einen Datensatzes frisch vom Treiber
                                 const driver = this.activeDrivers.get(driverId);
-                                if (driver) {
+                                if (driver && quest) {
                                     // Sperre im Server-Arbeitsspeicher (In-Memory) registrieren
                                     /** @type {LockData} */
                                     const newLock = {
@@ -571,12 +712,12 @@ export class RealtimeServer {
                                     server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
 
                                     // Daten lesen
-                                    const singleRecordRows = await driver.getRecord(tableName, recordId, idColName || "gsid");
+                                    const singleRecordRows = await driver.getRecord(tableName, quest);
 
                                     // Antwort zusammenstellen
                                     answer.type = "DATA";
                                     answer.targetType = "FORM";
-                                    answer.rows = singleRecordRows;
+                                    answer.payload = { [tableName]: singleRecordRows };
 
                                     // Dem anfragenden Client grünes Licht geben und das Daten-Array für sein Formular senden
                                     ws.send(JSON.stringify(answer));
@@ -596,7 +737,7 @@ export class RealtimeServer {
                                         server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
 
                                         // Benutzer Informieren das die Sperre aufgehoben ist
-                                        ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED" }));
+                                        ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED", requestId }));
                                     }
                                 }
                                 break;
@@ -607,32 +748,32 @@ export class RealtimeServer {
                             // =================================================================
                             case "SAVE_DATA": {
                                 // Sonderfall: Speichern der globalen Optionen (Zustand: NULL überwinden)
-                                if (msg.tableName === "save_driver_wizard" && rows) {
-                                    const headers = rows[0];
-                                    const values = rows[1];
-                                    /** @type {DriverConfig} */
-                                    // @ts-ignore
-                                    const newDriverCfg = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
+                                // if (msg.tableName === "save_driver_wizard" && rows) {
+                                //     const headers = rows[0];
+                                //     const values = rows[1];
+                                //     /** @type {DriverConfig} */
+                                //     // @ts-ignore
+                                //     const newDriverCfg = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
 
-                                    currentConfig.drivers.push(newDriverCfg);
-                                    currentConfig.isNewSystem = false; // Zustand NULL ist beendet
+                                //     currentConfig.drivers.push(newDriverCfg);
+                                //     currentConfig.isNewSystem = false; // Zustand NULL ist beendet
 
-                                    // Persistieren in der lokalen Benutzerdatei
-                                    await saveApplicationConfig(currentConfig);
-                                    // Treiber zur Laufzeit frisch hochfahren
-                                    await this.initializeConfiguredDrivers();
+                                //     // Persistieren in der lokalen Benutzerdatei
+                                //     await saveApplicationConfig(currentConfig);
+                                //     // Treiber zur Laufzeit frisch hochfahren
+                                //     await this.initializeConfiguredDrivers();
 
-                                    ws.send(JSON.stringify({ type: "SYSTEM_RELOAD_REQUIRED", text: "Treiber eingerichtet! Benutzeroberfläche wird neu aufgebaut." }));
-                                    break;
-                                }
+                                //     ws.send(JSON.stringify({ type: "SYSTEM_RELOAD_REQUIRED", text: "Treiber eingerichtet! Benutzeroberfläche wird neu aufgebaut." }));
+                                //     break;
+                                // }
 
                                 // Regulärer Fall: Datenzeilen-Änderung in einer echten Datenbank
-                                if (!driverId || !tableName || !rows) break;
+                                if (!driverId || !tableName || !payload || !idFields) break;
 
                                 // Concurrency Check: Hat der User die Sperre noch?
                                 const currentLock = this.activeLocks.get(lockKey);
                                 if (currentLock && currentLock.username !== ws.data.username) {
-                                    ws.send(JSON.stringify(this.getErrorMessage("Speichern fehlgeschlagen: Du hast die Bearbeitungsrechte zwischenzeitlich verloren.")));
+                                    ws.send(JSON.stringify(this.getErrorMessage("Speichern fehlgeschlagen: Du hast die Bearbeitungsrechte zwischenzeitlich verloren.", requestId)));
                                     break;
                                 }
 
@@ -640,7 +781,7 @@ export class RealtimeServer {
                                 if (driver) {
                                     // Der Server reicht das Delta-Array [ [Header], [Nur ID & Geänderte Zellen] ] an den Treiber weiter.
                                     // Der Treiber validiert intern und führt das physische UPDATE/INSERT aus.
-                                    const success = await driver.saveRows(tableName, rows, idColName || "gsid");
+                                    const success = await driver.saveRows(tableName, payload[tableName], idFields);
 
                                     if (success) {
                                         // Nach dem erfolgreichen Schreiben heben wir das Lock sofort auf
@@ -655,7 +796,7 @@ export class RealtimeServer {
                                         answer.payload = { message: "Daten erfolgreich geschrieben." };
                                         ws.send(JSON.stringify(answer));
                                     } else {
-                                        ws.send(JSON.stringify(this.getErrorMessage("Der Datenbanktreiber hat das Speichern abgelehnt (Validierungsfehler).")));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Der Datenbanktreiber hat das Speichern abgelehnt (Validierungsfehler).", requestId)));
                                     }
                                 }
                                 break;
@@ -665,13 +806,13 @@ export class RealtimeServer {
                             // 4. LÖSCH-OPERATION (Data Purge)
                             // =================================================================
                             case "DELETE_DATA": {
-                                if (!lockKey || !driverId || !tableName || !recordId) break;
+                                if (!lockKey || !driverId || !tableName || !quest) break;
 
                                 // Datensatz darf nicht von jemand anderem gesperrt sein
                                 if (this.activeLocks.has(lockKey)) {
                                     const currentLock = this.activeLocks.get(lockKey);
                                     if (currentLock && currentLock.username !== ws.data.username) {
-                                        ws.send(JSON.stringify(this.getErrorMessage("Löschen verweigert: Der Datensatz wird gerade von einem anderen Benutzer editiert.")));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Löschen verweigert: Der Datensatz wird gerade von einem anderen Benutzer editiert.", requestId)));
                                         break;
                                     }
                                 }
@@ -679,7 +820,7 @@ export class RealtimeServer {
                                 const driver = this.activeDrivers.get(driverId);
                                 if (driver) {
                                     // Löschbefehl an den Treiber übergeben
-                                    const success = await driver.deleteRow(tableName, recordId, idColName || "gsid");
+                                    const success = await driver.deleteRows(tableName, quest);
 
                                     if (success) {
                                         // Eine eventuelle eigene Sperre sofort löschen
@@ -692,18 +833,18 @@ export class RealtimeServer {
                                         answer.payload = { message: "Datensatz permanent entfernt." };
                                         ws.send(JSON.stringify(answer));
                                     } else {
-                                        ws.send(JSON.stringify(this.getErrorMessage("Der Treiber konnte den Datensatz nicht löschen.")));
+                                        ws.send(JSON.stringify(this.getErrorMessage("Der Treiber konnte den Datensatz nicht löschen.", requestId)));
                                     }
                                 }
                                 break;
                             }
                             default:
-                                ws.send(JSON.stringify(this.getErrorMessage(`Aktionstyp '${msg.type}' wird vom Server nicht unterstützt.`)));
+                                ws.send(JSON.stringify(this.getErrorMessage(`Aktionstyp '${msg.type}' wird vom Server nicht unterstützt.`, requestId)));
                                 break;
                         }
                     } catch (err) {
                         console.error("Fehler im WebSocket-Handler:", err);
-                        ws.send(JSON.stringify(this.getErrorMessage("Interner Serverfehler bei der Verarbeitung der Nachricht.")));
+                        ws.send(JSON.stringify(this.getErrorMessage("Interner Serverfehler bei der Verarbeitung der Nachricht.", msg.requestId)));
 
                     }
                     //console.log(`Nachricht empfangen von ${ws.data.userId}:`, message.toString());

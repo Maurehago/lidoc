@@ -1,84 +1,132 @@
-// ====================
-//   Infodata
-// ====================
+// ============================
+//    InfoTable
+// ============================
 // @ts-check
 
 
-// ===========================
-//   Typen
-// --------
+// ----------- Daten DatenTypen ---------------------
 
 
-/** 
- * Callback Funktion die für die Sortierung verwendet wird
- * @template T
- * @callback CallbackSortFunction
- * @param {T} A - 1. Objekt für vergleich
- * @param {T} B - 2. Objekt für vergleich
- * @returns {number} Bei Aufsteigend: (A > B) => 1; (A < B) => -1; (A == B) => 0
+/**
+ * Eine einzelne Datenzeile. Kann primitive Werte oder Binärdaten enthalten.
+ * @typedef {Array<string | number | bigint | boolean | Uint8Array | null>} DataRow
  */
 
-/** 
- * Callback Funktion die für jede Gruppe ausgeführt wird
- * @template T
- * @callback CallbackGroupFunction
- * @param {Array<T>} objList - Liste mit gefilterten Datensatz Objekten, pro Gruppe
- * @param {Array<string|number>} [idList] - Liste mit ID's der gefilterten Datenzeilen pro Gruppe
- * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
+/**
+ * Das universelle, zweidimensionale Tabellenformat für alle Treiber und Schichten.
+ * Die ERSTE Zeile (Index 0) enthält IMMER die Spaltennamen (Header).
+ * @typedef {Array<DataRow>} DataRows
  */
+
+
+// ----------- APP DatenTypen ---------------------
+
+/**
+ * @typedef {Object} Token
+ * @property {string} gsid - Eindeutige Session ID
+ * @property {string} userId - ID des Users
+ * @property {string} username - Name des Benutzers
+ * @property {number} exp - Gültigkeitszeitraum
+ */
+
+/**
+ * Beschreibt eine registrierte Datenquelle (Datenbank oder Datei-Verzeichnis).
+ * Diese Struktur wird in der lokalen config.json persistiert.
+ * @typedef {Object} DriverConfig
+ * @property {string} id - Eindeutige ID des Treibers innerhalb dieser App (z.B. "lokale_kunden_db")
+ * @property {"SQLITE"|"FIREBIRD"|"FOLDER"} type - Die technologische Art des Treibers
+ * @property {string} name - Menschenlesbarer Anzeigename für das UI-Hauptmenü
+ * @property {string} connectionString - Pfad zur Datei (SQLite), Server-Verbindungsdaten (Firebird), Pfad ("FOLDER")
+ */
+
+/**
+ * Die globale Konfigurationsdatei der Anwendung, abgelegt im Benutzer-Appdata-Ordner.
+ * @typedef {Object} ApplicationConfig
+ * @property {string} appName - Der Name der App (aus Startparameter oder Default)
+ * @property {boolean} isNewSystem - Flag; "true" wenn das System im Zustand "NULL" ist (keine Treiber konfiguriert)
+ * @property {Array<DriverConfig>} drivers - Liste aller vom Benutzer eingerichteten Datenquellen
+ * @property {string | null} defaultDriverId - Optionaler Standard-Treiber, der beim Start direkt geöffnet wird
+ * @property {DataRows} infoTables - Liste mit allen InfoTables
+ * @property {DataRows} infoForms - Liste mit Formularen
+ */
+
+/**
+ * Alle erlaubten MessageTypen für das System.
+ * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
+ * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
+ * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
+ * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
+ */
+
+/**
+ * Ziel Typen für die Verarbeitung der Messages
+ * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
+ */
+
+
+/**
+ * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
+ * server:"INITIAL_STATE" -> client // bei erster Verbindung
+ * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
+ * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
+ *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
+ * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
+ *                          server:"LOCK_RELEASED_CONFIRMED" -> client
+ * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * @typedef {Object} ClientServerMessage
+ * @property {MessageType} type - Aktionstyp
+ * @property {string} [requestId] - Eindeutige ID der Nachricht wird an den Server geschickt, und dieser sendet diese wieder zurück damit der Client diese zuordnen kann????
+ * @property {string} [driverId] - Ziel-Treiber für die Aktion
+ * @property {string} [tableName] - Ziel-Tabelle für die Aktion
+ * @property {string} [recordId] - Eindeutige ID des Datensatzes. Wird für Datensatzsperren verendet
+ * @property {Array<string>} [idFields] - Felder die einen Datensatz eindeutig identifizieren
+ * @property {Object<string,any>} [quest] - Optional Abfrage Bedingung. z.B.: { gsid: "jagfdgg" }
+ * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
+ * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
+ */
+
+
+// ----------- Lokale DatenTypen ---------------------
+
 
 /** 
  * Callback Funktion die für alle Datensätze ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
  * @template T
- * @callback CallbackFilterFunction
- * @param {T} obj - Datensatz Objekt
- * @param {number} [index] - Position in der Liste nach Index
- * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
- * @returns {boolean|undefined} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste.
- */
-
-/** 
- * Callback Funktion die für alle Datensätze ausgeführt wird.  
- * Wenn die Funktion "true" zurückliefert, wird die ganze For-Schleife abgebochen.
- * @template T
- * @callback CallbackForFunction
- * @param {T} obj - Datensatz Objekt
- * @param {number} [index] - Position in der Liste nach Index
- * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
- * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
- */
-
-/** 
- * Callback Funktion die ein Datensatz Objekt in ein anderes Objekt konvertiert.  
- * Lieftert das neue Objekt zurück.
- * @template T
- * @callback CallbackConvertFunction
- * @param {T} obj - Datensatz Objekt
- * @param {number} [index] - Position in der Liste nach Index
- * @param {Array<string|number>} [list] - Übergebene Liste mit ID's
- * @returns {T} Konvertiertes Objekt
+ * @callback CallbackFunction
+ * @param {T} obj - Datensatz Zeile
+ * @param {number} [rowIndex] - Position in der Liste nach Index
+ * @param {ReturnType<DataTable<T>["readOnly"]>} [datatable] - Referenz auf die DatenTabelle
+ * @returns {any} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste wenn "break" wird abgebrochen.
  */
 
 
 /** 
  * Callback Funktion die für alle Datensätze ausgeführt wird.  
  * Wenn die Funktion "true" zurückliefert, wird der Datensatz in die neue Liste und Index aufgenommen.
- * @callback CallbackFormatFunction
- * @param {Array<any>} values - Datensatz Werte
- * @param {number} [index] - Position in der Liste nach Index
- * @param {Array<string|number>} [list] - Gesammte ID-Liste nach optionalen Index
- * @returns {Array<any>|undefined|false} Wenn Array dann kommt der Datensatz in die neue Liste.
+ * @template T
+ * @callback GroupFunction
+ * @param {Array<T>} list - Liste mit Datensatz Objekten
+ * @param {ReturnType<DataTable<T>["readOnly"]>} [datatable] - Referenz auf die DatenTabelle
+ * @returns {any} Wenn "true" dann kommt der Datensatz in die neue gefilterte Liste wenn "break" wird abgebrochen.
  */
 
 
-/** 
- * Callback Funktion die für alle Spalten ausgeführt wird.  
- * Wenn die Funktion "true" zurückliefert, wird die ganze For-Schleife abgebochen.
- * @callback CallbackForColFunction
- * @param {string} colName - Name der Spalte
- * @param {Array<string>} [colList] - Liste der Spalten-Namen
- * @returns {boolean|undefined} Wenn "true" dann Abbruch der Schleife
+/**
+ * ID Objekt welche die ID und den Index eines Datensatzes oder Spalte enthält
+ * @typedef {Object} RowInfo
+ * @property {string} id - Die ID des Datensatzes oder der Spalte
+ * @property {number} index - Die Position des Datensatzes oder der Spalte
+ */
+
+
+/**
+ * @typedef {Object} SQLQuery
+ * @property {string} sql - WHERE Bedingung ohne "WHERE" am Beginn
+ * @property {Array<any>} params - Parameterwerte für die sql-Query
  */
 
 
@@ -119,457 +167,660 @@ export function isClass(obj) {
     return typeof obj === 'function' && obj.prototype && obj.prototype.constructor === obj;
 }
 
+
+//const ALLOWED_TABLES = ["users", "banned_users", "posts"]; // Schutz für Unter-Selects
+//const ALLOWED_COLUMNS = ["id", "user_id", "name", "role", "age", "status", "reason"];
+const ALLOWED_OPERATORS = ["=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN", "EXISTS", "NOT EXISTS"];
+
+
+// ===================================
+//   Klassen
+// -------------
+
+
 /**
- * Liefert einen Wert von einem Objekt Pfad(z.B.: von kunde, "adresse.hausnummer") zurück
- * @param {any} obj - Objekt mit der Eigenschaft
- * @param {string} prop - Eigenschaft Pfad mit "." getrennt
- * @returns {any|undefined} Wert der Eigenschaft oder "undefined" wenn nicht vorhanden
+ * Basis Klasse für Daten Treiber. Muss Überschieben werden.
+ * @class DBDriver
  */
-function getPropValue(obj, prop) {
-    if (typeof obj !== 'object') { return undefined; }
-    if (typeof prop !== 'string') { return undefined; }
+export class DBDriver {
+    id = ""; // Entspricht DriverConfig.id
+    type = ""; // Entspricht DriverConfig.type
+    name = ""; // Name des Teibers???
 
-    // Replace [] notation with dot notation
-    //prop = prop.replace(/\[["'`](.*)["'`]\]/g,".$1")
+    /** 
+     * Regular Expression für Gültige Tabellennamen
+     * @example
+     * tableNameRegex = /^(?!sqlite_)[a-z_][a-z0-9_]*$/; // SQLite Tabellen  
+     * if (!tableNameRegex.test(tableName)) throw new Error("Table not allowed!");  
+     */
+    tableNameRegex = /^(?!sqlite_)[a-z_][a-z0-9_]*$/;
 
-    const parts = prop.split(".");
-    let value = obj;
-    for (let i = 0; i < parts.length; i++) {
-        if (value[parts[i]] == undefined) { return undefined; }
-        value = value[parts[i]];
+
+    /**
+     * Erstellt aus einer Quest-Abfrage eine SQL-Abfrage (ohne WHERE am Beginn)  
+     * OPERATORS: "=", "!=", ">", "<", ">=", "<=", "LIKE", "IS", "IS NOT", "IN", "NOT IN", "EXISTS", "NOT EXISTS"
+     * Objekte {} == AND  
+     * Arrays [] == OR  
+     * @param {Object<string,any>} quest - Abfrage Filter
+     * @returns {SQLQuery}
+     * @example
+     * SELECT * FROM users WHERE (status = ? AND (role = ? OR (age >= ? AND name LIKE ?)))  
+     * {
+     *      status: "active",
+     *      _or: [
+     *          { role: "admin" },
+     *          { 
+     *              age: { ">=": 60 }, 
+     *              name: { "LIKE": "Hugo%" } 
+     *          }
+     *      ]
+     * }
+     * oder
+     * 
+     * SELECT * FROM users WHERE (status = ? AND role IN (?, ?) AND id NOT IN (SELECT user_id FROM banned_users WHERE reason = ?))
+     * {  
+     *     status: "active",  
+     *     role: { "IN": ["admin", "moderator"] },  
+     *     id: {  
+     *         "NOT IN": {  
+     *             subSelect: {  
+     *                 table: "banned_users",  
+     *                 column: "user_id",  
+     *                 where: { reason: "spam" }  
+     *             }  
+     *         }  
+     *     }  
+     * }
+     */
+    quest_to_query(quest, depth = 0) {
+        const clauses = [];
+        const params = [];
+
+        // Aktueller Alias für diese Ebene (Haupttabelle = "t", Sub-Ebenen = "s0", "s1"...)
+        const currentAlias = depth === 0 ? "t" : `s${depth - 1}`;
+
+
+        // FALL 1: Array -> OR
+        if (Array.isArray(quest)) {
+            //for (const subFilter of quest) {
+            for (let i = 0; i < quest.length; i++) {
+                const parsed = this.quest_to_query(quest[i]);
+                if (parsed.sql) {
+                    clauses.push(parsed.sql);
+                    params.push(...parsed.params);
+                }
+            }
+            return {
+                sql: clauses.length > 1 ? `(${clauses.join(" OR ")})` : clauses.join(" OR "),
+                params
+            };
+        }
+
+        // FALL 2: Objekt -> AND
+        if (quest && typeof quest === "object") {
+            const keys = Object.keys(quest);
+            //for (const key in quest) {
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
+
+                // Join Handler
+                if (key === "_join" && typeof quest[key] === "object") {
+                    const joinCfg = quest[key];
+                    const type = joinCfg.type || "EXISTS"; // EXISTS oder NOT EXISTS
+                    const subTable = joinCfg.table;
+                    const subAlias = `s${depth}`; // Eindeutiger Alias für das Subselect
+
+                    // ON-Bedingungen für das EXISTS bauen (Verbindung von aktueller Tabelle zur Untertabelle)
+                    const joinConditions = [];
+                    const refKeys = Object.keys(joinCfg.refs);
+                    for (let j = 0; j < refKeys.length; j++) {
+                        joinConditions.push(`${currentAlias}.${refKeys[j]} = ${subAlias}.${joinCfg.refs[refKeys[j]]}`);
+                    }
+
+                    // Wo-Klausel für das Subselect vorbereiten
+                    const subClauses = [...joinConditions];
+                    const subParams = [];
+
+                    // Wenn im Join ein direktes "quest" (Quest-Objekt) liegt
+                    if (joinCfg.quest) {
+                        const parsedWhere = this.quest_to_query(joinCfg.quest, depth + 1);
+                        if (parsedWhere.sql) {
+                            subClauses.push(parsedWhere.sql);
+                            subParams.push(...parsedWhere.params);
+                        }
+                    }
+
+                    // REKURSION: Wenn der Join tiefer geschachtelt ist (für n:n über Zwischentabellen)
+                    if (joinCfg.parentJoin) {
+                        const parsedParent = this.quest_to_query({ _join: joinCfg.parentJoin }, depth + 1);
+                        if (parsedParent.sql) {
+                            subClauses.push(parsedParent.sql);
+                            subParams.push(...parsedParent.params);
+                        }
+                    }
+
+                    // Das vollständige EXISTS-Statement zusammensetzen
+                    clauses.push(`${type} (SELECT 1 FROM ${subTable} ${subAlias} WHERE ${subClauses.join(" AND ")})`);
+                    params.push(...subParams);
+                    continue;
+                }
+
+
+                // ODER-Brücke (_or)
+                if (key === "_or" && Array.isArray(quest[key])) {
+                    const parsed = this.quest_to_query(quest[key]);
+                    if (parsed.sql) {
+                        clauses.push(parsed.sql);
+                        params.push(...parsed.params);
+                    }
+                    continue;
+                }
+
+                // NICHT-Brücke (_not)
+                if (key === "_not" && typeof quest[key] === "object") {
+                    const parsed = this.quest_to_query(quest[key]);
+                    if (parsed.sql) {
+                        clauses.push(`NOT (${parsed.sql})`);
+                        params.push(...parsed.params);
+                    }
+                    continue;
+                }
+
+
+                // Sicherheits-Check für Spaltennamen
+                //if (!ALLOWED_COLUMNS.includes(key)) {
+                //    throw new Error(`Ungültiger Spaltenname: ${key}`);
+                //}
+
+                const val = quest[key];
+
+                // Behandlung von Operatoren-Objekten
+                if (val && typeof val === "object") {
+                    const operators = Object.keys(val);
+                    for (const op of operators) {
+                        // @ts-ignore
+                        if (!ALLOWED_OPERATORS.includes(op)) {
+                            throw new Error(`Ungültiger Operator: ${op}`);
+                        }
+
+                        const innerVal = val[op];
+
+                        if (op === "IN" || op === "NOT IN") {
+                            if (Array.isArray(innerVal)) {
+                                if (innerVal.length === 0) {
+                                    clauses.push(op === "IN" ? "1=0" : "1=1");
+                                } else {
+                                    const placeholders = innerVal.map(() => "?").join(", ");
+                                    clauses.push(`${currentAlias}.${key} ${op} (${placeholders})`);
+                                    params.push(...innerVal);
+                                }
+                            }
+                            else if (innerVal && typeof innerVal === "object" && innerVal.subSelect) {
+                                const sub = innerVal.subSelect;
+                                if (!this.tableNameRegex.test(sub.table)) throw new Error(`Ungültige Tabelle im Subselect: ${sub.table}`);
+
+                                const subParsed = this.quest_to_query(sub.where || {}, depth + 1);
+                                clauses.push(`${currentAlias}.${key} ${op} (SELECT sub.${sub.column} FROM ${sub.table} sub WHERE ${subParsed.sql})`);
+                                params.push(...subParsed.params);
+                            } else {
+                                throw new Error(`Ungültiger Wert für Operator ${op}. Erwartet wird ein Array oder ein subSelect-Objekt.`);
+                            }
+                        }
+                        else {
+                            if (innerVal === null) {
+                                if (op === "=" || op === "IS") clauses.push(`${currentAlias}.${key} IS NULL`);
+                                else if (op === "!=" || op === "IS NOT") clauses.push(`${currentAlias}.${key} IS NOT NULL`);
+                                else throw new Error(`Operator ${op} kann nicht mit null verwendet werden.`);
+                            } else {
+                                clauses.push(`${currentAlias}.${key} ${op} ?`);
+                                params.push(innerVal);
+                            }
+                        }
+                    }
+                }
+                // Normale Gleichheit
+                else {
+                    clauses.push(`${currentAlias}.${key} = ?`);
+                    params.push(val);
+                }
+            }
+
+        //     // Behandlung von Operatoren-Objekten
+        //     if (val && typeof val === "object") {
+        //         const operators = Object.keys(val);
+        //         for (const op of operators) {
+        //             if (!ALLOWED_OPERATORS.includes(op)) {
+        //                 throw new Error(`Ungültiger Operator: ${op}`);
+        //             }
+
+        //             const innerVal = val[op];
+
+        //             // NEU: Spezialbehandlung für IN / NOT IN
+        //             if (op === "IN" || op === "NOT IN") {
+
+        //                 // Variante A: Normales Array von Werten (z.B. ["admin", "moderator"])
+        //                 if (Array.isArray(innerVal)) {
+        //                     if (innerVal.length === 0) {
+        //                         // Ein leeres IN-Array wirft in SQL Fehler, daher fangen wir es logisch ab
+        //                         clauses.push(op === "IN" ? "1=0" : "1=1");
+        //                     } else {
+        //                         const placeholders = innerVal.map(() => "?").join(", ");
+        //                         clauses.push(`${key} ${op} (${placeholders})`);
+        //                         params.push(...innerVal);
+        //                     }
+        //                 }
+
+        //                 // Variante B: Unter-Select (z.B. { subSelect: { table: '...', ... } })
+        //                 else if (innerVal && typeof innerVal === "object" && innerVal.subSelect) {
+        //                     const sub = innerVal.subSelect;
+
+        //                     // Sicherheits-Checks für das Unter-Select
+        //                     if (!this.tableNameRegex.test(sub.table)) throw new Error(`Ungültige Tabelle im Subselect: ${sub.table}`);
+        //                     //if (!ALLOWED_COLUMNS.includes(sub.column)) throw new Error(`Ungültige Spalte im Subselect: ${sub.column}`);
+
+        //                     // Rekursiver Aufruf für die WHERE-Bedingung des Unter-Selects!
+        //                     const subParsed = this.quest_to_query(sub.where || {});
+
+        //                     clauses.push(`${key} ${op} (SELECT ${sub.column} FROM ${sub.table} WHERE ${subParsed.sql})`);
+        //                     params.push(...subParsed.params);
+        //                 } else {
+        //                     throw new Error(`Ungültiger Wert für Operator ${op}. Erwartet wird ein Array oder ein subSelect-Objekt.`);
+        //                 }
+        //             }
+        //             // Alle anderen Operatoren (=, >=, IS NULL, etc.)
+        //             else {
+        //                 if (innerVal === null) {
+        //                     if (op === "=" || op === "IS") clauses.push(`${key} IS NULL`);
+        //                     else if (op === "!=" || op === "IS NOT") clauses.push(`${key} IS NOT NULL`);
+        //                     else throw new Error(`Operator ${op} kann nicht mit null verwendet werden.`);
+        //                 } else {
+        //                     clauses.push(`${key} ${op} ?`);
+        //                     params.push(innerVal);
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     // Normale Gleichheit
+        //     else {
+        //         clauses.push(`${key} = ?`);
+        //         params.push(val);
+        //     }
+        // }
+
+        return {
+            sql: clauses.length > 1 ? `(${clauses.join(" AND ")})` : clauses.join(" AND "),
+            params
+        };
     }
-    return value;
+
+        return { sql: "1=1", params: [] };
+    }
+
+    // // --- Testlauf ---
+
+    // const meinUltimativerFilter = {
+    //     status: "active",
+    //     role: { "IN": ["admin", "moderator"] },
+    //     id: {
+    //         "NOT IN": {
+    //             subSelect: {
+    //                 table: "banned_users",
+    //                 column: "user_id",
+    //                 where: { reason: "spam" }
+    //             }
+    //         }
+    //     }
+    // };
+
+    // const { sql, params } = quest_to_query(meinUltimativerFilter);
+    // console.log("Generiertes SQL:\n", `SELECT * FROM users WHERE ${sql}`);
+    // console.log("\nParameter dazu:\n", params);
+
+
+    // /**
+    //  * Verarbeitet die neue flache Payload-Struktur für Multi-Tabellen-Abfragen.
+    //  * @param {Object} payloadTables - Das von Ihnen entworfene Objekt
+    //  * @returns {Promise<Object>} - Die flachen Daten pro Tabelle für den Client
+    //  */
+    // async getMultiRows(payloadTables) {
+    //     const result = {};
+    //     const tableNames = Object.keys(payloadTables);
+
+    //     for (const tableName of tableNames) {
+    //         const config = payloadTables[tableName];
+    //         let finalQuest = { ...config.quest };
+
+    //         // Wenn eine Bindung zu einer übergeordneten Tabelle existiert
+    //         if (config.bindTo) {
+    //             const { parentTable, refs } = config.bindTo;
+    //             const parentConfig = payloadTables[parentTable];
+
+    //             if (parentConfig && refs) {
+    //                 // Wir lagern die EXISTS-Logik in einen speziellen Query-Operator aus,
+    //                 // den Ihre quest_to_query-Methode versteht.
+    //                 finalQuest["_exists_join"] = {
+    //                     parentTable: parentTable,
+    //                     refs: refs, // z.B. { customer_id: "id" } oder { firma: "firma", ... }
+    //                     parentQuest: parentConfig.quest || {}
+    //                 };
+    //             }
+    //         }
+
+    //         // Aufruf Ihrer bestehenden Datenbank-Abfrage
+    //         result[tableName] = await this.getRows(tableName, finalQuest);
+    //     }
+
+    //     return result;
+    // }
+
+
+    // --- FUNKTIONEN sollen überschrieben werden
+
+    /**
+     * Gibt alle Datensätze oder nur die von der Abfrage zurück
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Object<string,any>} [quest] - Optionale Abfrage
+     * @returns {Promise<DataRows>}
+     */
+    async getRows(tableName, quest) { return []; }
+
+    /**
+     * Gibt einen Datensatz mit angegebener ID zurück
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Object<string,any>} quest - Abfrage für eindeutigen Datensatz.
+     * @returns {Promise<DataRows>}
+     */
+    async getRecord(tableName, quest) { return []; }
+
+    /**
+     * Speichert die Daten oder legt diese neu an. Die ID-Spalten müssen den Datensatz eindeutig Identifizieren.
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Array<Array<any>>} deltaRows - geänderte Daten. In der ersten Zeile stehen die Spaltennamen.
+     * @param {Array<string>} idCols - Name der ID-Spalten
+     * @returns {Promise<boolean>} true wenn erfolgreich
+     */
+    async saveRows(tableName, deltaRows, idCols) { return true; }
+
+    /**
+     * Löscht Datensätze von der Abfrage
+     * @param {string} tableName - Name der Datentabelle
+     * @param {Object<string,any>} quest - Optionale Abfrage
+     * @returns {Promise<boolean>}
+     */
+    async deleteRows(tableName, quest) { return false; }
 }
 
 
-// ===========================
-//   List
-// --------
+
 
 /**
+ * Eine InMemmory Datentabelle
  * @template T
- * @extends {Map<string|number,T>}
  */
-export class DataMap extends Map {
-    /** @type {function} */
-    #class = () => { };
+export class DataTable {
+    /**
+     * Eine InMemmory Datentabelle
+     * @param {string} tableName - Name der Tabelle
+     * @param {Array<Array<any>>} dataArray - DatenZeilen. Erste Zeile enthält Spaltennamen
+     * @param {string} [idColumnName] - Name der ID-DatenSpalte. Default: "gsid"
+     */
+    constructor(tableName, dataArray, idColumnName = "gsid") {
+        /** @type {string} */
+        this.tableName = tableName;
+        /** @type {Array<string>} */
+        this.columns = dataArray[0] || [];
+        /** @type {Array<Array<any>>} WICHTIG!! rows nicht direkt bearbeiten! */
+        this.rows = dataArray;
+        /** @type {string} */
+        this.idColumnName = idColumnName;
 
-    /** @type {Array<string>} */
-    #properties = [];
-    get properties() {
-        return [...this.#properties];
+        /** @type {Object<string,number>} */
+        this.columnIndex = {}; // Object.fromEntries(this.columns.map((col, idx) => [col, idx]));
+        for (let i = 0; i < this.columns.length; i++) {
+            this.columnIndex[this.columns[i]] = i;
+        }
+
+        /** @type {Map<string,number>} */
+        this.rowMap = new Map();
+
+        const idIdx = this.columnIndex[idColumnName];
+        for (let i = 1; i < this.rows.length; i++) {
+            this.rowMap.set(this.rows[i][idIdx] + "", i);
+        }
+
+        this._instanzCache = new Map();
+        /** @type {Map<string,Array<number>>} */
+        this._indexList = new Map();
+
+        /** @type {Map<string,number>} */
+        this._changed = new Map();
+
+        /** @type {Map<string,number>} */
+        this._deleted = new Map();
     }
 
-    /** @type {string|Array<string>} */
-    #idname = [];
 
-    #indexList = new Map();
+    /**
+     * Gib die Anzahl der Listeneinträge zurück
+     * @param {string|Array<number>} [indexName] - Optional Index von dem die Länge zurückgegeben wird
+     */
+    getLength(indexName) {
+        return this.getIndexList(indexName).length;
+    }
+
+
+    /**
+     * Gibt alle Spalten der Tabelle zurück
+     * @returns {Array<string>} Alle Spalten der Tabelle in richtiger Reihenfolge
+     */
+    getCols() {
+        return this.columns;
+    }
 
     /**
      * Liefert die ID eines Objektes zurück
-     * @param {T} obj - Datenobjekt mit dem idFeld
-     * @returns {string|number} ID
+     * @param {Object<string,any>|Array<any>} obj - Datenobjekt mit dem idFeld
+     * @returns {any} ID
      */
     getID(obj) {
-        if (Array.isArray(this.#idname)) {
-            let id = "";
-            for (let i = 0; i < this.#idname.length; i++) {
-                id += getPropValue(obj, this.#idname[i]) + "_";
-                //id += obj[this.#idname[i]] + "_";
-            }
-            return id;
+        if (!obj) { return; }
+        if (Array.isArray(obj)) {
+            const idIdx = this.columnIndex[this.idColumnName];
+            return obj[idIdx];
         } else {
-            return getPropValue(obj, this.#idname);
+            return obj[this.idColumnName] || undefined;
         }
     }
 
 
     /**
-     * Liefert eine Liste aller IDs vom angegeben Index oder allen Datensätzen zurück.  
-     * Existiert der Index nicht, wird eine leere Liste zurück gegeben.
-     * @param {string|Array<string|number>} [index] - Indexname
-     * @returns {Array<string|number>} IDs der Datzensätze
+     * Liefter die SpaltenIndexes der Angegeben Spalten in einer Liste zurück.
+     * @param {Array<string>|string} colNames - Liste mit Spaltennamen
+     * @returns {Array<number>} Liste min Spalten Indexes
      */
-    getIndex(index) {
-        if (!index) {
-            return [...this.keys()];
+    getColIndex(colNames) {
+        /** @type {Array<number>} */
+        const colIndexList = [];
+        if (Array.isArray(colNames)) {
+            for (let i = 0; i < colNames.length; i++) {
+                colIndexList.push(this.columnIndex[colNames[i]] || -1);
+            }
+            return colIndexList;
         } else {
-            if (Array.isArray(index)) { return index; }
-            return this.#indexList.get(index) || [];
+            return [this.columnIndex[colNames] || -1];
         }
     }
 
+
+    /**
+     * Prüft ob ein Datensatz mit abgefragter ID bereits in der List ist
+     * @param {string} id - ID die gesucht wird
+     * @returns {boolean} 
+     */
+    has(id) {
+        return this.rowMap.has(id);
+    }
+
+
+    /**
+     * Lieftert die Datensatz Information (ID und Position(index) in der Liste) zurück. index: -1 wenn nicht gefunden oder gelöscht.
+     * @param {string|number} id - ID oder Datensatzindex
+     * @returns {RowInfo} DatensatzInformation Objekt mit ID und Position(index). index: -1 wenn nicht gefunden
+     */
+    getRowInfo(id) {
+        /** @type {RowInfo} */
+        const rowInfo = { id: "", index: -1 };
+
+        // Wenn ID des Datensatzen
+        if (typeof id == "string") {
+            rowInfo.id = id;
+            rowInfo.index = this.rowMap.get(id) || -1;
+        } else if (id > 0 && id < this.rows.length) {
+            rowInfo.index = id;
+            rowInfo.id = this.getID(this.rows[id]);
+        } else {
+            return rowInfo;
+        }
+
+        // wenn gelöscht -> abbrechen
+        if (this._deleted.has(rowInfo.id)) {
+            rowInfo.index = -1;
+        }
+
+        return rowInfo;
+    }
+
+
+    /**
+     * Liefert eine Liste aller Index-Positionen vom angegeben Index oder allen Datensätzen zurück.  
+     * Existiert der Index nicht, wird eine die ganze Liste zurück gegeben.
+     * @param {string|Array<number>} [indexName] - Indexname oder Liste mit PositionsNummern
+     * @returns {Array<number>} ID-Liste der Datzensätze
+     */
+    getIndexList(indexName) {
+        if (!indexName) {
+            return [...this.rowMap.values()];
+        } else {
+            if (Array.isArray(indexName)) { return indexName; }
+            return this._indexList.get(indexName) || [...this.rowMap.values()];
+        }
+    }
 
     /**
      * Prüft ob ein bestimmter index in der Liste vorhanden ist
-     * @param {string} index - Index Name
+     * @param {string} indexName - Index Name
      * @returns {boolean} "true" wenn Index mit dem Namen vorhanden
      */
-    hasIndex(index) {
-        return this.#indexList.has(index);
+    hasIndexList(indexName) {
+        return this._indexList.has(indexName);
     }
 
 
     /**
-     * Setzt ein objekt in die Liste. Die ID wird aus den Einstellungen und dem Objekt-Eigenschaften gelesen.
-     * @param {T} obj - Obekt das in die Liste aufgenommen wird.
+     * Liefert eine Datenzeile zurück die nicht die Kopfzeile ist, und auch noch nicht gelöscht worden ist.
+     * @param {string|number} id - ID oder Datenzeilen Position
+     * @returns {Array<any>|undefined}
      */
-    setObject(obj) {
-        const id = this.getID(obj);
-        this.set(id, obj);
+    getRow(id) {
+        const rowInfo = this.getRowInfo(id);
+
+        // wenn gelöscht -> abbrechen
+        if (rowInfo.index <= 0) { return; }
+
+        return this.rows[rowInfo.index];
     }
 
+
     /**
-     * Fügt eine Array Wert-Liste als Objekte in die List ein.
-     * Die erste Zeile muss die Namen der Spalten(Eigenschaften) enthalten.
-     * @param {Array<any>} list 
-     * @param {boolean} [clear] - Optional wenn bestehende Liste zuvor gelöscht wird
-     * @returns {void}
-    */
-    setValueArray(list, clear) {
-        if (!Array.isArray(list)) { return; }
+     * Fügt neue Datenzeilen hinzu oder ersetzt bestehende wenn die selbe ID. Die 1. Datenzeile muss Feldnamen enthalten.
+     * @param {Array<Array<any>>} newRows - Neue Datenzeilen, in 1. Zeile müssen die Spaltennamen stehen
+     */
+    mergeRows(newRows) {
+        if (!Array.isArray(newRows)) { return; }
 
-        if (clear) {
-            // Daten zurücksetzen
-            this.clear();
-        }
+        // 1. Zeile mit Feldnamen
+        const colIndexes = this.getColIndex(newRows[0]);
 
-        // erste Zeile sind Feldnamen
-        if (list.length < 1) { return; }
-        const properties = list[0];
+        // Alle Zeilen durchgehen
+        for (let i = 1; i < newRows.length; i++) {
+            const newRow = newRows[i];
+            const id = this.getID(newRow);
 
-        // alle Datenzeilen durchgehen
-        for (let i = 1; i < list.length; i++) {
-            // @ts-ignore neue Klasse
-            const obj = new this.#class();
-
-            // alle Spalten durchgehen
-            for (let j = 0; j < properties.length; j++) {
-                obj[properties[j]] = list[i][j];
+            // versuchen bestehenesn Datensatz zu lesen
+            let row = this.getRow(id);
+            if (!row) {
+                row = new Array(this.columns.length);
+                const newIndex = this.rows.push(row) - 1;
+                this.rowMap.set(id, newIndex);
             }
 
-            // in Daten setzen
-            this.set(this.getID(obj), obj);
-        }
-    }
-
-
-    /**
-     * Fügt eine Array Objekt-Liste als Objekte in die List ein.  
-     * Mit der optionalen Konvertierungs Funktion kann das Objekt in ein anderes Objekt, oder Objekt Eigenschaften ausgebessert werden vor dem Speichern in die Liste.  
-     * @param {Array<T>} list 
-     * @param {boolean} [clear] - Optional wenn bestehende Liste zuvor gelöscht wird
-     * @param {CallbackConvertFunction<T>} [convertFu] - Optionale Funktion die das Objekt vor dem Speichern konvertiert
-     * @returns {void}
-    */
-    setObjArray(list, clear, convertFu) {
-        if (!Array.isArray(list)) { return; }
-
-        if (clear) {
-            // Daten zurücksetzen
-            this.clear();
-        }
-
-        const isConvert = typeof (convertFu) == "function";
-
-        // alle Objekte durchgehen
-        for (let i = 0; i < list.length; i++) {
-            let obj = list[i];
-            // Wenn Konvertierung
-            if (isConvert) {
-                obj = convertFu(list[i], i);
-            }
-            // Objekt in Liste speichern
-            this.set(this.getID(obj), obj);
-        }
-    }
-
-
-    /**
-     * Liefert ein Array mit Arrays von Eigenschaften eines Objektes zurück
-     * @param {string} [index] - Optionale Name des zu verendenden Indexes
-     * @param {Array<string>} [colNames] - Optional Namen der Spalten die gelesen werden
-     * @param {CallbackFormatFunction} [formatFu] - Optional Funktion welche die Daten formatiert.
-     * @returns {Array<any>} Array mit Eigenschaften. Der erste Eintrag enthält sie Spalten/Feld/Property Namen.
-     */
-    getValueArray(index, colNames, formatFu) {
-        const list = [];
-        const ids = this.getIndex(index);
-
-        // Spalten die gelesen werden
-        let cols = [];
-        if (Array.isArray(colNames)) {
-            cols = colNames;
-        } else {
-            cols = this.#properties;
-        }
-
-        // Prüfen auf Formatierungs Funktion
-        const isFormatFu = typeof formatFu == "function";
-
-        // Erste Zeile mit Feldnamen
-        list.push(cols);
-
-        for (let i = 0; i < ids.length; i++) {
-            const obj = this.get(ids[i]);
-
-            if (obj) {
-                // Neue Eigenschaftsliste
-                /** @type {Array<any>} */
-                const a = [];
-                for (let j = 0; j < cols.length; j++) {
-                    // Wert der Property in die Eigenschaftsliste
-                    // todo: was tun wein Eigenschaft-Wert ein Objekt ist? 
-                    //@ts-ignore
-                    a.push(obj[cols[j]]);
-                }
-
-                // Wenn Formatierungs Funktion
-                if (isFormatFu) {
-                    let newA = formatFu(a, i, ids);
-                    if (Array.isArray(newA)) {
-                        list.push(newA);
-                    }
-                } else {
-                    // Datensatz als Array in die Liste
-                    list.push(a);
+            // Alle spalten durchgehen
+            for (let j = 0; j < colIndexes.length; j++) {
+                // Wenn Spalte vorhanden
+                if (colIndexes[j] >= 0) {
+                    // wert zuweisen
+                    row[colIndexes[j]] = newRow[j];
                 }
             }
         }
-        return list;
     }
 
 
     /**
-     * Liefert einen JSON-String mit einer Liste von Arrays von Eigenschaften aller Objekte vom index zurück.  
-     * In der ersten Zeile stehen die Spaltennamen.  
-     * @param {string} [index] - Optionale Name des zu verendenden Indexes. Wenn nicht angegeben werden alle Objekte zurückgegeben.
-     * @param {Array<string>} [colNames] - Optional Namen der Spalten die gelesen werden
-     * @returns {string} JSON-String.
+     * Erzeugt eine neue Datenzeile die noch nicht in der Liste angelegt wird. 
+     * @param {string} [id] - Optional neue ID. Wenn nicht angegeben wird eine GSID generiert
+     * @returns {Partial<T>}
      */
-    getAsJSON(index, colNames) {
-        return JSON.stringify(this.getValueArray(index, colNames));
+    newObject(id) {
+        /** @type {Partial<T>} */
+        const obj = {};
+        //@ts-ignore
+        obj[this.idColumnName] = id || getGSID();
+        return obj;
     }
 
 
     /**
-     * Erstellt Einträge in der DataMap anhand von einem JSON-String mit einer Liste von Eigenschaften. In der ersten Zeile müssen die Spaltennamen stehen.
-     * @param {string} jsonString - JSON String mit Liste von Arrays
-     * @param {boolean} [clear] - true wenn die Liste zuvor gelöscht wird
+     * Liefert einen Datensatz als Objekt zurück
+     * @param {string|number} id - ID oder DatenSatz Position 
+     * @returns {T|undefined} Datensatz als Objekt
      */
-    setFromJSON(jsonString, clear) {
-        const list = JSON.parse(jsonString);
-        if (Array.isArray(list)) {
-            this.setValueArray(list, clear);
-        }
-    }
+    getObject(id) {
+        const rawRow = this.getRow(id);
+        if (!rawRow) { return; }
 
-
-    /**
-     * Liefert einen String von Eigenschaften aller Objekte vom index zurück.  
-     * In der ersten Zeile stehen die Spaltennamen.  
-     * Die Zeilen werden durch "▲"(ASCII 30) getrennt und die Spalten mit "▼" (ASCII 31). Somit bleiben Sonderzeichen, Zeilenumbrüche, Tabulatoren, Komas, usw. erhalten.
-     * @param {string} [index] - Optionale Name des zu verendenden Indexes. Wenn nicht angegeben werden alle Objekte zurückgegeben.
-     * @param {Array<string>} [colNames] - Optional Namen der Spalten die gelesen werden
-     * @returns {string} CSV-String.
-     */
-    getAsText(index, colNames) {
-        let list = "";
-        const ids = this.getIndex(index);
-
-        // Spalten die gelesen werden
-        let cols = [];
-        if (Array.isArray(colNames)) {
-            cols = colNames;
-        } else {
-            cols = this.#properties;
-        }
-
-        // Erste Zeile mit Feldnamen
-        list += `${cols.join('▼')}"▲`;
-
-        for (let i = 0; i < ids.length; i++) {
-            const obj = this.get(ids[i]);
-
-            if (obj) {
-                // Neue Eigenschaftsliste
-                let a = "";
-                for (let j = 0; j < cols.length; j++) {
-                    // Wert der Property in die Eigenschaftsliste
-                    // todo: was tun wein Eigenschaft-Wert ein Objekt ist? 
-                    //@ts-ignore
-                    const value = obj[cols[j]];
-                    if (a) { a += "▼";}
-                    if (typeof value == "undefined") {
-                        // keine zusätzliche Daten
-                    } else {
-                        a += value;
-                    }
-                }
-                list += a + "▲";
-            }
-        }
-        return list;
-    }
-
-    /**
-     * Erstellt Einträge in der DataMap anhand von einem Text der mit Trennzeichen(▲ ASCII 30 für Zeilentrennung, ▼ ASCII 31 für Spaltentrennung) getrennt ist.
-     * @param {string} text - Text mit Trennzeichen
-     * @param {boolean} [clear] - Optional "true" wenn Liste zuvor gelöscht wird.
-     */
-    setFromText(text, clear) {
-        if (!text) {return;}
-        const list = text.split("▲"); // Zeilentrennzeichen ASCII 30
-        if (!Array.isArray(list)) { return; }
-
-        if (clear) {
-            // Daten zurücksetzen
-            this.clear();
-        }
-
-        // erste Zeile sind Feldnamen
-        if (list.length < 1) { return; }
-        const properties = list[0].split("▼"); // SpaltenTrennzeichen ASCII 31
-
-        // alle Datenzeilen durchgehen
-        for (let i = 1; i < list.length; i++) {
-            // @ts-ignore neue Klasse
-            const obj = new this.#class();
-            const values = list[i].split("▼"); // SpaltenTrennzeichen ASCII 31
-
-            // alle Spalten durchgehen
-            for (let j = 0; j < properties.length; j++) {
-                obj[properties[j]] = values[j];
-            }
-
-            // in Daten setzen
-            this.set(this.getID(obj), obj);
-        }
-    }
-
-    /**
-     * Liefert ein Array mit Objekten laut angegeben index zurück. Wird kein Index angegeben, werden alle Objekte zurückgeliefert.  
-     * Wenn keine Konvertierungs-Funktion angegeben, werden die Originalen Objekte zurückgegeben(referenzen)
-     * @param {string|Array<string|number>} [index] - Optional Name des Indexes oder Liste mit Key's
-     * @param {CallbackConvertFunction<T>} [convertFu] - Optional Funktion welche die Objekte(Kopien) konvertiert.
-     * @returns {Array<any>} Array mit Objekten
-     */
-    getObjArray(index, convertFu) {
-        const list = [];
-        const ids = this.getIndex(index);
-
-        // Prüfen auf Formatierungs Funktion
-        const isFormatFu = typeof convertFu == "function";
-
-        for (let i = 0; i < ids.length; i++) {
-            const obj = this.get(ids[i]);
-
-            // Wenn Formatierungs Funktion
-            if (isFormatFu && obj) {
-                let newObj = Object.assign({}, convertFu(obj, i, ids));
-                if (typeof newObj == "object") {
-                    list.push(newObj);
-                }
-            } else {
-                // Datensatz als Array in die Liste
-                list.push(obj);
-            }
-        }
-        return list;
-    }
-
-
-    /**
-     * Löscht Datensatz mit angegebener ID aus der liste
-     * @param {string|Array<string|number>} index - ID oder Liste mit Ids zum Löschen
-     */
-    deleteWithIndex(index) {
-        let list = this.getIndex(index);
-        for (let i = 0; i < list.length; i++) {
-            this.delete(list[i]);
-        }
-    }
-
-    /**
-     * Sucht ein Objekt aus der Liste das einen bestimmten Wert hat und gibt das erte gefundene Objekt zurück.
-     * @param {string} propName - Name der Eigenschaft
-     * @param {any} value - Wert nach dem gesucht wird 
-     * @param {string} [index] - Optional Index der für die Suche verwendet wird 
-     * @returns {T|undefined}
-     */
-    findByValue(propName, value, index) {
-        let list = this.getIndex(index);
-        for (let i = 0; i < list.length; i++) {
-            const obj = this.get(list[i]);
+        /** @type {T} */
+        //@ts-ignore
+        const obj = {};
+        for (let i = 0; i < this.columns.length; i++) {
             //@ts-ignore
-            if (obj && obj[propName] == value) {
-                return obj;
-            }
-        }
-    }
-
-    /**
-     * Sucht ein Objekt aus der Liste das mit dem übergebenen Objekt übereinstimmt und gibt das erte gefundene Objekt zurück.
-     * @param {Object<string,any>} quest - Wert nach dem gesucht wird 
-     * @param {string} [index] - Optional Index der für die Suche verwendet wird 
-     * @returns {T|undefined}
-     */
-    findByObj(quest, index) {
-        const list = this.getIndex(index);
-        const keys = Object.keys(quest);
-
-        /**
-         * Sucht nach allen Eigenschaften
-         * @param {Object<string,any>} obj 
-         * @returns {boolean}
-         */
-        function find(obj) {
-            for (let i = 0; i < keys.length; i++) {
-                if (obj[keys[i]] != quest[keys[i]]) {
-                    return false;
-                }
-            }
-            return true;
+            obj[this.columns[i]] = rawRow[i];
         }
 
-        for (let i = 0; i < list.length; i++) {
-            const obj = this.get(list[i]);
-            if (obj && find(obj)) {
-                return obj;
-            }
-        }
+        return obj;
     }
 
 
     /**
-     * Sucht alle Objekte aus der Liste das mit dem übergebenen Objekt übereinstimmen und gibt eine ObjektListe zurück.
-     * @param {Object<string,any>} quest - Wert nach dem gesucht wird 
-     * @param {string} [index] - Optional Index der für die Suche verwendet wird 
-     * @returns {Array<T>}
+     * Liefert eine Liste mit Datensatzobjekten zurück
+     * @param {string|Array<string|number>|undefined} index - Index-Name oder Liste mit ID oder Datensatz position
+     * @returns {Array<T>} Liste mit Datensatz-Objekten
      */
-    findAll(quest, index) {
-        const list = this.getIndex(index);
-        const keys = Object.keys(quest);
-        const objList = [];
+    getObjectList(index) {
+        /** @type {Array<T>} */
+        let objList = [];
 
-        /**
-         * Sucht nach allen Eigenschaften
-         * @param {Object<string,any>} obj 
-         * @returns {boolean}
-         */
-        function find(obj) {
-            for (let i = 0; i < keys.length; i++) {
-                if (obj[keys[i]] != quest[keys[i]]) {
-                    return false;
-                }
-            }
-            return true;
+        if (!index || typeof index == "string") {
+            index = this.getIndexList(index);
         }
 
-        for (let i = 0; i < list.length; i++) {
-            const obj = this.get(list[i]);
-            if (obj && find(obj)) {
-                objList.push(obj);
+        // Wenn Array
+        if (Array.isArray(index)) {
+            for (let i = 0; i < index.length; i++) {
+                const obj = this.getObject(index[i]);
+                if (obj) {
+                    objList.push(obj);
+                }
             }
         }
 
@@ -578,27 +829,328 @@ export class DataMap extends Map {
 
 
     /**
-     * Gibt ein Array an Werten für die Spalten(fieldList) eines Datensatzes(id) zurück.
-     * @param {string|number} rowID - ID des Datensatzes
-     * @param {Array<string>} colList - Liste mit Spaltennamen
-     * @returns {Array<any>} Liste mit Werten der angegebenen Spalten
+     * Liefert eine Liste mit allen gelöschen Datensatzobjekten zurück
+     * @returns {Array<T>} Liste mit Datensatz-Objekten
      */
-    getColValues(rowID, colList) {
-        if (rowID == undefined) { return []; }
-        if (!colList || !Array.isArray(colList)) {
-            return [];
+    getDeletedList() {
+        /** @type {Array<T>} */
+        let objList = [];
+
+        const index = [...this._deleted.values()];
+
+        // Wenn Array
+        if (Array.isArray(index)) {
+            for (let i = 0; i < index.length; i++) {
+                const obj = this.getObject(index[i]);
+                if (obj) {
+                    objList.push(obj);
+                }
+            }
         }
 
-        const dataRow = this.get(rowID);
-        if (!dataRow) { return []; }
+        return objList;
+    }
 
-        const valueList = [];
 
-        for (let i = 0; i < colList.length; i++) {
-            valueList.push(getPropValue(dataRow, colList[i]));
-        };
+    /**
+     * Liefert den Wert einer Spalte von der angegebenen Zeilenposition zurück
+     * @param {string|number} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @returns {any}
+     */
+    getCellValue(row, col) {
+        // Datenzeile lesen
+        const rawRow = this.getRow(row);
+        if (!rawRow) { return; }
 
-        return valueList;
+        if (typeof col == "string") {
+            return rawRow[this.columnIndex[col]];
+        } else {
+            return rawRow[col];
+        }
+    }
+
+
+    /**
+     * Speichert einen wert in einer Datensatz-Spalte, legt keinen neuen Daten an wenn nicht gefunden
+     * @param {string|number} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @param {any} value - Wert der gespeichert wird
+     * @returns {string|number|undefined} die ID wenn Änderung erfolgreich
+     */
+    setCellValue(row, col, value) {
+        // DatensatzIndex lesen
+        const rowInfo = this.getRowInfo(row);
+        const rowIndex = rowInfo.index;
+        if (rowIndex <= 0) { return; }
+
+        let colIndex = -1;
+        if (typeof col == "string") {
+            colIndex = this.columnIndex[col];
+        } else {
+            colIndex = col;
+        }
+
+        // Nur wenn Spalte vorhanden
+        if (colIndex != undefined && colIndex >= 0 && colIndex < this.columns.length) {
+            // Wert übernehmen
+            this.rows[rowIndex][colIndex] = value;
+
+            // als Geändert markieren
+            this._changed.set(rowInfo.id, rowIndex);
+        }
+
+        return row;
+    }
+
+
+    /**
+     * Fügt einen wert in einer Datensatz-Spalte hinzu. Die Spalte muss ein Array sein oder wird in ein Array umgewandelt. 
+     * @param {string|number} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @param {any} value - Wert der gespeichert wird
+     * @param {boolean} unique - Optional ob der Wert in der Liste eindeutig sein soll. DEFAULT: true
+     * @returns {string|number|undefined} Die ID wenn Änderung erfolgreich
+     */
+    addCellArrayValue(row, col, value, unique = true) {
+        // DatensatzIndex lesen
+        const rowInfo = this.getRowInfo(row);
+        const rowIndex = rowInfo.index;
+        if (rowIndex <= 0) { return; }
+
+        if (typeof col == "string") {
+            col = this.columnIndex[col]
+        }
+
+        // Wenn Spalte nicht in der Datenzeile
+        if (col == undefined || col < 0 || col >= this.columns.length) {
+            return row;
+        }
+
+        const oldValue = this.rows[rowIndex][col];
+
+        // Wenn bereits ein Array
+        if (Array.isArray(oldValue)) {
+            // Wenn einfügender Wert ein Array ist
+            if (Array.isArray(value)) {
+                // Alle Werte durchgehen
+                for (let i = 0; i < value.length; i++) {
+                    if (!unique || oldValue.indexOf(value[i]) < 0) {
+                        oldValue.push(value[i]);
+                    }
+                }
+            } else {
+                if (!unique || oldValue.indexOf(value) < 0) {
+                    oldValue.push(value);
+                }
+            }
+        } else if (oldValue != undefined) {
+            if (Array.isArray(value)) {
+                this.rows[rowIndex][col] = [oldValue, ...value];
+            } else {
+                this.rows[rowIndex][col] = [oldValue, value];
+            }
+        } else {
+            if (Array.isArray(value)) {
+                this.rows[rowIndex][col] = value;
+            } else {
+                this.rows[rowIndex][col] = [value];
+            }
+        }
+
+        // als Geändert markieren
+        this._changed.set(rowInfo.id, rowIndex);
+        return row;
+    }
+
+
+    /**
+     * Fügt einen wert in einer Datensatz-Spalte hinzu. Die Spalte muss ein Set sein oder wird in ein Set umgewandelt. 
+     * @deprecated
+     * @param {string|number} row - Zeilennummer oder ID
+     * @param {string|number} col - Spaltenname oder Spalten Position
+     * @param {any} value - Wert der gespeichert wird
+     * @returns {string|number|undefined} Die ID wenn Änderung erfolgreich
+     */
+    addCellSetValue(row, col, value) {
+        // SpaltenIndex bestimmen
+        if (typeof col == "string") {
+            col = this.columnIndex[col]
+        }
+
+        // Wenn Spalte nicht in der Datenzeile
+        if (col == undefined || col < 0 || col >= this.columns.length) {
+            return;
+        }
+
+        // DatensatzIndex lesen
+        const rowInfo = this.getRowInfo(row);
+        const rowIndex = rowInfo.index;
+        if (rowIndex <= 0) { return; }
+
+        // wenn eine Liste von Werten
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+                this.addCellSetValue(row, col, value[i]);
+            }
+            return row;
+        }
+
+
+        const oldValue = this.rows[rowIndex][col];
+        if (oldValue instanceof Set) {
+            oldValue.add(value);
+        } else if (oldValue != undefined) {
+            this.rows[rowIndex][col] = new Set([oldValue, value]);
+        } else {
+            this.rows[rowIndex][col] = new Set([value]);
+        }
+
+        // als Geändert markieren
+        this._changed.set(rowInfo.id, rowIndex);
+        return row;
+    }
+
+
+    /**
+     * Setzt ein Objekt in die Liste. Die ID wird aus den Einstellungen und dem Objekt-Eigenschaften gelesen.
+     * @param {Partial<T>} obj - Objekt mit Daten das in die Liste aufgenommen wird.
+     * @param {boolean} [createNew] - Optional ob ein neues Objekt angelegt wird wenn nicht vorhanden. Default: true
+     * @returns {string|undefined} Die ID wenn Neu oder Bearbeitet
+     */
+    setObject(obj, createNew = true) {
+        let id = this.getID(obj);
+        let isChanged = false;
+
+        // Wenn keine ID dann kann nicht eingefügt werden
+        if (id == undefined) {
+            if (createNew == false) { return; }
+
+            // neue ID selbst vergeben
+            id = getGSID();
+            //@ts-ignore
+            obj[this.idColumnName] = id;
+
+            isChanged = true;
+        }
+
+        // gelöschte Datensätze mit selber ID nicht mehr anlegen
+        if (this._deleted.has(id)) { return; }
+
+        /** @type {Array<string>} neue Spalten */
+        const newColNames = [...Object.keys(obj)];
+        const colIds = this.getColIndex(newColNames);
+
+        /** @type {Array<any>} */
+        let rawRow = [];
+
+        //let rowIndex = this.rowMap.get(id);
+        const rowInfo = this.getRowInfo(id);
+        let rowIndex = rowInfo.index;
+
+        // Wenn kein rowindex (oder datensatz gelöscht?)
+        if (rowIndex < 0) {
+            if (createNew == false) { return; }
+
+            // neu anlegen
+            rawRow = new Array(this.columns.length);
+            rowIndex = this.rows.push(rawRow) - 1;
+            this.rowMap.set(id, rowIndex);
+            isChanged = true;
+        } else if (rowIndex > 0) {
+            rawRow = this.rows[rowIndex];
+        } else {
+            return;
+        }
+
+        // Werte zuweisen
+        for (let i = 0; i < newColNames.length; i++) {
+            if (colIds[i] >= 0 && colIds[i] < this.columns.length) {
+                //@ts-ignore
+                rawRow[colIds[i]] = obj[newColNames[i]];
+                isChanged = true;
+            }
+        }
+
+        // nur wenn Bearbeitet die ID zurückgeben
+        if (isChanged) {
+            this._changed.set(id, rowIndex);
+            return id;
+        }
+
+        return;
+    }
+
+
+    /**
+     * Setzt Eigenschaften einer Datenzeile 
+     * @param {string} id - ID der Datenzeile
+     * @param {Partial<T>} obj - Eigenschaften die gesetzt werden
+     * @param {boolean} [createNew] - Optional ob ein neues Objekt angelegt wird wenn nicht vorhanden. Default: true
+     * @returns {string|number|undefined} die ID wenn Bearbeitet oder angelegt
+     */
+    setValues(id, obj, createNew = true) {
+        if (id == undefined) return;
+
+        //@ts-ignore
+        obj[this.idColumnName] = id;
+        return this.setObject(obj, createNew);
+    }
+
+
+    /**
+     * Markiert einen oder mehrere Datensätze aus der Liste als gelöscht
+     * @param {string|number|Array<string|number>} id - ID oder ZeilenIndex oder Liste mit Ids oder ZeilenIndexes
+     */
+    delete(id) {
+        // Wenn liste mit ID's
+        if (Array.isArray(id)) {
+            for (let i = 0; i < id.length; i++) {
+                this.delete(id);
+            }
+            return;
+        }
+
+        // Zeilenindex lesen
+        const rowInfo = this.getRowInfo(id);
+        const rowIndex = rowInfo.index;
+        if (rowIndex) {
+            // zeile als gelöscht markieren
+            this._deleted.set(rowInfo.id, rowIndex);
+
+            // Zeile aus IndexMap entfernen
+            this.rowMap.delete(rowInfo.id);
+            this._changed.delete(rowInfo.id);
+        }
+    }
+
+    /**
+     * Markiert einen oder mehrere Datensätze aus der Liste als nicht gelöscht
+     * @param {string|number|Array<string|number>} id - ID oder ZeilenIndex oder Liste mit Ids oder ZeilenIndexes
+     */
+    unDelete(id) {
+        // Wenn liste mit ID's
+        if (Array.isArray(id)) {
+            for (let i = 0; i < id.length; i++) {
+                this.unDelete(id);
+            }
+            return;
+        }
+
+        // ZeilenInfo lesen
+        const rowInfo = this.getRowInfo(id);
+
+        // Wenn gelöscht
+        if (this._deleted.has(rowInfo.id)) {
+            // zeile aus gelöscht entfernen
+            this._deleted.delete(rowInfo.id);
+
+            // Zeile in IndexMap hinzufügen
+            this.rowMap.set(rowInfo.id, rowInfo.index);
+
+            // Bearbeitet setzen
+            this._changed.set(rowInfo.id, rowInfo.index);
+        }
     }
 
 
@@ -608,16 +1160,16 @@ export class DataMap extends Map {
      * Wenn kein "index" angegeben, werden alle Daten sortiert.
      * Wenn "index" angegeben, werden nur die Daten unter diesem Index sortiert.
      * Wenn "newIndex" angegeben, wird die Sortierung unter "newIndex" abgelegt.
-     * @param {Array<string>|CallbackSortFunction<T>} sortCols - Liste mit Spalten nach denen Sortiert wird oder eine Sortierungsfunktion
-     * @param {string|Array<string|number>} [index] - Index Name oder Liste mit ID's der zum sortieren verwendet wird.
+     * @param {Array<string>} sortCols - Liste mit Spalten nach denen Sortiert wird oder eine Sortierungsfunktion (|CallbackSortFunction<T>)
+     * @param {string|Array<number>} [index] - Index Name oder Liste mit IndexPositionan der zum sortieren verwendet wird.
      * @param {string} [newIndexName] - Index Name der nach dem Sortieren gesetzt wird.
-     * @returns {Array<string|number>} sortierte Liste mit ID's
+     * @returns {Array<number>} sortierte Liste mit sortiertem Datenzeilen-Positionen
      * @example
      * const sortList = dataList.sortRows(["name", "hausnummer DESC"], "sortListe");
      */
     sort(sortCols, index, newIndexName) {
         // Alle Datenzeile in einer liste
-        const rowList = this.getIndex(index);
+        const rowList = this.getIndexList(index); // todo: ??? prüfen ob Kopie oder Referenz ??? Es ist eine Referenz!!!!
 
         // Wenn Sortierungs Funktion
         if (typeof sortCols == "function") {
@@ -627,7 +1179,7 @@ export class DataMap extends Map {
             // wenn keine SortierungsSpalten angegeben
             if (!Array.isArray(sortCols)) {
                 // nur Index merken
-                if (typeof index == "string") { this.#indexList.set(index, rowList); }
+                if (typeof index == "string") { this._indexList.set(index, rowList); }
                 // unsortierte Liste mit ID's
                 return rowList;
             }
@@ -636,12 +1188,13 @@ export class DataMap extends Map {
             const colLength = sortCols.length;
             const orderIndex = new Array(colLength);
             const isString = new Array(colLength);
-            const sCols = new Array(colLength);
+            /** @type {Array<number>} */
+            const sCols = new Array(colLength); // Spalten Index
             const sDirection = new Array(colLength);
 
-            // 1. Datensatz lesen
-            let obj = this.get(rowList[0]);
-            if (!obj) { return rowList; }
+            // 1. Daten-Datensatz(1) lesen / erste Zeile(0) enthält Feldnamen
+            let row = this.rows[1];
+            if (!row) { return rowList; }
 
             // Alle sortierspalten durchgehen
             for (let i = 0; i < colLength; i++) {
@@ -650,7 +1203,7 @@ export class DataMap extends Map {
 
                 // prüfen auf Sortier Richtung
                 const fieldData = col.split(" ");
-                sCols[i] = fieldData[0]; // Spaltennamen für spätere Verwendung merken
+                sCols[i] = this.columnIndex[fieldData[0]] || -1; // Spalten-ID für spätere Verwendung merken
                 sDirection[i] = "ASC";
                 if (fieldData[1]?.trim().toUpperCase() == "DESC") {
                     direction = -1;
@@ -658,20 +1211,26 @@ export class DataMap extends Map {
                 }
 
                 orderIndex[i] = direction;
-                //@ts-ignore
-                isString[i] = typeof obj[sCols[i]] == "string" ? true : false; // dataType?.type == "string" ? true : false;
+                isString[i] = typeof row[sCols[i]] == "string" ? true : false; // dataType?.type == "string" ? true : false;
             }
 
 
             // Sortieren
             rowList.sort((a, b) => {
-                const aRow = this.get(a) || {};
-                const bRow = this.get(b) || {};
+
+                // Kopfzeile immer als erstes
+                if (a === 0) return -1; // 'a' ist die Kopfzeile, bleibt oben
+                if (b === 0) return 1;  // 'b' ist die Kopfzeile, bleibt oben
+
+                const aRow = this.rows[a] || [];
+                const bRow = this.rows[b] || [];
 
                 // Prüfen
                 for (let i = 0; i < colLength; i++) {
-                    const aValue = getPropValue(aRow, sCols[i]);
-                    const bValue = getPropValue(bRow, sCols[i]);
+                    if (sCols[i] < 0) continue;
+
+                    const aValue = aRow[sCols[i]];
+                    const bValue = bRow[sCols[i]];
                     if (aValue == undefined && bValue == undefined) {
                         continue;
                     } else if (aValue != undefined && bValue == undefined) {
@@ -729,170 +1288,348 @@ export class DataMap extends Map {
 
         // neuen Index speichern
         if (typeof newIndexName == "string") {
-            this.#indexList.set(newIndexName, rowList);
-            //this.#sortCols.set(newIndexName, sCols);
-            //this.#sortColsDirection.set(newIndexName, sDirection);
+            this._indexList.set(newIndexName, rowList);
         } else if (typeof index == "string") {
-            // this.#indexList.set(index, rowList);
-            //this.#sortCols.set(index, sCols);
-            //this.#sortColsDirection.set(index, sDirection);
+            this._indexList.set(index, rowList);
         }
         return rowList;
     } // sort
 
 
     /**
-     * Gibt eine gefilterte Liste mit Datensätzen IDs zurück.  
-     * Wenn index Angegeben werden die Daten zum Filtern vom bestehenden Index genommen.  
-     * Wenn newIndex angegeben, wird die gefilterte Liste unter dem "newIndex" abgelegt.
-     * @param {CallbackFilterFunction<T>} fu - Filterfunktion muss "true" oder "false" zurückgeben. Wenn "true" wird der Datensatz in die gefilterte Liste aufgenommen. 
-     * @param {string|Array<string|number>} [index] - optionaler Index Name oder Liste von ID's, wenn Daten von einem bestehenden Index genommen werden. 
-     * @param {string} [newIndexName] - Index unter dem die gefilterte Liste abgelegt wird.
-     * @returns {Array<string|number>} Gefilterte Liste mit ID's 
-     */
-    filter(fu, index, newIndexName) {
-
-        // Daten zum Filtern
-        let rowList = this.getIndex(index);
-        if (typeof fu != "function") { return rowList; }
-
-        const newList = [];
-
-        // alle durchgehen
-        for (let i = 0; i < rowList.length; i++) {
-            const obj = this.get(rowList[i]);
-
-            if (obj && fu(obj, i, rowList)) {
-                newList.push(rowList[i]);
-            }
-        }
-
-        // neuen Index speichern
-        if (typeof newIndexName == "string") {
-            this.#indexList.set(newIndexName, newList);
-        } else if (typeof index == "string") {
-            //this.#indexList.set(index, newList);
-        }
-        return newList;
-    }
-
-    /**
      * Führt die angegebene Funktion für jeden Datensatz, oder jeden Datensatz im angegebenen index, aus.  
-     * Als Parameter wird die Datenzeile als Objekt übergeben. 
-     * @param {CallbackForFunction<T>} fu - Funktion die pro Datensatz ausgeführt wird
-     * @param {string} [index] - optionaler Index Name oder Liste von ID's der als Datenquelle verwendet wird
+     * @param {CallbackFunction<T>} fu - Funktion die pro Datensatz ausgeführt wird.
+     * @param {string|Array<number>} [index] - optionaler Index Name oder Liste von Indexes der als Datenquelle verwendet wird
+     * @param {any} [breakValue] - Optionaler Wert, wenn dieser von der Funktion zurückgegeben wird, wird Abgebrochen und dieser Wert zurückgegeben
      * @returns {void}
-     * @example
-     * const namensListe = [];
-     * adresslistList.forEach((row, listIndex, rowList) => {namensListe.push(row.vorname + " " + row.nachname);});
-     * console.log(namensListe);
      */
-    forEachIndex(fu, index) {
-        // Daten zum Filtern
-        const rowList = this.getIndex(index);
+    forEach(fu, index, breakValue) {
         if (typeof fu != "function") { return; }
+
+        // Daten zum Filtern
+        const rowIndexList = this.getIndexList(index);
+        const readOnlyTable = this.readOnly();
 
         // alle durchgehen
-        for (let i = 0; i < rowList.length; i++) {
-            const obj = this.get(rowList[i]);
+        for (let i = 0; i < rowIndexList.length; i++) {
+            const rowIndex = rowIndexList[i];
+            const obj = this.getObject(rowIndex);
+            if (!obj) { continue; }
+
             // Funktion ausführen
-            if (obj && fu(obj, i, rowList)) { break; };
-        }
-    }
-
-
-    /**
-     * Führt für jede Spalte die angegebene Funktion aus.
-     * @param {CallbackForColFunction} fu - Funktion die für jede Spalte ausgeführt wird
-     * @param {Array<string>} [cols] - Optional Namen der Spalten 
-     * @returns {void}
-     */
-    forCols(fu, cols) {
-        if (typeof fu != "function") { return; }
-        if (!Array.isArray(cols)) {
-            cols = this.#properties;
-        }
-
-        // alle Spalten durchgehen
-        for (let i = 0; i < cols.length; i++) {
-            // Funktion ausführen
-            // (SpaltenName, Liste mit SpaltenNamen)
-            if (fu(cols[i], cols)) { break; };
+            const backValue = fu(obj, rowIndex, readOnlyTable);
+            if (backValue != undefined && backValue == breakValue) {
+                return backValue;
+            };
         }
     }
 
 
     /**
      * Führt die Angegebene Funktion, pro Gruppierung nach den Angegebenen Spalten, aus.
-     * @param {CallbackGroupFunction<T>} fu - Funktion die für jede Gruppierung aufgerufen wird.
-     * @param {Array<string>} colList - Liste der Spalten nach denen Gruppiert wird.
-     * @param {string|Array<string|number>} [index] - Optionaler Index der für die Gruppierung verwendet wird.
+     * @param {GroupFunction<T>} fu - Funktion die für jede Gruppierung aufgerufen wird.
+     * @param {string|Array<string>} colList - Liste der Spalten nach denen Gruppiert wird.
+     * @param {string|Array<number>} [index] - Optionaler Index der für die Gruppierung verwendet wird.
+     * @param {any} [breakValue] - Optionaler Wert der die Ausführung abbricht.
      * @returns {void}
      */
-    forGroup(fu, colList, index) {
-        // Daten zum Filtern
-        const rowList = this.getIndex(index);
+    forGroup(fu, colList, index, breakValue) {
         if (typeof fu != "function") { return; }
 
+        // Daten zum Filtern
+        const rowIndexList = this.getIndexList(index);
+        //const colIndexList = this.getColIndex(colList);
+
+        /** @type {Map<string,Array<T>>} */
         const groupIndex = new Map(); // merkt sich den Index der Gruppe
 
-        /** @type {Array<Array<string|number>>} */
-        const groupList = [];
-        /** @type {Array<Array<T>>} */
-        const groupObjList = [];
+        /**
+         * Liefert den Gruppenwert der Datenzeile
+         * @param {T} obj - Datenzeile
+         * @returns {string} GruppenWert
+         */
+        let getGroupValue = function (obj) {
+            let value = "";
+            for (let i = 0; i < colList.length; i++) {
+                //@ts-ignore
+                value += obj[colList[i]] + "_";
+            }
+            return value;
+        }
 
-        // alle durchgehen
-        for (let i = 0; i < rowList.length; i++) {
-            //let istNewGroup = false;
-            const obj = this.get(rowList[i]);
+        // alle Datenzeilen durchgehen
+        for (let i = 0; i < rowIndexList.length; i++) {
+            const rowIndex = rowIndexList[i];
+            const obj = this.getObject(rowIndex);
 
-            if (obj) {
-                // Gruppenwert lesen
-                const groupValue = this.getColValues(rowList[i], colList).join("_");
+            // erste Datenzeile(Feldnamen) und gelöschte Datenzeilen überspringen
+            if (!obj) { continue; }
 
-                // Wenn Gruppenwert vorhanden
-                if (groupIndex.has(groupValue)) {
-                    const j = groupIndex.get(groupValue);
-                    groupList[j].push(rowList[i]);
-                    groupObjList[j].push(obj);
-                } else {
-                    // Gruppenwert noch nicht vorhanden
-                    const newGroupList = [rowList[i]];
-                    const newgroupObjList = [obj];
-                    groupList.push(newGroupList);
-                    groupObjList.push(newgroupObjList);
-                    groupIndex.set(groupValue, groupList.length - 1);
-                }
+            const groupValue = getGroupValue(obj);
+
+            // Wenn es Gruppenwert schon gibt
+            if (groupIndex.has(groupValue)) {
+                // Index hinzufügen
+                groupIndex.get(groupValue)?.push(obj);
+            } else {
+                // neuen Index anlegen
+                groupIndex.set(groupValue, [obj]);
             }
         } // for jeder Datensatz
+
+        // Alle Gruppen Arrays
+        const groupList = [...groupIndex.keys()];
+        const readOnlyTable = this.readOnly();
+
 
         // alle Gruppierten Listen durchgehen
         for (let i = 0; i < groupList.length; i++) {
             // funktion ausführen
-            fu(groupObjList[i], groupList[i], rowList);
+            const backValue = fu(groupIndex.get(groupList[i]) || [], readOnlyTable);
+            if (breakValue != undefined && breakValue == backValue) { return; }
         }
     }
 
 
     /**
-     * Erzeugt eine List Instanz
-     * @param {Function|Object<string,any>} obj - Klasse oder Constructor Funktion
-     * @param {string|Array<string>} [idName] - Optional Name des ID Feldes oder Liste mit Namen wenn nur durch mehrere Spalten eindeutig
+     * Sucht in der Liste nach angegebener Quest und liefert das gefundene Objekt zurück
+     * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
+     * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
+     * @returns {T|undefined} DatenObjekt oder undefined wenn nicht gefunden.
      */
-    constructor(obj, idName) {
-        super();
-        // auf Klasse Prüfen
-        if (typeof obj === 'function' && obj.prototype && obj.prototype.constructor === obj) {
-            this.#class = obj;
-            // @ts-ignore
-            this.#properties = Object.keys(new this.#class());
-        } else if (typeof obj == "object") {
-            this.#class = obj.constructor;
-            this.#properties = Object.keys(obj);
+    find(quest, index) {
+        const indexList = this.getIndexList(index);
+
+        /** @type {CallbackFunction<T>} */
+        let fu;
+
+        // Wenn Quest eine Funktion
+        if (typeof quest == "function") {
+            //@ts-ignore
+            fu = quest;
+        } else if (typeof quest == "object") {
+            const keys = Object.keys(quest);
+
+            /**
+             * Sucht nach allen Spalten
+             * @param {T} obj - Datenzeile
+             * @returns {boolean}
+             */
+            fu = function find(obj) {
+                for (let i = 0; i < keys.length; i++) {
+                    //@ts-ignore
+                    const rowValue = obj[keys[i]];
+                    const questValue = quest[keys[i]];
+
+                    if (typeof questValue == "function") {
+                        // Wert gegen Funktion prüfen (Wert, Spaltenindex, Dateizeile)
+                        if (!questValue(rowValue, keys[i], obj)) { return false; }
+                    } else if (rowValue != questValue) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        } else {
+            return;
         }
 
-        // wenn idName
-        this.#idname = idName || "GSID";
+        const readOnlyTable = this.readOnly();
+
+        for (let i = 0; i < indexList.length; i++) {
+            const rowIndex = indexList[i];
+            const obj = this.getObject(rowIndex);
+
+            // erste datenZeile(FeldNamen) und gelöschte auslassen
+            if (!obj) { continue; }
+            if (fu(obj, rowIndex, readOnlyTable)) {
+                return obj;
+            }
+        }
+
+        // nicht gefunden
+        return;
+    }
+
+
+    /**
+     * Sucht alle Objekte aus der Liste das mit dem übergebenen Objekt übereinstimmt und gibt eine Liste der gefundenen Objekte zurück.
+     * @param {Object<string,any>|CallbackFunction<T>} quest - Abfrage Objekt oder FilterFunktion
+     * @param {string|Array<number>} [index] - Optional Index der für die Suche verwendet wird 
+     * @param {string} [newIndex] - Optional Name unter der der Filterindex abgelegt wird. 
+     * @returns {Array<T>} Liste mit Datensatz Zeilen oder Leere Liste wenn nicht gefunden.
+     */
+    findAll(quest, index, newIndex) {
+        const indexList = this.getIndexList(index);
+
+        /** @type {Array<number>} */
+        const newIndexList = [];
+        /** @type {Array<T>} */
+        const newObjList = [];
+
+        /** @type {CallbackFunction<T>} */
+        let fu;
+
+        // Wenn Quest eine Funktion
+        if (typeof quest == "function") {
+            //@ts-ignore
+            fu = quest;
+        } else if (typeof quest == "object") {
+            const keys = Object.keys(quest);
+
+            /**
+             * Sucht nach allen Spalten
+             * @param {T} obj - Datenzeile
+             * @returns {boolean}
+             */
+            fu = function find(obj) {
+                for (let i = 0; i < keys.length; i++) {
+                    //@ts-ignore
+                    const rowValue = obj[keys[i]];
+                    const questValue = quest[keys[i]];
+
+                    if (typeof questValue == "function") {
+                        // Wert gegen Funktion prüfen (Wert, Spaltenindex, Dateizeile)
+                        if (!questValue(rowValue, keys[i], obj)) { return false; }
+                    } else if (rowValue != questValue) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        } else {
+            return newObjList;
+        }
+
+        const readOnlyTable = this.readOnly();
+
+        // Alle Zeilen durchgehen
+        for (let i = 0; i < indexList.length; i++) {
+            const rowIndex = indexList[i];
+            const obj = this.getObject(rowIndex);
+
+            // erste datenZeile(FeldNamen) und gelöschte auslassen
+            if (!obj) { continue; }
+            if (fu(obj, rowIndex, readOnlyTable)) {
+                newIndexList.push(rowIndex);
+                newObjList.push(obj);
+            }
+        }
+
+        if (newIndex) {
+            // Index merken
+            this._indexList.set(newIndex, newIndexList);
+        }
+
+        // gefundene Indexes
+        return newObjList;
+    }
+
+    /**
+     * Liefert eine Schreibgeschützte Version der Liste zurück
+     * @returns {{
+     * getID: DataTable<T>["getID"]
+     * , getLength: DataTable<T>["getLength"]
+     * , getCols: DataTable<T>["getCols"]
+     * , getColIndex: DataTable<T>["getColIndex"]
+     * , has: DataTable<T>["has"]
+     * , getRowInfo: DataTable<T>["getRowInfo"]
+     * , getIndexList: DataTable<T>["getIndexList"]
+     * , hasIndexList: DataTable<T>["hasIndexList"]
+     * , getCellValue: DataTable<T>["getCellValue"]
+     * , sort: DataTable<T>["sort"]
+     * , newObject: DataTable<T>["newObject"]
+     * , getObject: DataTable<T>["getObject"]
+     * , getObjectList: DataTable<T>["getObjectList"]
+     * , forEach: DataTable<T>["forEach"]
+     * , forGroup: DataTable<T>["forGroup"]
+     * , find: DataTable<T>["find"]
+     * , findAll: DataTable<T>["findAll"]
+     * }} 
+     */
+    readOnly() {
+        return {
+            getID: this.getID.bind(this)
+            , getLength: this.getLength.bind(this)
+            , getCols: this.getCols.bind(this)
+            , getColIndex: this.getColIndex.bind(this)
+            , has: this.has.bind(this)
+            , getRowInfo: this.getRowInfo.bind(this)
+            , getIndexList: this.getIndexList.bind(this)
+            , hasIndexList: this.hasIndexList.bind(this)
+            , getCellValue: this.getCellValue.bind(this)
+            , sort: this.sort.bind(this)
+            , newObject: this.newObject.bind(this)
+            , getObject: this.getObject.bind(this)
+            , getObjectList: this.getObjectList.bind(this)
+            , forEach: this.forEach.bind(this)
+            , forGroup: this.forGroup.bind(this)
+            , find: this.find.bind(this)
+            , findAll: this.findAll.bind(this)
+        };
     }
 }
 
+
+// // Umsetzung
+// // Alles in Tabellen Strucktur
+// // 1. Zeile enthält Feldnamen - Wichtig IDFeld muss immer angegeben werden
+// // Neue Datensätze (ID) In Map (_newRows)
+// // generische Klasse constructor (Array in daten)
+// // funktion toArray -> Feldnamen in Richtige Spalten vom Array
+
+
+
+// /// Example
+// // @ts-check
+// // import { DataTable } from "./data-table.js";
+// // import { Customer } from "./customer.js";
+
+// const rohDaten = [
+//     ["gsid", "name", "city"],
+//     ["C-1", "Max", "Wien"]
+// ];
+
+// // class Customer extends DataRow {
+// //     /** Eindeutige ID */
+// //     gsid = "";
+// //     name = "";
+// //     city = "";
+// //     /** Test @type {Map<string,string>} */
+// //     test = new Map();
+// //     constructor() { super(); } // Zwingend erforderlich wenn man von einer anderen Klasse erbt
+// // }
+
+// /**
+//  * @typedef {Object} Customer
+//  * @property {string} gsid
+//  * @property {string} name
+//  * @property {string} city
+//  */
+// let CustomerCols = ["gsid", "name", "city"];
+
+// /** @type {DataTable<Customer>} */
+// const kundenTabelle = new DataTable("customers", rohDaten, "gsid");
+
+// // --- NEUEN DATENSATZ ANLEGEN ---
+// // VS Code vervollständigt dir hier alles und prüft die Typen!
+// const neuerKunde = kundenTabelle.newObject();
+// neuerKunde.city = "Salzburg";
+
+// // Werte zuweisen (schreibt LIVE ins 'rohDaten'-Array!)
+// neuerKunde.name = "Sabine";
+
+// console.log(neuerKunde.gsid);  // Autogenerierte GSID (z.B. "f81d4fae-...")
+
+// kundenTabelle.setObject(neuerKunde);
+
+// // Überprüfung der globalen Rohdaten:
+// console.log(rohDaten);
+// /*
+// Output zeigt, dass die Zeile vollautomatisch am Ende des Arrays angefügt wurde:
+// [
+//   ["gsid", "name", "city"],
+//   ["C-1", "Max", "Wien"],
+//   ["f81d4fae-...", "Sabine", "Salzburg"]
+// ]
+// */

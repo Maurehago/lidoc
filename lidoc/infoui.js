@@ -3,12 +3,67 @@
 // =========================================================================
 // @ts-check
 
-import { DataTable } from "./infotable.js";
-import { Schema, infoSchema, InfoTableUI_fields, InfoTableUI_unique, InfoFormUI_fields, InfoFormUI_unique } from "./infoschema.js";
+import { DataTable, getGSID } from "./infodata.js";
+import { Schema, InfoSchema } from "./infoschema.js";
 
 // ===================================
 //   Infos
 // --------
+
+// view:
+//      - list (InfoTableUI)
+//      - form (InfoFormUI)
+//      - html (InfoDetailUI)
+// hash: #liste1/detail1
+
+// hash: #add_schema
+// Form:
+//  Title: Add Schema
+//  textarea:
+//  button: addSchema
+// onOK: next: schema_detail
+// onError: self: error
+
+// view: schema_detail
+// parameters: schemaList
+// - list schema filter: {type: "object"}
+// - list schema filter: {type: "string|number|boolean"}
+
+
+// "row-select", {
+//     bubbles: true,
+//     detail: { tableId: this.id, recordId: activeRow?.getAttribute("data-record-id") }
+// }
+
+// "row-edit", {
+//     bubbles: true,
+//     detail: { tableId: this.id, recordId: activeRow?.getAttribute("data-record-id") }
+// }
+
+
+// CustomEvent:
+// "form-action", {
+//      bubbles: true,
+//      detail: {
+//          formId: this.id,
+//          action: actionName,
+//          values: this.getValues()
+//      }
+// })
+
+// "sync-initial-state", {
+//     detail: { rows: data.rows, idColName: data.idColName }
+// }
+
+// "sync-data-received", {
+//     detail: {
+//         tableName: data.tableName,
+//         targetType: data.targetType, // "LIST", "FORM", "DETAIL"
+//         recordId: data.recordId,
+//         dataTable: incomingTable
+//     }
+// }
+
 
 // --------- CSS ---------------
 // /* Der umschließende Spalten-Container, wenn er den Fokus hat */
@@ -54,21 +109,38 @@ import { Schema, infoSchema, InfoTableUI_fields, InfoTableUI_unique, InfoFormUI_
 //   Typen
 // -------------
 
-/**
- * DatenTypen vom Server, damit diese gleich sind am Client
- * @import {MessageType, ClientServerMessage, InfoTableUI, InfoFormUI, ApplicationConfig} from "./infoschema.js"
- */
+/** @typedef {import('./infodata.js').DataRows} DataRows */
+/** @typedef {import('./infodata.js').ClientServerMessage} ClientServerMessage */
 
-// /**
-//  * Knoten für jedes Element im System
-//  * @typedef {object} InfoNode
-//  * @property {string} id - UUID oder eindeutiger String (z.B. "jira-PROJ-123", "md-uuid")
-//  * @property {string} type - 'markdown', 'task', 'jira', 'xwiki', 'pdf', 'schema'
-//  * @property {string} title - Anzeige Text
-//  * @property {string} source_path - Pfad / Url zu Markdown,HTML, DB-Tabelle, Jira, XWiki, usw..
-//  * @property {string} created_at - (datetime) Zeitstempel wann die Node angelegt worden ist
-//  */
-// const InfoNode_fields = ["id", "type", "title", "source_path", "created_at"];
+/**
+ * Tabellen einstellungen
+ * @typedef {object} InfoUITableCol
+ * @property {string} column_name - Name der Spalte
+ * @property {string} display_name - Anzeige Text
+ * @property {number} position - Spalten Position
+ * @property {string} [format] - Name der Value Formatierungs-Funktion
+*/
+export const InfoUITableCol_fields = ["column_name", "display_name", "position", "format"];
+export const InfoUITableCol_unique = "column_name";
+
+/**
+ * Input Typen
+ * @typedef {"input_text"|"input_number"|"input_range"|"input_date"|"checkbox"|"select"|"button"|"textarea"} InfoUIInputType
+ */
+export const InfoUIInputType_values = ["input_text", "input_number", "input_range", "input_date", "checkbox", "select", "button", "textarea"];
+
+/**
+ * Formular einstellungen
+ * @typedef {object} InfoUIFormField
+ * @property {string} field_name - Name des Datenfeldes
+ * @property {string} label - Anzeige/Überschrift/Text(bei Buttons)
+ * @property {number} position - Position des Feldes
+ * @property {InfoUIInputType|undefined} ui_element - Typ des Input elementes oder "button"
+ * property {string|undefined} action_module - Modul Name welches die Funktionalität bereit stellt
+ * @property {string|undefined} action_function - Name der Funktion im Modul
+ */
+export const InfoUIFormField_fields = ["field_name", "label", "position", "ui_element", "action_function"];
+export const InfoUIFormField_unique = "field_name";
 
 // /**
 //  * Knoten/Veknüpfung verknüpft alles mit allem (Richtung unabhängig)
@@ -79,13 +151,16 @@ import { Schema, infoSchema, InfoTableUI_fields, InfoTableUI_unique, InfoFormUI_
 //  */
 // const InfoEdge_fields = ["source_id", "target_id", "relation_type"];
 
-// /**
-//  * Tags für die schnelle Suche
-//  * @typedef {object} InfoTag
-//  * @property {string} node_id - ID der InfoNode zu der dieser Tag gehört
-//  * @property {string} tag - Name/Bezeichnung des Tags
-//  */
-// const InfoTag_fields = ["node_id", "tag"];
+/**
+ * Detail Einstellungen
+ * @typedef {object} InfoUIDetailField
+ * @property {string} field_name - Name des Datenfeldes
+ * @property {string} label - Anzeige
+ * @property {number} position - Position des Feldes
+ * @property {string} [format] - Name der Value Formatierungs-Funktion
+ */
+export const InfoUIDetailField_fields = ["field_name", "label", "position", "format"];
+export const InfoUIDetailField_unique = "field_name";
 
 
 
@@ -103,15 +178,7 @@ import { Schema, infoSchema, InfoTableUI_fields, InfoTableUI_unique, InfoFormUI_
 // const InfoTableUI_fields = ["gsid", "table_id", "column_name", "display_name", "position", "format"];
 // const InfoTableUI_unique = "gsid";
 
-// // Beispiel:
-// // ```json
-// // [
-// //   ["table_id", "column_name", "display_name", "position", "format"],
-// //   ["kundenTabelle", "gsid", "Kundennummer", 1, "text"],
-// //   ["kundenTabelle", "nachname", "Nachname", 2, "text"],
-// //   ["kundenTabelle", "vorname", "Vorname", 3, "text"]
-// // ]
-// // ```
+/** @typedef {"on-error"|"on-init"|"on-lock-update"|"on-data"|"on-lock-denied"|"on-lock-released"|"on-save"|"on-data-changed"|"on-delete"} WebSocketEvents */
 
 // /**
 //  * Formular einstellungen
@@ -128,42 +195,69 @@ import { Schema, infoSchema, InfoTableUI_fields, InfoTableUI_unique, InfoFormUI_
 // const InfoFormUI_fields = ["gsid", "form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"];
 // const InfoFormUI_unique = "gsid";
 
-// Beispiel
-// ```json
-// [
-//   ["form_id", "field_name", "label", "position", "ui_element", "action_module", "action_function"],
-//   ["kundenForm", "vorname", "Vorname des Kunden", 1, "input_text", null, null],
-//   ["kundenForm", "nachname", "Nachname des Kunden", 2, "input_text", null, null],
-//   ["kundenForm", "save_btn", "Speichern", 3, "button", "./modules/kunden_actions.js", "speichern"],
-//   ["kundenForm", "delete_btn", "Löschen", 4, "button", "./modules/kunden_actions.js", "loeschen"]
-// ]
-// ```
+// ============================================
+//   Komponente
+// --------------
 
-// ==========================================
-//   Schema
-// ------------
+export class InfoUIComponent {
+    /**
+     * 
+     * @param {string} id - ID der Komponente
+     */
+    constructor(id) {
+        this.id = id;
+        /** @type {HTMLElement|null} */
+        this.domElement = null; // Wird beim Rendern besetzt
 
-const infoUISchema = new Schema("infoUISchema");
+        /** @type {Object<string,Array<function>>} */
+        this.listeners = {}; // wird von der APP überschrieben
 
-infoUISchema.setDataType({ name: "InfoTable", art: "object", id: "gsid" });
-infoUISchema.addProperty("InfoTable", "gsid");
-infoUISchema.addProperty("InfoTable", "table_id");
-infoUISchema.addProperty("InfoTable", "column_name");
-infoUISchema.addProperty("InfoTable", "position", {prop_type: "int"});
-infoUISchema.addProperty("InfoTable", "format");
+        /** @type {Object<string,function>} */
+        this.formaters = {}; // wird von der APP überschrieben
+    }
 
-infoUISchema.setDataType({ name: "InfoForm", art: "object", id: "gsid" });
-infoUISchema.addProperty("InfoForm", "gsid");
-infoUISchema.addProperty("InfoForm", "form_id");
-infoUISchema.addProperty("InfoForm", "field_name");
-infoUISchema.addProperty("InfoForm", "label");
-infoUISchema.addProperty("InfoForm", "position", {prop_type: "int"});
-infoUISchema.addProperty("InfoForm", "ui_element");
-infoUISchema.addProperty("InfoForm", "action_module");
-infoUISchema.addProperty("InfoForm", "action_function");
+    /**
+     * Registriert eine Eventfunktion
+     * @param {string} actionName - Name des Events
+     * @param {function} callback - Callback Funktion die für dieses Event ausgeführt wird
+     */
+    on(actionName, callback) {
+        if (!this.listeners[actionName]) this.listeners[actionName] = [];
+        this.listeners[actionName].push(callback);
+    }
 
-// ==========================================
+    /**
+     * Ruft die Registrieren Funktionen auf wenn vorhanden
+     * @param {string} actionName - Name des Events
+     */
+    trigger(actionName) {
+        if (this.listeners[actionName]) {
+            for (let i = 0; i < this.listeners[actionName].length; i++) {
+                if (typeof this.listeners[actionName][i] == "function") {
+                    typeof this.listeners[actionName][i](this);
+                }
+            }
+        }
+    }
 
+    /**
+     * Gibt einen Formatierten Wert zurück
+     * @param {string} formatName - Name der Formatierung
+     * @param {any} value - Wert der Formatiert wird
+     * @returns {any} Formatierter Wert
+     * @example
+    const AppFormatters = {  
+        currency: (val) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(val),  
+        date: (val) => new Intl.DateTimeFormat('de-DE').format(new Date(val)),  
+        uppercase: (val) => String(val).toUpperCase()  
+    };  
+     */
+    getFormat(formatName, value) {
+        if (this.formaters[formatName] && typeof this.formaters[formatName] == "function") {
+            return this.formaters[formatName](value);
+        }
+        return value;
+    }
 
 // HTML-Template: Ein einziger flexibler Container für unendlich anbaubare Spalten nach rechts
 const base_html = `
@@ -177,41 +271,160 @@ const base_html = `
 //   neue Klassen
 // ---------------
 
-export class UiGenerator {
+    /** Wird von Komponenten überschrieben */
+    render() { return ""; }
+
+    /**
+     * Wird vom Controller aufgerufen, wenn die Komponente den Fokus hat
+     * @param {KeyboardEvent} e 
+     */
+    handleKeyDown(e) { }
+
+    /**
+     * Wird vom Controller aufgerufen, wenn ein Klick innerhalb der Komponente erfolgt
+     * @param {MouseEvent} e 
+     */
+    handleMouseClick(e) { } // Wird von Subklassen überschrieben
+
+    /**
+     * Wird vom Controller aufgerufen, wenn ein Klick innerhalb der Komponente erfolgt
+     * @param {MouseEvent} e 
+     */
+    handleMouseDblClick(e) { } // Wird von Subklassen überschrieben
+
+    /** 
+     * Aktiviert das visuelle CSS-Styling für den Fokus 
+     * @param {boolean} isFocused - Setzt/ entfernt den Fokus
+     */
+    setFocused(isFocused) {
+        if (this.domElement) {
+            this.domElement.classList.toggle("component-focused", isFocused);
+        }
+    }
+}
+
+
+export class InfoUITable extends InfoUIComponent {
+    /**
+     * Eine Tabellen-Liste Komponente
+     * @param {string} id - ID der Komponente
+     * @param {string} title - Titel der angezeigt wird
+     * @param {DataTable<any>} [dataTable] - Optional Datentabelle
+     * @param {string} [dataIndex] - Optional neuer Index
+     */
+    constructor(id, title, dataTable, dataIndex) {
+        super(id);
+        this.title = title;
+        this.dataTable = dataTable;
+
+        /** @type {string|undefined} */
+        this.dataIndex = dataIndex;
+        this.activeRowIdx = 0;
+        this.activeColIdx = 0;
+        this.cols = [];
+    }
+
+    /** @type {Array<InfoUITableCol>} */
+    cols = [];
+
+    /** @type {Object<string,number>} */
+    colIndex = {};
+
+    sort() {
+        this.cols = this.cols.sort((a, b) => a.position - b.position);
+    }
+
+    createIndex() {
+        this.colIndex = {};
+        for (let i = 0; i < this.cols.length; i++) {
+            this.colIndex[this.cols[i].column_name] = this.cols[i].position;
+        }
+    }
+
+
+    /**
+     * Fügt eine neue Tabellenspalte hinzu
+     * @param {string} column_name - name der Spalte
+     * @param {string} [display_name] - Optional Text der Angezeigt wird
+     * @param {number} [position] - Optional Position der Spalte. Verschiebt alle folgenden Spalten. -1 Wenn hinten anfügen
+     * @param {string} [format] - Formatierung der Spalte. Funktion ?????
+     */
+    add_col(column_name, display_name, position = -1, format) {
+        // neues Object
+        let obj = { column_name, display_name: display_name || column_name, position, format };
+
+        // prüfen ob vorhanden
+        let colIndex = this.colIndex[column_name] || -1;
+        if (colIndex >= 0) {
+            // Vorhandenes ersetzen unabhängig von position
+            obj.position = colIndex;
+            this.cols[colIndex] = obj;
+        } else {
+            // nicht vorhanden
+            if (position == undefined || position < 0) {
+                obj.position = this.cols.push(obj) - 1;
+                this.colIndex[obj.column_name] = obj.position;
+            } else {
+                // an neuer Position einfügen
+                this.cols.splice(position, 0, obj);
+
+                // index neu aufbauen
+                this.createIndex();
+            }
+        }
+    }
+
+
     /**
      * Generiert eine HTML-Tabelle
-     * @param {string} tableId - ID der UI-Konfiguration
-     * @param {DataTable<InfoTableUI>} uiConfigTable - Die Tabelle mit den UI-Spalten-Definitionen
-     * @param {DataTable<any>} dataTable - Die echten Geschäftsdaten (z.B. Kunden)
-     * @param {string} [dataIndex] - Optional Index der DatenTabelle
+     * @returns {string} generiertes HTML
      */
-    static generateTable(tableId, uiConfigTable, dataTable, dataIndex) {
+    render() {
         // 1. Hole die relevanten UI-Spalten für diese Tabelle und sortiere sie
-        const columns = uiConfigTable.findAll({ table_id: tableId }).sort((a, b) => a.position - b.position);
+        const columns = this.cols;
+        const colIndexes = [];
 
-        let html = `<div class="ui-view-container" data-target-type="LIST" data-table-id="${tableId}" tabindex="0">`;
-        html += `<table class="pure-table"><thead><tr>`;
+        let html = `<div class="ui-view-container" data-table-id="${this.id}">`;
+        html += `<h4>${this.title}</h4>`;
+
+        // wenn Keine Daten zugewiesen
+        if (!this.dataTable) {
+            return html + "<p>no DataTable</p>"
+        }
+
+        html += `<table table-stripes><thead><tr>`;
 
         // Header rendern
         for (let i = 0; i < columns.length; i++) {
             // Spalten Überschriften todo: Ausrichtung
             html += `<th>${columns[i].display_name}</th>`;
+            colIndexes.push(this.dataTable.columnIndex[columns[i].column_name]);
         }
         html += `</tr></thead><tbody>`;
 
         // Zeilen aus den echten Daten rendern (Index 0 auslassen, da Header im Datentreiber)
         // Index für Sortierung und Filter
-        const dataRowIndex = dataTable.getIndexList(dataIndex);
+        const dataRowIndex = this.dataTable.getIndexList(this.dataIndex);
 
         for (let i = 0; i < dataRowIndex.length; i++) {
-            if (dataRowIndex[i] === 0) return;
+            if (dataRowIndex[i] === 0) continue;
+
+            // Datenzeile lesen
+            const row = this.dataTable.getRow(dataRowIndex[i]);
+            if (!row) { continue; }
 
             // Datensatz ID todo: Optimieren: eventuell SpaltenIndex ?????
-            const recordId = dataTable.getCellValue(dataRowIndex[i], dataTable.idColumnName);
+            const recordId = this.dataTable.getID(row);
 
             html += `<tr data-record-id="${recordId}">`;
             for (let j = 0; j < columns.length; j++) {
-                const value = dataTable.getCellValue(dataRowIndex[i], columns[j].column_name) ?? "";
+                const format = columns[i].format;
+                let value = row[colIndexes[j]];
+
+                // Formatierung
+                if (format) {
+                    value = this.getFormat(format, value);
+                }
 
                 // Spalte anzeigen todo: Ausrichtung/Formatierung ????
                 html += `<td>${value}</td>`;
@@ -224,143 +437,147 @@ export class UiGenerator {
     }
 
     /**
-     * Generiert ein HTML-Formular
-     * @param {string} formId - Name des Formulares
-     * @param {DataTable<InfoFormUI>} uiConfigTable - Einstellungen für das Formular
-     * @param {Object<string,any>} currentDataObj - Datenzeilen Objekt
+     * DatenTabelle setzen
+     * @param {DataTable<any>} newDataTable - neue Datentabelle setzen 
+     * @param {string} [newDataIndex] - Optional neuer Index
      */
-    static generateForm(formId, uiConfigTable, currentDataObj) {
-        const fields = uiConfigTable.findAll({ form_id: formId }).sort((a, b) => a.position - b.position);
+    set_dataTable(newDataTable, newDataIndex) {
+        this.dataTable = newDataTable;
+        this.dataIndex = newDataIndex || this.dataIndex;
 
-        let html = `<div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">`;
+        if (this.domElement) {
+            // HTML neu erzeugen
+            this.domElement.innerHTML = this.render();
 
-        //fields.forEach(field => {
-        for (let i = 0; i < fields.length; i++) {
-            // todo: input Formate Festlegen
-            // todo: eingabe Schema prüfen ????
-            if (fields[i].ui_element === "input_text") {
-                const val = currentDataObj ? currentDataObj[fields[i].field_name] : "";
-                html += `
-                    <div class="form-group" data-focusable="true">
-                        <label>${fields[i].label}</label>
-                        <input type="text" data-field="${fields[i].field_name}" value="${val}">
-                    </div>`;
-            } else if (fields[i].ui_element === "button") {
-                html += `
-                    <button class="ui-btn" data-focusable="true" 
-                            data-module="${fields[i].action_module || ''}" 
-                            data-function="${fields[i].action_function || ''}">
-                        ${fields[i].label}
-                    </button>`;
+            // Fokus-Index zurücksetzen ???
+            this.activeRowIdx = 0;
+            this.updateVisualFocus();
+        }
+    }
+
+
+    updateVisualFocus() {
+        const tbody = this.domElement?.querySelector("tbody");
+        if (!tbody) return;
+
+        // Alte Markierungen entfernen
+        tbody.querySelectorAll(".active-row").forEach(el => el.classList.remove("active-row"));
+        tbody.querySelectorAll(".active-cell").forEach(el => el.classList.remove("active-cell"));
+
+        // Zeilen-Fokus
+        const activeRow = tbody.rows[this.activeRowIdx];
+        if (activeRow) {
+            activeRow.classList.add("active-row");
+
+            // Zellen-Fokus (Horizontale Navigation)
+            const activeCell = activeRow.cells[this.activeColIdx];
+            if (activeCell) {
+                activeCell.classList.add("active-cell");
             }
-        };
+        }
+    }
+
+
+    /** 
+     * Vom Controller delegiertes Event für die interne Tabellensteuerung 
+     * @param {KeyboardEvent} e - Tastatur Event
+     */
+    handleKeyDown(e) {
+        const tbody = this.domElement?.querySelector("tbody");
+        if (!tbody) return;
+        const maxRows = tbody.rows.length;
+        const maxCols = this.cols.length;
+
+        // Vertikale Navigation
+        if (e.key === "ArrowDown" && this.activeRowIdx < maxRows - 1) {
+            this.activeRowIdx++; e.preventDefault();
+            this.updateVisualFocus();
+            this.trigger("row-select");
+        }
+        if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
+            this.activeRowIdx--; e.preventDefault();
+            this.updateVisualFocus();
+            this.trigger("row-select");
+        }
+
+        // Horizontale Navigation (Zellen-Fokus)
+        if (e.key === "ArrowRight" && this.activeColIdx < maxCols - 1) {
+            this.activeColIdx++; e.preventDefault();
+            this.updateVisualFocus();
+            this.trigger("cell-select");
+        }
+        if (e.key === "ArrowLeft" && this.activeColIdx > 0) {
+            this.activeColIdx--; e.preventDefault();
+            this.updateVisualFocus();
+            this.trigger("cell-select");
+        }
+
+        // Auswahl (Leertaste)
+        if (e.key === " ") { // "Space" im Web-API ist ein Leerzeichen-String
+            e.preventDefault();
+            const activeRow = tbody.rows[this.activeRowIdx];
+            this.trigger("row-select");
+        }
+
+        // Ausführen / Editieren (Enter)
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const activeRow = tbody.rows[this.activeRowIdx];
+            this.trigger("row-edit");
+        }
+    }
+
+
+    /**
+     * Checkt die Mouse Events
+     * @param {MouseEvent} e - Maus Event
+     * @returns 
+     */
+    handleMouseClick(e) {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        const cell = target.closest("td");
+        const row = target.closest("tr");
+        if (!cell || !row) return;
+
+        // Indizes berechnen (0-basiert für den tbody)
+        // row.rowIndex zieht auch den thead mit ein, daher nutzen wir besser parentNode oder eine Schleife:
+        const tbody = row.closest("tbody");
+        if (tbody) {
+            this.activeRowIdx = Array.from(tbody.rows).indexOf(row);
+            this.activeColIdx = cell.cellIndex;
+
+            this.updateVisualFocus();
+            this.trigger("row-select");
+        }
 
         html += `</div>`;
         return html;
     }
 
     /**
-     * Generiert ein Navigationsmenü aus einer DataTable
-     * @param {string} menuId 
-     * @param {DataTable<InfoTableUI>} uiConfigTable 
-     * @param {DataTable<any>} menuData 
-     * @param {string} [dataIndex] - Optional Index der DatenTabelle
+     * Checkt die Mouse Events
+     * @param {MouseEvent} e - Maus Event
+     * @returns 
      */
-    static generateMenu(menuId, uiConfigTable, menuData, dataIndex) {
-        let html = `<div class="ui-view-container" data-target-type="MENU" data-table-id="${menuId}" tabindex="0">`;
-        html += `<ul class="ui-menu-list">`;
+    handleMouseDblClick(e) {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
 
-        const rowIndices = menuData.getIndexList(dataIndex);
-        // todo: Optimieren
-        for (let i = 0; i < rowIndices.length; i++) {
-            if (rowIndices[i] === 0) continue; // Header überspringen
+        const cell = target.closest("td");
+        const row = target.closest("tr");
+        if (!cell || !row) return;
 
-            // Wir erwarten Spalten wie 'id' (oder gsid) und 'title'
-            const id = menuData.getCellValue(rowIndices[i], "id") || menuData.getCellValue(rowIndices[i], "gsid");
-            const title = menuData.getCellValue(rowIndices[i], "title") ?? "";
+        // Indizes berechnen (0-basiert für den tbody)
+        // row.rowIndex zieht auch den thead mit ein, daher nutzen wir besser parentNode oder eine Schleife:
+        const tbody = row.closest("tbody");
+        if (tbody) {
+            this.activeRowIdx = Array.from(tbody.rows).indexOf(row);
+            this.activeColIdx = cell.cellIndex;
 
-            html += `<li data-record-id="${id}" class="ui-menu-item">${title}</li>`;
-        }
-
-        html += `</ul></div>`;
-        return html;
-    }
-
-
-    /**
-     * Generiert ein Formular aus einer Key-Value-Tabelle (Vertikale Daten)
-     * todo: Spalten müssen noch angepasst werden. Was ist die Key-Spalte, was ist die Value-Spalte?
-     * @param {string} formId 
-     * @param {DataTable<InfoFormUI>} uiConfigTable 
-     * @param {DataTable<any>} dataTable - Die vertikalen Tabellendaten
-     * @param {string} [dataIndex] - Optional Index der DatenTabelle
-     */
-    static generateVerticalForm(formId, uiConfigTable, dataTable, dataIndex) {
-        let html = `<div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">`;
-
-        const rowIndices = dataTable.getIndexList(dataIndex);
-
-        for (let i = 0; i < rowIndices.length; i++) {
-            if (rowIndices[i] === 0) continue; // Header überspringen
-
-            // Angenommen, die Tabelle hat die Spalten "key" (oder parameter) und "value"
-            const key = dataTable.getCellValue(rowIndices[i], "parameter_name");
-            const val = dataTable.getCellValue(rowIndices[i], "wert") ?? "";
-
-            // Label aus der UI-Config holen, falls vorhanden, sonst den Key nutzen
-            const uiField = uiConfigTable.find({ form_id: formId, field_name: key });
-            const labelText = uiField ? uiField.label : key;
-
-            html += `
-            <div class="form-group" data-focusable="true" style="margin-bottom: 10px;">
-                <label style="display: block; font-weight: 500;">${labelText}</label>
-                <input type="text" data-field="${key}" value="${val}" style="width: 100%;">
-            </div>`;
-        }
-
-        html += `</div>`;
-        return html;
-    }
-
-    /**
-     * Generiert eine zusammengesetzte Detailansicht aus mehreren Sub-Tabellen
-     * todo: Muss angepasst werden da im payload unterschiedliche Daten kommen können (Formulare, Tabellen, Details(HTML), usw)
-     */
-    static generateDetail(viewId, uiConfigTable, compositeDataPayload) {
-        // compositeDataPayload ist das geparste JSON-Objekt aus dem Server-Payload
-        let html = `<div class="ui-view-container" data-target-type="DETAIL" data-view-id="${viewId}" tabindex="0" style="display:flex; flex-direction:column; gap:20px;">`;
-
-        // 1. Stammdaten-Segment (Formularartig, schreibgeschützt)
-        if (compositeDataPayload.stammdaten) {
-            const stammdatenTable = new DataTable(compositeDataPayload.stammdaten);
-            const obj = stammdatenTable.getObject(1);
-            html += `<div class="detail-segment card"><h3>Kundenstammdaten</h3>`;
-            for (const [key, value] of Object.entries(obj)) {
-                html += `<p><strong>${key}:</strong> ${value}</p>`;
-            }
-            html += `</div>`;
-        }
-
-        // 2. Kontakt-Sektion als kompakte Liste
-        if (compositeDataPayload.kontakte) {
-            html += `<div class="detail-segment"><h3>Kontaktinformationen</h3><ul class="ui-menu-list">`;
-            const kontakteTable = new DataTable(compositeDataPayload.kontakte);
-            kontakteTable.getIndexList().forEach(idx => {
-                if (idx === 0) return;
-                const typ = kontakteTable.getCellValue(idx, "typ");
-                const wert = kontakteTable.getCellValue(idx, "wert");
-                html += `<li class="ui-static-item"><strong>${typ}:</strong> ${wert}</li>`;
-            });
-            html += `</ul></div>`;
-        }
-
-        // 3. Letzte Bestellungen als Sub-Tabelle
-        if (compositeDataPayload.bestellungen) {
-            html += `<div class="detail-segment"><h3>Letzte Bestellungen</h3>`;
-            const bestellungenTable = new DataTable(compositeDataPayload.bestellungen);
-            // Nutzen Sie die bestehende generateTable Methode intern!
-            html += UiGenerator.generateTable("subBestellungen", uiConfigTable, bestellungenTable);
-            html += `</div>`;
+            this.updateVisualFocus();
+            this.trigger("row-edit");
         }
 
         html += `</div>`;
@@ -369,63 +586,81 @@ export class UiGenerator {
 }
 
 
-export class UiController {
+export class InfoUIForm extends InfoUIComponent {
     /**
-     * 
-     * @param {HTMLElement} appContainer - Der übergeordnete DOM-Container für die Spalten
+     * Eine Formular Komponente
+     * @param {string} id - ID der Komponente
+     * @param {string} title - Titel der angezeigt wird
+     * @param {Object<string,any>} [dataObject] - Optional Datentabelle
      */
-    constructor(appContainer) {
-        /** @type {HTMLElement} */
-        this.appContainer = appContainer;
+    constructor(id, title, dataObject) {
+        super(id);
+        this.title = title;
+        this.dataObject = dataObject;
 
-        /** @type {Map<string,DataTable<any>>} */
-        this.loadedTables = new Map();
-
-        /** @type {Map<string,string>} */
-        this.currentDataIndex = new Map();
-
-        /** @type {DataTable<InfoTableUI>} */
-        this.infoTableUI = new DataTable("InfoTableUI", [InfoTableUI_fields], InfoTableUI_unique);
-        
-        /** @type {DataTable<InfoFormUI>} */
-        this.infoFormUI = new DataTable("InfoFormUI", [InfoFormUI_fields], InfoFormUI_unique);
-
-        /** @type {any} - Wird nachgelagert vom Sync-Client besetzt */
-        //this.sync = null;
-        this.activeContainer = null;
         this.activeRowIdx = 0;
-        this.activeColIdx = 0;
 
-        //this.initGlobalEvents();
+        /** 
+         * Speicher für dynamische Select-Optionen, die nicht aus dem Schema kommen.
+         * Format: { "feld_name": [[key, value], ... ] }
+         * @type {Map<string, Array<Array<any>>|Array<string>>} 
+         */
+        this.dynamicOptions = new Map();
     }
 
+    /** @type {HTMLFormElement|null|undefined} */
+    formElement = null;
+
+    /** @type {Array<HTMLElement>} */
+    inputElements = []
+
+    /** @type {Array<InfoUIFormField>} */
+    fields = [];
+
+    /** @type {Object<string,number>} */
+    fieldIndex = {};
+
+    #sort() {
+        this.fields = this.fields.sort((a, b) => a.position - b.position);
+    }
+
+    createIndex() {
+        this.fieldIndex = {};
+        for (let i = 0; i < this.fields.length; i++) {
+            this.fieldIndex[this.fields[i].field_name] = this.fields[i].position;
+        }
+    }
 
     /**
-     * Entscheidet, ob eine Spalte neu geöffnet oder nur aktualisiert (refreshed) wird
-     * @param {string} tableName - Name der Tabelle
-     * @param {string} targetType - Zile Typ ? "LIST", "FORM", ...
-     * @param {DataTable<any>} dataTable - DatenTabelle
-     * @param {string} html - HTML String ????? 
+     * Fügt eine neue Tabellenspalte hinzu
+     * @param {string} field_name - name der Spalte
+     * @param {string} [label] - Text der Angezeigt wird
+     * @param {InfoUIInputType} [ui_element] - Formatierung der Spalte. Funktion ?????
+     * @param {number} [position] - Optional Position der Spalte. Verschiebt alle folgenden Spalten. -1 Wenn hinten anfügen
+     * param {string} [action_module] - Formatierung der Spalte. Funktion ?????
+     * @param {string} [action_function] - Formatierung der Spalte. Funktion ?????
      */
-    renderOrUpdateColumn(tableName, targetType, dataTable, html) {
-        // Prüfen, ob dieses UI-Element bereits im DOM existiert
-        const existingView = document.querySelector(`[data-table-id="${tableName}"][data-target-type="${targetType}"]`);
+    add_field(field_name, label, ui_element, position = -1, action_function) {
+        // neues Object
+        let obj = { field_name, label: label || field_name, ui_element, position, action_function };
 
-        // Instanz für spätere Sortierung/Filterung im Cache merken
-        this.loadedTables.set(tableName, dataTable);
+        // prüfen ob vorhanden
+        let fieldIndex = this.fieldIndex[field_name] || -1;
+        if (fieldIndex >= 0) {
+            // Vorhandenes ersetzen unabhängig von position
+            obj.position = fieldIndex;
+            this.fields[fieldIndex] = obj;
+        } else {
+            // nicht vorhanden
+            if (position == undefined || position < 0) {
+                obj.position = this.fields.push(obj) - 1;
+                this.fieldIndex[obj.field_name] = obj.position;
+            } else {
+                // an neuer Position einfügen
+                this.fields.splice(position, 0, obj);
 
-        if (existingView) {
-            // REFRESH: Bestehendes HTML einfach austauschen!
-            const bodyContainer = existingView.closest(".app-column-body");
-            if (bodyContainer) {
-                bodyContainer.innerHTML = html;
-
-                // Dem Controller sagen, er soll das geänderte HTML neu scannen
-                /** @type {HTMLElement|null} */
-                const newView = bodyContainer.querySelector(".ui-view-container");
-                this.parseContainer(newView);
-                this.focusContainer(newView);
-                return;
+                // index neu aufbauen
+                this.createIndex();
             }
         }
 
@@ -436,327 +671,606 @@ export class UiController {
     }
 
     /**
-     * Erstellt eine neue visuelle Spalte im macOS-Finder-Stil, entfernt alle rechts davon stehenden Spalten
-     * und bettet das generierte HTML ein.
-     * @param {string} title - Titel der Spalte (wird im Header angezeigt)
-     * @param {string} innerHtml - Das vom UiGenerator erzeugte HTML
-     * @returns {HTMLElement|null} - Das innere Container-Element für den UiController (.ui-view-container)
+     * Generiert plattformunabhängige, tastaturbedienbare Formularfelder
+     * @param {InfoUIFormField} field - Feld-Einstellungs-Objekt
+     * @param {any} value - Aktueller Wert aus dem Daten-Objekt
+     * @param {Schema} [schema] - Optionales Schema zur Typerkennung
      */
-    appendColumnHTML(title, innerHtml) {
-        // 1. Ermittle, von wo aus die Aktion getriggert wurde (aktive Spalte)
-        // Falls kein Element aktiv ist, fangen wir bei Spalte 0 an.
-        let currentColIdx = -1;
-        if (this.activeContainer) {
-            const parentCol = this.activeContainer.closest(".app-column");
-            if (parentCol) {
-                currentColIdx = parseInt(parentCol.getAttribute("data-col-index") || "0", 10);
-            }
-        }
+    get_input_html(field, value, schema) {
+        // Falls ein Schema übergeben wurde, versuchen wir den prop_type zu ermitteln, falls ui_element generisch ist
+        let uiType = field.ui_element;
 
-        // 2. Kaskadierendes Löschen: Alle Spalten RECHTS von der aktuellen Spalte abschneiden
-        const targetColIdx = currentColIdx + 1;
-        const existingCols = this.appContainer.querySelectorAll(".app-column");
-        existingCols.forEach(col => {
-            const idx = parseInt(col.getAttribute("data-col-index") || "0", 10);
-            if (idx >= targetColIdx) {
-                col.remove();
-            }
-        });
+        // Fallback-Wert-Splitting für Ranges (erwartet "wert1|wert2" oder ein Array)
+        const rangeValues = typeof value === "string" ? value.split("|") : (Array.isArray(value) ? value : ["", ""]);
+        const cleanVal = value !== undefined && value !== null ? value : "";
 
-        // 3. Neue Spalten-Hülle bauen
-        const colDiv = document.createElement("div");
-        colDiv.className = "app-column";
-        colDiv.setAttribute("data-col-index", targetColIdx.toString());
-        colDiv.style.cssText = "display: flex; flex-direction: column; width: 350px; min-width: 350px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e1e4e8; height: 100%;";
+        switch (uiType) {
+            case "input_text":
+                return `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <input type="text" name="${field.field_name}" value="${cleanVal}">
+                </div>`;
 
-        // Spalten-Kopf (Header)
-        colDiv.innerHTML = `
-            <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
-                ${title}
-            </div>
-            <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px;">
-                ${innerHtml}
-            </div>
-        `;
+            case "input_number":
+                return `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <input type="number" name="${field.field_name}" value="${cleanVal}">
+                </div>`;
 
-        this.appContainer.appendChild(colDiv);
+            case "input_range": // Numerische Range (Von - Bis)
+                // todo: Min und Max Value lesen (schema?????)
+                return `
+                <div class="form-group range-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <input type="range" name="${field.field_name}" value="${cleanVal}" min="0" max="99">
+                </div>`;
 
-        // Nach rechts scrollen
-        this.appContainer.scrollTo({ left: this.appContainer.scrollWidth, behavior: "smooth" });
+            case "input_date":
+                return `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <input type="date" name="${field.field_name}" value="${cleanVal}">
+                </div>`;
 
-        // Das interaktive Element für den Controller zurückgeben
-        return colDiv.querySelector(".ui-view-container");
-    }
+            case "textarea":
+                return `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <textarea 
+                        name="${field.field_name}" 
+                        data-field="${field.field_name}"
+                        class="ui-input ui-textarea"
+                        rows="4">${cleanVal}</textarea>
+                </div>`;
+            // todo: Datumsbereich mit Range???
+            // case "input_date_range": // Datums-Range (Von - Bis)
+            //     return `
+            //     <div class="form-group range-group" data-focusable="true">
+            //         <label>${field.label}</label>
+            //         <div style="display:flex; gap:5px;">
+            //             <input type="date" name="${field.field_name}_start" value="${rangeValues[0] ?? ''}">
+            //             <input type="date" name="${field.field_name}_end" value="${rangeValues[1] ?? ''}">
+            //         </div>
+            //     </div>`;
 
+            case "checkbox":
+                const isChecked = value === true || value === "true" || value === 1 || value === "1";
+                return `
+                <div class="form-group checkbox-group" data-focusable="true">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" name="${field.field_name}" ${isChecked ? 'checked' : ''}>
+                        ${field.label}
+                    </label>
+                </div>`;
 
-    /**
-     * Parst einen neu hinzugefügten DOM-Bereich und bindet dynamische JS-Module an Buttons
-     * @param {HTMLElement|null} container 
-     */
-    parseContainer(container) {
-        if (!container) {return;}
-        // 1. Suche nach interaktiven Elementen (z.B. Buttons mit Modul-Zuweisung)
-        const buttons = container.querySelectorAll("button[data-module]");
-        buttons.forEach(async (btn) => {
-            const modulePath = btn.getAttribute("data-module");
-            const functionName = btn.getAttribute("data-function");
+            case "select": // Dropdown-Auswahl
+                let optionsHtml = "<option value=''>-- Bitte wählen --</option>";
+                const currentVal = cleanVal;
 
-            if (modulePath && functionName) {
-                // Dynamischer JavaScript-Import zur Laufzeit!
-                try {
-                    const module = await import(modulePath);
-                    btn.addEventListener("click", (e) => {
-                        // Rufe die Funktion auf und übergebe den aktuellen Sync-Server & Kontext
-                        // todo: Daten als Datensatz Übergeben ????
-                        module[functionName]({ event: e, sync: this.sync, btn: btn });
-                    });
-                } catch (err) {
-                    console.error(`Fehler beim Laden des Moduls ${modulePath}:`, err);
+                // 1. Priorität: Dynamisch übergebene Listen von der App
+                if (this.dynamicOptions.has(field.field_name)) {
+                    const optionsList = this.dynamicOptions.get(field.field_name) || [];
+                    for (let i = 0; i < optionsList?.length; i++) {
+                        const opt_key = Array.isArray(optionsList[i]) ? optionsList[i][0] : optionsList[i];
+                        const opt_value = Array.isArray(optionsList[i]) ? optionsList[i][1] : optionsList[i];
+                        optionsHtml += `<option value="${opt_value}" ${currentVal == opt_value ? 'selected' : ''}>${opt_key}</option>`;
+                    };
                 }
-            }
-        });
-
-        // 2. Klick-Navigation zur Maus-Unterstützung
-        container.addEventListener("click", (e) => {
-            const target = e.target;
-            if (!(target instanceof HTMLElement)) { return; }
-            const viewContainer = target.closest(".ui-view-container");
-            if (viewContainer instanceof HTMLElement) {
-                this.focusContainer(viewContainer);
-
-                // Falls auf eine Tabellenzeile geklickt wurde:
-                const tr = target.closest("tr");
-                const tr_parent = tr?.parentNode;
-                if (tr && tr_parent instanceof HTMLElement && tr_parent.tagName === "TBODY") {
-                    this.activeRowIdx = tr.rowIndex - 1; // Ohne Header
-                    this.updateVisualFocus();
-                }
-            }
-        });
-    }
-
-    /**
-     * Setzt den Fokus auf das angegebene Element
-     * @param {HTMLElement|null} el - Element welches den Fokus erhält
-     */
-    focusContainer(el) {
-        if (!el) {return;}
-        if (this.activeContainer) this.activeContainer.classList.remove("focused");
-        this.activeContainer = el;
-        this.activeContainer.classList.add("focused");
-        this.activeContainer.focus();
-        this.activeRowIdx = 0;
-        this.activeColIdx = 0;
-        this.updateVisualFocus();
-    }
-
-    initGlobalEvents() {
-        window.addEventListener("keydown", (e) => {
-            if (!this.activeContainer) return;
-
-            const targetType = this.activeContainer.getAttribute("data-target-type");
-
-            if (targetType === "LIST" || targetType === "MENU") {
-                this.handleTableNavigation(e);
-
-            } else if (targetType === "FORM") {
-                this.handleFormNavigation(e);
-            }
-            // Alt + Pfeiltasten für Spaltenwechsel
-            if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-                const currentCol = this.activeContainer.closest(".app-column");
-                if (!currentCol) return;
-                const currentIdx = parseInt(currentCol.getAttribute("data-col-index") || "0", 10);
-                let targetIdx = e.key === "ArrowLeft" ? currentIdx - 1 : currentIdx + 1;
-                const targetCol = this.appContainer.querySelector(`.app - column[data - col - index="${targetIdx}"]`);
-                if (targetCol) {
-                    const viewContainer = targetCol.querySelector(".ui-view-container");
-                    if (viewContainer instanceof HTMLElement) {
-                        this.focusContainer(viewContainer);
-                        e.preventDefault();
+                // 2. Priorität: Fallback auf dein infoSchema Enum
+                else if (schema && field.field_name) {
+                    const enumObj = schema.getEnum(field.field_name) || schema.getEnum("InfoUIInputType"); // Dynamisch passend
+                    if (enumObj && enumObj.values) {
+                        // Da 'values' nun ein Array ist (voriger Schritt!), können wir direkt forEach nutzen!
+                        enumObj.values.forEach(val => {
+                            optionsHtml += `<option value="${val}" ${currentVal == val ? 'selected' : ''}>${val}</option>`;
+                        });
                     }
                 }
+
+                return `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <select name="${field.field_name}" data-field="${field.field_name}">${optionsHtml}</select>
+                </div>`;
+
+            case "button":
+                // Wir nutzen 'action_function' als sprechenden Event-Namen (z.B. "addSchema")
+                const actionName = field.action_function || field.field_name;
+                return `
+                <div class="form-group button-group">
+                    <button type="button" class="ui-btn" data-focusable="true" 
+                            data-action="${actionName}">
+                        ${field.label}
+                    </button>
+                </div>`;
+
+            default:
+                return `
+                <div class="form-group" data-focusable="true">
+                    <label>${field.label}</label>
+                    <input type="text" name="${field.field_name}" value="${cleanVal}">
+                </div>`;
+        }
+    }
+
+    /**
+     * Generiert ein HTML-Formular
+     * @returns {string}
+     */
+    render() {
+        const fields = this.fields;
+
+        let html = `<form class="ui-view-container" data-form-id="${this.id}">`;
+
+        //fields.forEach(field => {
+        for (let i = 0; i < fields.length; i++) {
+            // todo: input Formate Festlegen
+            // todo: eingabe Schema prüfen ????
+            const val = this.dataObject ? this.dataObject[fields[i].field_name] : "";
+
+            // Input HTML zusammenbauen
+            html += this.get_input_html(fields[i], val);
+        };
+
+        html += `</form>`;
+
+        // Nach dem Einfügen ins DOM müssen wir Event-Listener für Live-Validierung binden
+        //setTimeout(() => this.#bindLiveValidation(schemaInstance), 0);
+
+        // Form und inputs zurücksetzen
+        this.formElement = null;
+        this.inputElements = [];
+
+        return html;
+    }
+
+    /**
+     * DatenObjekt setzen
+     * @param {Object<string,any>} newDataObject - neue Datentabelle setzen 
+     */
+    set_dataObject(newDataObject) {
+        this.dataObject = newDataObject;
+        if (this.domElement) {
+            // HTML neu erzeugen
+            this.domElement.innerHTML = this.render();
+
+            // todo: Fokus-Index zurücksetzen ???
+            //this.activeRowIdx = 0;
+            //this.updateVisualFocus();
+        }
+    }
+
+    /**
+     * Erlaubt es der App, Dropdown-Daten zur Laufzeit zu setzen
+     * @param {string} fieldName 
+     * @param {Array<Array<any>>|Array<string>} options 
+     */
+    setSelectOptions(fieldName, options) {
+        this.dynamicOptions.set(fieldName, options);
+
+        // Falls das Formular bereits im DOM ist, rendern wir es neu
+        if (this.domElement) {
+            this.domElement.innerHTML = this.render();
+        }
+    }
+
+    /**
+     * Liest die aktuellen Formulardaten als flaches Objekt aus
+     * @returns {Object<string,any>|null}
+     */
+    getValues() {
+        this.formElement = this.formElement || this.domElement?.querySelector("form");
+        if (!this.formElement) return null;
+
+        // Erzeugt automatisch ein Key-Value-Objekt aller Felder
+        const formData = new FormData(this.formElement);
+        /** @type {Object<string,any>} */
+        const daten = Object.fromEntries(formData);
+
+        // Typ-Konvertierung basierend auf deinen Formularfeldern
+        this.fields.forEach(field => {
+            if (field.ui_element === "input_number" && daten[field.field_name] !== "") {
+                daten[field.field_name] = Number(daten[field.field_name]);
+            }
+            if (field.ui_element === "checkbox") {
+                // FormData überträgt gecheckte Checkboxen als "on", ungecheckte gar nicht
+                daten[field.field_name] = formData.has(field.field_name);
             }
         });
+
+        return daten;
+    }
+
+    /**
+     * Validiert das gesamte Formular gegen ein Schema
+     * @param {Schema} [schema] 
+     * @returns {boolean}
+     */
+    validate(schema) {
+        if (!schema || !this.domElement) return false; //
+
+        this.formElement = this.formElement || this.domElement.querySelector("form");
+        if (!this.formElement) return false; //
+
+        // Daten in Objekt lesen
+        const aktuelleDaten = this.getValues();
+        if (!aktuelleDaten) return false;
+
+        // todo: Schema Objekt Name ????
+        // Nutzt die von dir geschriebene validateObject-Methode
+        const validationResult = schema.validateObject(this.id, aktuelleDaten); //
+
+        // 3. Bestehende Fehlermeldungen im DOM aufräumen
+        this.formElement.querySelectorAll(".input-error").forEach(el => el.classList.remove("input-error")); //
+        this.formElement.querySelectorAll(".error-message").forEach(el => el.remove()); //
+
+        // 4. Fehler im UI anzeigen, falls vorhanden
+        if (!validationResult.valid && validationResult.propValids) { //
+            validationResult.propValids.forEach(propError => { //
+                if (!propError.valid) { //
+                    const input = this.formElement?.querySelector(`[name="${propError.property}"]`);
+                    if (input) {
+                        input.classList.add("input-error"); //
+                        const errorSpan = document.createElement("span"); //
+                        errorSpan.className = "error-message"; //
+                        errorSpan.style.cssText = "color: #d0021b; font-size: 11px; display: block; margin-top: 2px;"; //
+                        errorSpan.textContent = propError.error || "Ungültiger Wert"; //
+                        input.parentNode?.appendChild(errorSpan); //
+                    }
+                }
+            });
+        }
+
+        return validationResult.valid; //
     }
 
     // initGlobalEvents_old() {
     //     window.addEventListener("keydown", (e) => {
     //         if (!this.activeContainer) return;
 
-    //         const targetType = this.activeContainer.getAttribute("data-target-type");
+    /** 
+    * Vom Controller delegiertes Event für die interne Formularsteuerung 
+    * @param {KeyboardEvent} e - Tastatur Event
+    */
+    handleKeyDown(e) {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) { return; }
 
-    //         if (targetType === "LIST" || targetType === "MENU") {
-    //             this.handleTableNavigation(e); // Nutzt dieselbe Zeilen-Navigation
-    //         } else if (targetType === "FORM") {
-    //             this.handleFormNavigation(e);
-    //         }
-    //     });
-    // }
+        // Prüfen, ob das Event überhaupt aus einem Eingabefeld kommt
+        if (!target.matches('input, textarea, select, button')) return;
 
+        /**
+         * Formular-Hilfsfunktion für die Navigation
+         * @param {"next"|"prev"} direction - Richtung in die gegangen wird
+        */
+        const navigateTo = (direction) => {
+            this.formElement = this.formElement || target.closest('form');
+            if (!this.formElement) return;
+            this.inputElements = this.inputElements || Array.from(this.formElement.querySelectorAll('input:not([type="hidden"]):not([disabled]), textarea, select, button'));
+            const index = this.inputElements.indexOf(target);
 
+            if (direction === 'next' && index < this.inputElements.length - 1) {
+                this.inputElements[index + 1].focus();
+            } else if (direction === 'prev' && index > 0) {
+                this.inputElements[index - 1].focus();
+            }
+        };
 
-    /**
-     * Verarbeitet die TastaturEvents auf einer Tabelle
-     * @param {KeyboardEvent} e - Event für die Tastur Eingaben
-     * @returns {ClientServerMessage|undefined}
-     */
-    handleTableNavigation(e) {
-        const tbody = this.activeContainer?.querySelector("tbody");
-        const thead = this.activeContainer?.querySelector("thead");
-        if (!tbody || !thead) return;
+        // Sonderfall - Wenn TextArea
+        if (target instanceof HTMLTextAreaElement) {
+            // Tabulator
+            if (e.key === 'Tab' && !e.shiftKey) {
+                e.preventDefault(); // Verhindert das Verlassen der Textarea
 
-        const maxRows = tbody.rows.length;
-        const tableId = this.activeContainer?.getAttribute("data-table-id") || "";
+                const start = target.selectionStart;
+                const end = target.selectionEnd;
+                const val = target.value;
 
-        // Hole den technischen Spaltennamen basierend auf der aktuellen Zelle
-        const th = thead.rows[0].cells[this.activeColIdx];
-        const columnName = th?.getAttribute("data-col-name") || "";
+                // Fügt an der Cursorposition ein Tab-Zeichen (oder 4 Leerzeichen) ein
+                target.value = val.substring(0, start) + "\t" + val.substring(end);
 
-        // Standard-Pfeiltasten-Navigation (Zelle / Zeile wechseln)
-        if (e.key === "ArrowRight") {
-            const currentRowsCells = tbody.rows[this.activeRowIdx]?.cells.length || 0;
-            if (this.activeColIdx < currentRowsCells - 1) { this.activeColIdx++; e.preventDefault(); }
-        }
-        if (e.key === "ArrowLeft") {
-            if (this.activeColIdx > 0) { this.activeColIdx--; e.preventDefault(); }
-        }
-        if (e.key === "ArrowDown" && this.activeRowIdx < maxRows - 1) {
-            this.activeRowIdx++; e.preventDefault();
-        }
-        if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
-            this.activeRowIdx--; e.preventDefault();
-        }
+                // Setzt den Cursor direkt hinter das eingefügte Tab-Zeichen
+                target.selectionStart = target.selectionEnd = start + 1;
+                return;
+            }
 
-        // --- NEU: TASTENBEFEHLE FÜR AKTIONEN ---
+            // Enter
+            if (e.key === 'Enter') {
+                // Wenn NUR Enter gedrückt wird, erlauben wir den Zeilenumbruch.
+                // Wir verhindern, dass ein übergeordnetes Formular-Submit ausgelöst wird.
+                e.stopPropagation();
 
-        // 1. SORTIEREN (Taste "s" oder "S")
-        if (e.key.toLowerCase() === "s" && columnName) {
-            e.preventDefault();
-            const mode = "CLIENT"; // Oder "SERVER" per Konfigurations-Flag der App
+                // Optional: Wenn Strg+Enter oder Meta+Enter das Formular trotz Textarea abspeichert:
+                // if (e.ctrlKey || e.metaKey) {
+                //     e.preventDefault();
+                //     this.submitForm(); // Ruft deine Speicher-Logik auf
+                // }
+                return; // Breche hier ab, damit der Zeilenumbruch normal durchgeführt wird
+            }
 
             if (mode === "CLIENT") {
                 console.log(`Lokal sortieren nach: ${columnName}`);
                 const currentTable = this.loadedTables.get(tableId);
 
-                if (currentTable) {
-                    currentTable.sort([columnName]); // Ihre eingebaute Sortierfunktion
-
-                    // 1. HTML mit den frisch sortierten Daten neu generieren
-                    const updatedHtml = UiGenerator.generateTable(tableId, this.infoTableUI, currentTable);
-
-                    // 2. KORREKTUR: Die soeben geschriebene Methode nutzen, um das HTML auszutauschen
-                    this.renderOrUpdateColumn(tableId, "LIST", currentTable, updatedHtml || "");
-                }
-            } else {
-                // Server-seitig
-                return {type: "GET_DATA", tableName: tableId, targetType: "LIST", payload: { action: "SORT", column: columnName } };
+            // Feature A: Umschalt + Pfeiltaste Unten/Oben springt SOFORT zum nächsten Feld
+            if (e.shiftKey && e.key === 'ArrowDown') {
+                e.preventDefault();
+                navigateTo('next');
+                return;
             }
+            if (e.shiftKey && e.key === 'ArrowUp') {
+                e.preventDefault();
+                navigateTo('prev');
+                return;
+            }
+
+            // Feature B: Normale Pfeiltasten prüfen, ob Cursor ganz oben/unten steht
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                const start = target.selectionStart;
+                const val = target.value;
+
+                if (e.key === 'ArrowUp') {
+                    // Steht der Cursor in der allerersten Zeile? 
+                    // Wenn vor dem Cursor kein Zeilenumbruch (\n) mehr kommt, sind wir ganz oben.
+                    const befindetSichGanzOben = !val.substring(0, start).includes('\n');
+                    if (befindetSichGanzOben) {
+                        e.preventDefault();
+                        navigateTo('prev');
+                        return;
+                    }
+                }
+
+                if (e.key === 'ArrowDown') {
+                    // Steht der Cursor in der allerletzten Zeile?
+                    // Wenn nach dem Cursor kein Zeilenumbruch (\n) mehr kommt, sind wir ganz unten.
+                    const befindetSichGanzUnten = !val.substring(start).includes('\n');
+                    if (befindetSichGanzUnten) {
+                        e.preventDefault();
+                        navigateTo('next');
+                        return;
+                    }
+                }
+            }
+            return;
         }
 
-        // 2. FILTERN (Taste "f" oder "F")
-        if (e.key.toLowerCase() === "f" && columnName) {
+        // Wenn Enter auf einem Button gedrückt wird -> Aktion auslösen
+        if (e.key === "Enter" && target.tagName.toLowerCase() === "button") {
             e.preventDefault();
             const activeCell = tbody.rows[this.activeRowIdx]?.cells[this.activeColIdx];
             const cellValue = activeCell?.textContent;
             const mode = "CLIENT";
 
-            if (mode === "CLIENT") {
-                console.log(`Lokal filtern: ${columnName} = ${cellValue}`);
-                const currentTable = this.loadedTables.get(tableId);
-                if (currentTable) {
-                    // Erstellt eine gefilterte Kopie oder mutiert die Tabelle temporär
-                    const filteredTable = currentTable.filter(columnName, cellValue);
-                    AppCore.refreshColumnHTML(tableId, filteredTable);
-                }
-            } else {
-                // Server-seitig
-                return {type: "GET_DATA", tableName: tableId, targetType: "LIST", payload: { action: "FILTER", column: columnName, value: cellValue }};
+            const actionName = target.getAttribute("data-action");
+            if (actionName) {
+                this.trigger(actionName);
+                // this.domElement?.dispatchEvent(new CustomEvent("form-action", {
+                //     bubbles: true,
+                //     detail: {
+                //         formId: this.id,
+                //         action: actionName,
+                //         values: this.getValues() // Schickt direkt alle aktuellen Formulardaten mit!
+                //     }
+                // }));
+            }
+            return;
+        }
+
+
+        // // 2. STANDARD-INPUTS: Enter-Taste (Formular absenden oder Aktion ausführen)
+        // if (e.key === 'Enter') {
+        //     e.preventDefault(); // Verhindert das unkontrollierte Neuladen der Seite
+        //     this.submitForm();
+        //     return;
+        // }
+
+        // Normale Inputs
+        if (target instanceof HTMLInputElement && target.type !== 'range') {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                navigateTo('next');
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                navigateTo('prev');
             }
         }
+    }
 
-        // 3. REFRESH VOM SERVER ERZWINGEN (Taste "r" oder "R")
-        if (e.key.toLowerCase() === "r") {
+    /**
+     * Verarbeitet ein Mous Event
+     * @param {MouseEvent} e - Maus Event
+     */
+    handleMouseClick(e) {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        // Prüfen, ob ein Button mit einer registrierten Aktion geklickt wurde
+        if (target.tagName.toLowerCase() === "button" && target.hasAttribute("data-action")) {
             e.preventDefault();
-            return{ type:"GET_DATA", tableName: tableId, targetType: "LIST", payload: { action: "REFRESH" } };
+            const actionName = target.getAttribute("data-action");
+            if (actionName) {
+                this.trigger(actionName);
+                // this.domElement?.dispatchEvent(new CustomEvent("form-action", {
+                //     bubbles: true,
+                //     detail: {
+                //         formId: this.id,
+                //         action: actionName,
+                //         values: this.getValues()
+                //     }
+                // }));
+            }
+        }
+    }
+}
+
+
+export class InfoUIVerticalForm extends InfoUIForm {
+    /**
+     * Eine Formular Komponente
+     * @param {string} id - ID der Komponente
+     * @param {string} title - Titel der angezeigt wird
+     * @param {DataTable<any>} [dataTable] - Optional Datentabelle
+     * @param {string} [keyField] - Optional Name der Key Spalte
+     * @param {string} [valueField] - Optional Name der Value Spalte
+     */
+    constructor(id, title, dataTable, keyField, valueField) {
+        super(id, title);
+
+        this.dataTable = dataTable;
+        this.keyField = keyField;
+        this.valueField = valueField;
+
+        /** @type {string|undefined} */
+        this.dataIndex = undefined;
+    }
+
+    /**
+     * @returns {string}
+     */
+    render() {
+        if (!this.dataTable || !this.keyField || !this.valueField) {
+            return "<p>No DataTable or KeyField or ValueField</p>"
         }
 
-        // 4. ENTER (Datensatz öffnen / in die nächste Spalte wandern)
-        if (e.key === "Enter") {
-            e.preventDefault();
-            const activeRow = tbody.rows[this.activeRowIdx];
-            const recordId = activeRow?.getAttribute("data-record-id");
+        let html = `<form class="ui-view-container" data-form-id="${this.id}">`;
 
-            return {type: "GET_DATA", tableName: tableId, recordId: recordId, targetType: "FORM" };
+        const keyIndex = this.dataTable.columnIndex[this.keyField];
+        const valueIndex = this.dataTable.columnIndex[this.valueField];
+
+        // Label aus der UI-Config holen, falls vorhanden, sonst den Key nutzen
+        const uiKeyField = this.fields[this.fieldIndex[this.keyField]];
+        const uiValueField = this.fields[this.fieldIndex[this.valueField]];
+
+        const input_type = uiValueField.ui_element;
+
+        // Zeilen aus den echten Daten rendern (Index 0 auslassen, da Header im Datentreiber)
+        // Index für Sortierung und Filter
+        const dataRowIndex = this.dataTable.getIndexList(this.dataIndex);
+
+        for (let i = 0; i < dataRowIndex.length; i++) {
+            if (dataRowIndex[i] === 0) continue;
+
+            // Datenzeile lesen
+            const row = this.dataTable.getRow(dataRowIndex[i]);
+            if (!row) { continue; }
+
+            // Datensatz ID todo: Optimieren: eventuell SpaltenIndex ?????
+            const recordId = this.dataTable.getID(row);
+
+            // Angenommen, die Tabelle hat die Spalten "key" (oder parameter) und "value"
+            const key = row[keyIndex];
+            const val = row[valueIndex];
+
+            //const labelText = uiField ? uiField.label : key;
+            const labelText = key;
+
+            // todo: datensatzID damit das richtig gespeichert wird
+            // todo: input-typ lesen
+            html += this.get_input_html(uiValueField, val);
         }
 
-        this.updateVisualFocus();
+        html += `</form>`;
+
+        // Form und inputs zurücksetzen
+        this.formElement = null;
+        this.inputElements = [];
+
+        return html;
+    }
+
+    /**
+     * DatenTabelle setzen
+     * @param {DataTable<any>} newDataTable - neue Datentabelle setzen 
+     * @param {string} [newDataIndex] - Optional neuer Index
+     */
+    set_dataTable(newDataTable, newDataIndex) {
+        this.dataTable = newDataTable;
+        this.dataIndex = newDataIndex || this.dataIndex;
+        if (this.domElement) {
+            // HTML neu erzeugen
+            this.domElement.innerHTML = this.render();
+        }
     }
 
 
-    // /**
-    //  * Verarbeitet die TastaturEvents auf einer Tabelle
-    //  * @param {KeyboardEvent} e - Event für die Tastur Eingaben
-    //  * @returns {void}
+    // /** 
+    //  * Vom Controller delegiertes Event für die interne Tabellensteuerung 
+    //  * @param {KeyboardEvent} e - Tastatur Event
     //  */
-    // handleTableNavigation_old2(e) {
-    //     const targetType = this.activeContainer?.getAttribute("data-target-type");
+    // handleKeyDown(e) {
+    // }
+}
 
     //     // Abstraktion: Entweder Zeilen im tbody (Tabelle) oder li-Elemente (Menü)
     //     const items = targetType === "MENU"
     //         ? Array.from(this.activeContainer?.querySelectorAll(".ui-menu-item") || [])
     //         : Array.from(this.activeContainer?.querySelectorAll("tbody tr") || []);
 
-    //     if (items.length === 0) return;
+export class InfoUIDatail extends InfoUIComponent {
+    /**
+     * Eine Detail Komponente
+     * @param {string} id - ID der Komponente
+     * @param {string} title - Titel der angezeigt wird
+     * @param {Object<string,any>} [dataObject] - Optional Datentabelle
+     */
+    constructor(id, title, dataObject) {
+        super(id);
+        this.title = title;
+        this.dataObject = dataObject;
 
-    //     if (e.key === "ArrowDown" && this.activeRowIdx < items.length - 1) {
-    //         this.activeRowIdx++; e.preventDefault();
-    //     }
-    //     if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
-    //         this.activeRowIdx--; e.preventDefault();
-    //     }
+        this.activeRowIdx = 0;
+    }
 
-    //     if (e.key === "Enter") {
-    //         e.preventDefault();
-    //         const activeItem = items[this.activeRowIdx];
-    //         const recordId = activeItem.getAttribute("data-record-id");
-    //         const tableId = this.activeContainer?.getAttribute("data-table-id");
+    /** @type {Array<InfoUIDetailField>} */
+    fields = [];
 
-    //         // Über die Kanten-Spezifikation (InfoEdge) weiß der Server, was als nächstes kommt!
-    //         this.sync.ws?.send(JSON.stringify({
-    //             type: "GET_DATA",
-    //             tableName: tableId,
-    //             recordId: recordId,
-    //             targetType: targetType === "MENU" ? "LIST" : "FORM"
-    //         }));
-    //     }
+    /** @type {Object<string,number>} */
+    fieldIndex = {};
 
-    //     this.updateVisualFocus();
-    // }
+    sort() {
+        this.fields = this.fields.sort((a, b) => a.position - b.position);
+    }
 
+    createIndex() {
+        this.fieldIndex = {};
+        for (let i = 0; i < this.fields.length; i++) {
+            this.fieldIndex[this.fields[i].field_name] = this.fields[i].position;
+        }
+    }
 
-    // /**
-    //  * Verarbeitet die TastaturEvents auf einer Tabelle
-    //  * @param {KeyboardEvent} e - Event für die Tastur Eingaben
-    //  * @returns {void}
-    //  */
-    // handleTableNavigation_old(e) {
-    //     const tbody = this.activeContainer?.querySelector("tbody");
-    //     if (!tbody) return;
-    //     const maxRows = tbody.rows.length;
+    /**
+     * Fügt eine neue Tabellenspalte hinzu
+     * @param {string} field_name - name der Spalte
+     * @param {string} label - Text der Angezeigt wird
+     * @param {string} [format] - Formatierung der Spalte. Funktion ?????
+     * @param {number} [position] - Optional Position der Spalte. Verschiebt alle folgenden Spalten. -1 Wenn hinten anfügen
+     */
+    add_field(field_name, label, format, position = -1) {
+        // neues Object
+        let obj = { field_name, label, format, position };
 
-    //     if (e.key === "ArrowDown" && this.activeRowIdx < maxRows - 1) {
-    //         this.activeRowIdx++; e.preventDefault();
-    //     }
-    //     if (e.key === "ArrowUp" && this.activeRowIdx > 0) {
-    //         this.activeRowIdx--; e.preventDefault();
-    //     }
+        // prüfen ob vorhanden
+        let fieldIndex = this.fieldIndex[field_name] || -1;
+        if (fieldIndex >= 0) {
+            // Vorhandenes ersetzen unabhängig von position
+            obj.position = fieldIndex;
+            this.fields[fieldIndex] = obj;
+        } else {
+            // nicht vorhanden
+            if (position == undefined || position < 0) {
+                obj.position = this.fields.push(obj) - 1;
+                this.fieldIndex[obj.field_name] = obj.position;
+            } else {
+                // an neuer Position einfügen
+                this.fields.splice(position, 0, obj);
 
-    //     if (e.key === "Enter") {
-    //         e.preventDefault();
-    //         const activeRow = tbody.rows[this.activeRowIdx];
-    //         const recordId = activeRow.getAttribute("data-record-id");
-    //         const tableId = this.activeContainer?.getAttribute("data-table-id");
+                // index neu aufbauen
+                this.createIndex();
+            }
+        }
+    }
 
     //         // Trigger an Server (Nächste Spalte anfordern)
     //         this.sync.ws?.send(JSON.stringify({
@@ -767,108 +1281,376 @@ export class UiController {
     //         }));
     //     }
 
-    //     this.updateVisualFocus();
-    // }
+    /**
+     * Generiert ein HTML-Formular
+     * @returns {string}
+     */
+    render() {
+        if (!this.dataObject) { return "<p>No DataObject!</p>" }
+        const fields = this.fields;
+
+        let html = `<div class="ui-view-container" data-detail-id="${this.id}">`;
+
+        // Tabelle
+        html += `<table><tbody>`;
+
+        //fields.forEach(field => {
+        for (let i = 0; i < fields.length; i++) {
+            const format = fields[i].format;
+            let val = this.dataObject[fields[i].field_name];
+            if (format) {
+                val = this.getFormat(format, val);
+            }
+            // Input HTML zusammenbauen
+            html += `<tr><th>${fields[i].label}</th><td>${val}</td></tr>`;
+        };
+
+        html += `</tbody></table></div>`;
+
+        return html;
+    }
+
 
     /**
-     * Verarbeitet die TastaturEvents auf einem Formular
-     * @param {KeyboardEvent} e - Event für die Tastur Eingaben
-     * @returns {ClientServerMessage|undefined}
+     * DatenObjekt setzen
+     * @param {Object<string,any>} newDataObject - neue Datentabelle setzen 
      */
-    handleFormNavigation(e) {
-        // Im Formular navigieren wir durch die Elemente mit "data-focusable"
-        const focusables = Array.from(this.activeContainer?.querySelectorAll("[data-focusable='true']") || []);
-        let currentIdx = document.activeElement ? focusables.indexOf(document.activeElement) : 0;
+    set_dataObject(newDataObject) {
+        this.dataObject = newDataObject;
+        if (this.domElement) {
+            // HTML neu erzeugen
+            this.domElement.innerHTML = this.render();
 
-        if (e.key === "ArrowDown" || e.key === "Tab") {
+            // todo: Fokus-Index zurücksetzen ???
+            //this.activeRowIdx = 0;
+            //this.updateVisualFocus();
+        }
+    }
+
+
+    /** 
+     * Vom Controller delegiertes Event für die interne Tabellensteuerung 
+     * @param {KeyboardEvent} e - Tastatur Event
+     */
+    handleKeyDown(e) {
+        const container = this.domElement?.querySelector(".ui-view-container");
+        if (!container) return;
+
+        // Da es keine Inputs gibt, scrollen wir die Komponente sanft per Tastatur
+        if (e.key === "ArrowDown") {
+            container.scrollTop += 30;
             e.preventDefault();
-            currentIdx = (currentIdx + 1) % focusables.length;
-            //@ts-ignore
-            focusables[currentIdx].focus();
+            this.trigger("row-select");
         }
         if (e.key === "ArrowUp") {
+            container.scrollTop -= 30;
             e.preventDefault();
-            currentIdx = (currentIdx - 1 + focusables.length) % focusables.length;
-            //@ts-ignore
-            focusables[currentIdx].focus();
+            this.trigger("row-select");
         }
         return;
     }
+}
 
     updateVisualFocus() {
         if (!this.activeContainer) return;
 
-        // Alle alten Fokuseffekte aufheben
-        //@ts-ignore todo: Verbessern
-        this.activeContainer.querySelectorAll(".active-row, .active-menu-item").forEach(el => {
-            el.classList.remove("active-row", "active-menu-item");
-        });
+// ==========================================
+//   Spalten UI
+// --------------
 
         const targetType = this.activeContainer.getAttribute("data-target-type");
 
-        if (targetType === "MENU") {
-            const items = this.activeContainer.querySelectorAll(".ui-menu-item");
-            if (items[this.activeRowIdx]) items[this.activeRowIdx].classList.add("active-menu-item");
-        } else if (targetType === "LIST") {
-            const tbody = this.activeContainer.querySelector("tbody");
-            if (tbody && tbody.rows[this.activeRowIdx]) tbody.rows[this.activeRowIdx].classList.add("active-row");
-        }
+// infoui.js (Fortsetzung)
+export class UiColumn {
+    /**
+     * UI Spalte in der Benutzeroberfläche
+     * @param {string} title - Titel in der Zeile
+     * @param {number} colIndex - Spalten Index
+     */
+    constructor(title, colIndex) {
+        this.title = title;
+        this.colIndex = colIndex;
+        /** @type {Array<InfoUIComponent>} Vertical gestapelte Komponenten */
+        this.components = [];
+        this.activeComponentIdx = 0;
+        this.domElement = null;
     }
 
-    // updateVisualFocus_old() {
-    //     if (!this.activeContainer) return;
+    /**
+     * Fügt eine Komponente zur Spalte hinzu
+     * @param {InfoUIComponent} component - Tabelle,Form/Detail, .. Komponente
+     */
+    addComponent(component) {
+        this.components.push(component);
+    }
+
+    /**
+     * Gibt die aktive Komponente zurück
+     * @returns {InfoUIComponent|null}
+     */
+    get activeComponent() {
+        return this.components[this.activeComponentIdx] || null;
+    }
+
+    /** Baut das HTML für die gesamte Spalte inklusive aller Sub-Komponenten */
+    render() {
+        const colDiv = document.createElement("div");
+        colDiv.className = "app-column";
+        colDiv.setAttribute("data-col-index", this.colIndex.toString());
+        colDiv.style.cssText = "display: flex; flex-direction: column; width: 350px; min-width: 350px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e1e4e8; height: 100%;";
+
+        colDiv.innerHTML = `
+            <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
+                ${this.title}
+            </div>
+            <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 15px;">
+                <!-- Komponenten werden hier eingehängt -->
+            </div>
+        `;
+
+        const body = colDiv.querySelector(".app-column-body");
+        if (body) {
+            this.components.forEach(comp => {
+                const compWrapper = document.createElement("div");
+                compWrapper.className = "ui-component-wrapper";
+                compWrapper.innerHTML = comp.render();
+                comp.domElement = compWrapper; // Verbindung zum DOM halten
+                body.appendChild(compWrapper);
+            });
+        }
+        this.domElement = colDiv;
+        return colDiv;
+    }
+}
+
+// ==========================================
+//   UI Controller
+// ----------------------
 
     //     // Entferne alte CSS-Klassen
     //     this.activeContainer.querySelectorAll(".active-row").forEach(el => el.classList.remove("active-row"));
 
-    //     const type = this.activeContainer.getAttribute("data-ui-type");
-    //     if (type === "table") {
-    //         const tbody = this.activeContainer.querySelector("tbody");
-    //         if (tbody && tbody.rows[this.activeRowIdx]) {
-    //             tbody.rows[this.activeRowIdx].classList.add("active-row");
-    //         }
-    //     }
-    // }
+// infoui.js (Fortsetzung)
+export class UiController {
+    /**
+     * 
+     * @param {HTMLElement} appContainer 
+     */
+    constructor(appContainer) {
+        this.appContainer = appContainer;
+        /** @type {Array<UiColumn>} */
+        this.columns = [];
+        this.activeColIdx = 0;
+
+        this.#initGlobalListeners();
+    }
+
+    /** Gibt die aktuell aktive Spalte zurück */
+    get activeColumn() {
+        return this.columns[this.activeColIdx] || null;
+    }
+
 
     /**
-     * Prüft alle Felder eines Formulars gegen die geladenen Schemas
-     * @param {HTMLElement} formContainer 
+     * Fügt eine fertig konfigurierte Spalte hinzu
+     * @param {UiColumn} uiColumn - UI Spalte zur Anzeige
      */
-    validateFormFields(formContainer) {
-        const formId = formContainer.getAttribute("data-form-id");
-        const inputs = formContainer.querySelectorAll("input[data-field]");
-        let hasAnyError = false;
+    addColumn(uiColumn) {
+        // Kaskadierendes Abschneiden rechts von der aktuellen Spalte
+        if (this.activeColumn) {
+            this.columns = this.columns.slice(0, this.activeColIdx + 1);
+            const clearCols = this.appContainer.querySelectorAll(".app-column");
+            clearCols.forEach(col => {
+                if (parseInt(col.getAttribute("data-col-index") || "", 10) > this.activeColIdx) col.remove();
+            });
+        }
 
-        inputs.forEach(input => {
-            const fieldName = input.getAttribute("data-field");
-            const value = input.value;
+        uiColumn.colIndex = this.columns.length;
+        this.columns.push(uiColumn);
 
-            // Hier rufen Sie Ihre bestehende Schema-Validierungs-Logik auf!
-            // Angenommen, diese liefert { isValid: false, message: "Pflichtfeld" }
-            const validationResult = YourCustomSchemaClass.validate(formId, fieldName, value);
+        const colHtml = uiColumn.render();
+        this.appContainer.appendChild(colHtml);
+        this.appContainer.scrollTo({ left: this.appContainer.scrollWidth, behavior: "smooth" });
 
-            // Vorherige Fehler-Stylings aufräumen
-            input.classList.remove("input-error");
-            const existingMsg = input.parentNode.querySelector(".error-message");
-            if (existingMsg) existingMsg.remove();
+        // Fokus auf die neue Spalte legen
+        this.switchFocus(this.columns.length - 1, 0);
+    }
 
-            if (!validationResult.isValid) {
-                hasAnyError = true;
-                input.classList.add("input-error"); // Macht den Rahmen z.B. rot via CSS
+    /** 
+     * Schaltet den Fokus sauber um (inkl. CSS-Visualisierung) 
+     * @param {number} colIdx - SpaltenIndex
+     * @param {number} compIdx - KomponentenIndex
+     */
+    switchFocus(colIdx, compIdx) {
+        // Alten Fokus aufheben
+        if (this.activeColumn?.activeComponent) {
+            this.activeColumn.activeComponent.setFocused(false);
+        }
 
-                // Fehlermeldung als Text unter dem Input einfügen
-                const errorSpan = document.createElement("span");
-                errorSpan.className = "error-message";
-                errorSpan.style.cssText = "color: red; font-size: 12px; display: block; margin-top: 4px;";
-                errorSpan.textContent = validationResult.message;
-                input.parentNode.appendChild(errorSpan);
+        this.activeColIdx = colIdx;
+        const col = this.activeColumn;
+        if (col) {
+            col.activeComponentIdx = compIdx;
+            if (col.activeComponent) {
+                col.activeComponent.setFocused(true);
+                // Optional: Scrolle das Element in den sichtbaren Bereich der Spalte
+                col.activeComponent.domElement?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+        }
+    }
+
+    #initGlobalListeners() {
+        // 1. GLOBALES KEYBOARD ROUTING (Zentraler Einstiegspunkt für Performance)
+        window.addEventListener("keydown", (e) => {
+            const col = this.activeColumn;
+            if (!col) return;
+
+            // --- A: STRUKTURELLE NAVIGATION ZWISCHEN SPALTEN (Alt + ArrowLeft/Right) ---
+            if (e.altKey && e.key === "ArrowRight") {
+                if (this.activeColIdx < this.columns.length - 1) {
+                    this.switchFocus(this.activeColIdx + 1, this.columns[this.activeColIdx + 1].activeComponentIdx);
+                    e.preventDefault();
+                }
+                return;
+            }
+            if (e.altKey && e.key === "ArrowLeft") {
+                if (this.activeColIdx > 0) {
+                    this.switchFocus(this.activeColIdx - 1, this.columns[this.activeColIdx - 1].activeComponentIdx);
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            // --- B: STRUKTURELLE NAVIGATION ZWISCHEN VERTIKALEN KOMPONENTEN (Alt + ArrowUp/Down) ---
+            if (e.altKey && e.key === "ArrowDown") {
+                if (col.activeComponentIdx < col.components.length - 1) {
+                    this.switchFocus(this.activeColIdx, col.activeComponentIdx + 1);
+                    e.preventDefault();
+                }
+                return;
+            }
+            if (e.altKey && e.key === "ArrowUp") {
+                if (col.activeComponentIdx > 0) {
+                    this.switchFocus(this.activeColIdx, col.activeComponentIdx - 1);
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            // --- C: DELEGATION AN DIE AKTIVE KOMPONENTE ---
+            // Wenn es kein globaler Steuerungsbefehl war, reichen wir das Event an die Komponente weiter
+            if (col.activeComponent) {
+                col.activeComponent.handleKeyDown(e);
             }
         });
 
-        return !hasAnyError; // Gibt true zurück, wenn alles fehlerfrei ist
+
+        // Innerhalb von #initGlobalListeners() im UiController:
+        this.appContainer.addEventListener("click", (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+
+            const clickedColDom = target.closest(".app-column");
+            const clickedCompDom = target.closest(".ui-component-wrapper");
+
+            if (clickedColDom && clickedCompDom) {
+                const colIdx = parseInt(clickedColDom.getAttribute("data-col-index") || "", 10);
+                const colInstance = this.columns[colIdx];
+
+                if (colInstance) {
+                    const compIdx = colInstance.components.findIndex(c => c.domElement === clickedCompDom);
+                    if (compIdx !== -1) {
+                        // 1. Fokus visuell umschalten (wie gehabt)
+                        this.switchFocus(colIdx, compIdx);
+
+                        // 2. MAGISCHE DELEGATION: Event an die Komponente weiterreichen
+                        const comp = colInstance.components[compIdx];
+                        if (comp) {
+                            comp.handleMouseClick(e);
+                        }
+                    }
+                }
+            }
+        });
+
+        // Innerhalb von #initGlobalListeners() im UiController:
+        this.appContainer.addEventListener("dblclick", (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+
+            const clickedColDom = target.closest(".app-column");
+            const clickedCompDom = target.closest(".ui-component-wrapper");
+
+            if (clickedColDom && clickedCompDom) {
+                const colIdx = parseInt(clickedColDom.getAttribute("data-col-index") || "", 10);
+                const colInstance = this.columns[colIdx];
+
+                if (colInstance) {
+                    const compIdx = colInstance.components.findIndex(c => c.domElement === clickedCompDom);
+                    if (compIdx !== -1) {
+                        // 1. Fokus visuell umschalten (wie gehabt)
+                        this.switchFocus(colIdx, compIdx);
+
+                        // 2. MAGISCHE DELEGATION: Event an die Komponente weiterreichen
+                        const comp = colInstance.components[compIdx];
+                        if (comp) {
+                            comp.handleMouseDblClick(e);
+                        }
+                    }
+                }
+            }
+        });
+
     }
 }
 
+
+
+// HTML-Template: Ein einziger flexibler Container für unendlich anbaubare Spalten nach rechts
+const base_html = `
+<div id="app-container" style="display: flex; flex-direction: row; overflow-x: auto; width: 100vw; height: 100vh; gap: 10px; padding: 10px; box-sizing: border-box;">
+  <!-- Spalten werden hier dynamisch per JS eingehängt -->
+</div>
+`;
+
+const app_html = `
+<f-row class="width: 100vw, height: 100vh">
+  <f-item id="left_menu" class="width:280px;"></f-item>
+  <f-item w-fit style="overflow-x: auto;">
+    <f-row gap-s class="app-container">
+      <!-- Dynamische Spalten(Views) -->
+    </f-row>
+  </f-item>
+</f-row>
+`;
+
+//   <f-item data-col-index="0" class="app-column">
+//     <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
+//       ${title}
+//     </div>
+//     <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px;">
+//       <!-- Tabelle -->
+//       <div class="ui-view-container" data-target-type="LIST" data-table-id="${tableId}" tabindex="0">
+//         <table class="pure-table">
+//           <thead><tr></tr></thead>
+//           <tbody><tr></tr></tbody>
+//         </table>
+//       </div>
+
+//       <!-- Formular -->
+//       <div class="ui-view-container" data-target-type="FORM" data-form-id="${formId}" tabindex="0">
+//         <!-- Input -->
+//         <div class="form-group" data-focusable="true">
+//           <label>${field.label}</label>
+//           <input type="text" data-field="${field.field_name}" value="${value}">
+//         </div>
+//         <!-- Button -->
+//         <button class="ui-btn" data-focusable="true" data-module="${field.action_module || ''}" data-function="${field.action_function || ''}">
+//           ${field.label}
+//         </button>
+//       </div>
+//     </div>        
+//   </f-item>
 
 
 
@@ -886,11 +1668,44 @@ export class RealtimeSync {
 
         /** @type {DataTable<any>|null} - Layout Definitionen vom Server */
         this.uiLayoutTable = null;
+
+        // Lokaler Event-Speicher für Netzwerk-Events
+        /** @type {Object<string,Array<function>>} */
+        this.listeners = {};
+
+        /** Datenabfragen Promices merken */
+        this.pendingRequests = new Map();
     }
 
     /** Gesperrte Datensätze */
     lockedData = new Map();
 
+    /**
+     * Registriert eine CallbackFunktion für ein Event
+     * @param {WebSocketEvents} actionName - Name des Events
+     * @param {function} callback - CallBack Funktion die bei diesem Event aufgerufen wird
+     */
+    on(actionName, callback) {
+        if (!this.listeners[actionName]) this.listeners[actionName] = [];
+        this.listeners[actionName].push(callback);
+    }
+
+    /**
+     * Löst ein Event aus
+     * @param {WebSocketEvents} actionName - Event Funktion
+     * @param {any} eventData - Event Daten
+     */
+    trigger(actionName, eventData) {
+        if (this.listeners[actionName]) {
+            for (let i = 0; i < this.listeners[actionName].length; i++) {
+                if (typeof this.listeners[actionName][i] === "function") {
+                    // Wichtig: Wir übergeben die Daten und optional 'this' als target
+                    //this.listeners[actionName][i]({ ...eventData, target: this });
+                    this.listeners[actionName][i](eventData);
+                }
+            }
+        }
+    }
 
     /**
      * Stellt eine Verbindung mit dem Server her
@@ -904,16 +1719,28 @@ export class RealtimeSync {
             const data = JSON.parse(event.data);
             console.log("vom Server: ", data);
 
+            // Prüfen, ob diese Nachricht zu einer aktiven Anfrage gehört
+            if (data.requestId && this.pendingRequests.has(data.requestId)) {
+                const deferred = this.pendingRequests.get(data.requestId);
+                this.pendingRequests.delete(data.requestId); // Anfrage erledigt, löschen
+
+                // Promise auflösen und die Daten direkt zurückgeben!
+                deferred.resolve(data);
+                return;
+            }
+
+
             switch (data.type) {
                 case "ERROR":
                     // TODO: Fehler anzeigen
                     console.error(data.payload);
+                    this.trigger("on-error", data);
                     break;
 
                 case "INITIAL_STATE":
                     if (data.payload) {
-                        this.uiController.infoTableUI = new DataTable("TableUI", data.payload.infoTables, InfoTableUI_unique);
-                        this.uiController.infoFormUI = new DataTable("FormUI", data.payload.infoForms, InfoFormUI_unique);
+                        // this.uiController.infoTableUI = new DataTable("TableUI", data.payload.infoTables, InfoTableUI_unique);
+                        // this.uiController.infoFormUI = new DataTable("FormUI", data.payload.infoForms, InfoFormUI_unique);
                     }
                 
                     if (data.rows) {
@@ -921,45 +1748,55 @@ export class RealtimeSync {
                         // behandeln wir es wie eine Tabelle, die gerendert wird.
                         const menuTable = new DataTable("System_Menu", data.rows, data.idColName);
 
-                        // Wir nutzen den Generator (für Menüs oder Listen)
-                        // HINWEIS: Hier greifen wir auf das global geladene UI-Schema zu
-                        const html = UiGenerator.generateMenu("System_Menue", this.uiController.infoTableUI, menuTable);
-                        this.uiController.renderOrUpdateColumn("System_Menue", "MENU", menuTable, html);
+                    // Melde der App, dass der Initialzustand (z.B. Hauptmenü-Daten) da ist
+                    this.trigger("on-init", data);
+                    // window.dispatchEvent(new CustomEvent("sync-initial-state", {
+                    //     detail: { rows: data.rows, idColName: data.idColName }
+                    // }));
 
-                        // // Spalte im UI anhängen (Hier nutzen wir Ihr AppCore-Prinzip)
-                        // const targetElement = AppCore.appendColumnHTML("Hauptmenü", html);
+                    // if (data.rows) {
+                    //     // Das Hauptmenü kommt vom Server. Da es im DataTable-Format vorliegt,
+                    //     // behandeln wir es wie eine Tabelle, die gerendert wird.
+                    //     const menuTable = new DataTable("System_Menu", data.rows, data.idColName);
 
-                        // // Controller scannt das Menü für Pfeiltasten & Buttons
-                        // if (this.uiController) {
-                        //     this.uiController.parseContainer(targetElement);
-                        //     this.uiController.focusContainer(targetElement);
-                        // }
-                    }
+                    //     // Wir nutzen den Generator (für Menüs oder Listen)
+                    //     // HINWEIS: Hier greifen wir auf das global geladene UI-Schema zu
+                    //     const html = UiGenerator.generateMenu("System_Menue", this.uiController.infoTableUI, menuTable);
+                    //     this.uiController.renderOrUpdateColumn("System_Menue", "MENU", menuTable, html);
+
+                    //     // // Spalte im UI anhängen (Hier nutzen wir Ihr AppCore-Prinzip)
+                    //     // const targetElement = AppCore.appendColumnHTML("Hauptmenü", html);
+
+                    //     // // Controller scannt das Menü für Pfeiltasten & Buttons
+                    //     // if (this.uiController) {
+                    //     //     this.uiController.parseContainer(targetElement);
+                    //     //     this.uiController.focusContainer(targetElement);
+                    //     // }
+                    // }
                     break;
 
                 case "LOCK_UPDATED":
                     // Optional: Sperr-Status im UI visualisieren (z.B. Zeile rot färben)
+                    this.trigger("on-lock-update", data);
                     break;
 
                 case "DATA":
-                    if (!data.rows) return;
+                    //if (!data.rows) return;
 
                     // Verwandle die Array-of-Arrays Zeilen in ein echtes DataTable-Objekt
-                    const incomingTable = new DataTable(data.tableName || "", data.rows, data.idColName);
-                    let generatedHtml = "";
+                    //const incomingTable = new DataTable(data.tableName || "", data.rows, data.idColName);
 
-                    // Je nach data.targetType die Antwort-Daten verarbeiten
-                    switch (data.targetType) {
-                        case "LIST":
-                            // Generiert die HTML-Tabelle anhand der UI-Konfigurations-Tabelle
-                            generatedHtml = UiGenerator.generateTable(data.tableName || "", this.uiLayoutTable, incomingTable) || "";
-                            break;
+                    this.trigger("on-data", data);
 
-                        case "FORM":
-                            // Konvertiert die erste Zeile der Daten in ein flaches Objekt für das Formular
-                            const currentRecordObj = incomingTable.getObject(1); // Holt die Zeile 1 als Key-Value-Paar
-                            generatedHtml = UiGenerator.generateForm(data.tableName || "", this.uiLayoutTable, currentRecordObj);
-                            break;
+                    // // CUSTOM EVENT
+                    // window.dispatchEvent(new CustomEvent("sync-data-received", {
+                    //     detail: {
+                    //         tableName: data.tableName,
+                    //         targetType: data.targetType, // "LIST", "FORM", "DETAIL"
+                    //         recordId: data.recordId,
+                    //         dataTable: incomingTable
+                    //     }
+                    // }));
 
                         case "DETAIL":
                             // Analog für Detailansichten
@@ -967,38 +1804,62 @@ export class RealtimeSync {
                             break;
                     }
 
-                    // Das generierte HTML in eine neue Spalte rendern und dem Controller übergeben
-                    if (generatedHtml && this.uiController) {
-                        // Delegiert an den Controller
-                        this.uiController.renderOrUpdateColumn(data.tableName, data.targetType, incomingTable, generatedHtml);                        
-                        // const targetElement = AppCore.appendColumnHTML(data.tableName, generatedHtml);
-                        // AppCore.renderOrUpdateColumn(data.tableName, data.targetType, incomingTable, generatedHtml);
+                    // // Je nach data.targetType die Antwort-Daten verarbeiten
+                    // switch (data.targetType) {
+                    //     case "LIST":
+                    //         // Generiert die HTML-Tabelle anhand der UI-Konfigurations-Tabelle
+                    //         generatedHtml = UiGenerator.generateTable(data.tableName || "", this.uiLayoutTable, incomingTable) || "";
+                    //         break;
 
-                        // // Der magische Schritt: Der Controller übernimmt Tastatur & Button-Module
-                        // this.uiController.parseContainer(targetElement);
-                        // this.uiController.focusContainer(targetElement);
-                    }
+                    //     case "FORM":
+                    //         // Konvertiert die erste Zeile der Daten in ein flaches Objekt für das Formular
+                    //         const currentRecordObj = incomingTable.getObject(1); // Holt die Zeile 1 als Key-Value-Paar
+                    //         generatedHtml = UiGenerator.generateForm(data.tableName || "", this.uiLayoutTable, currentRecordObj);
+                    //         break;
+
+                    //     case "DETAIL":
+                    //         // Analog für Detailansichten
+                    //         generatedHtml = UiGenerator.generateDetail(data.tableName || "", this.uiLayoutTable, incomingTable);
+                    //         break;
+                    // }
+
+                    // // Das generierte HTML in eine neue Spalte rendern und dem Controller übergeben
+                    // if (generatedHtml && this.uiController) {
+                    //     // Delegiert an den Controller
+                    //     this.uiController.renderOrUpdateColumn(data.tableName, data.targetType, incomingTable, generatedHtml);                        
+                    //     // const targetElement = AppCore.appendColumnHTML(data.tableName, generatedHtml);
+                    //     // AppCore.renderOrUpdateColumn(data.tableName, data.targetType, incomingTable, generatedHtml);
+
+                    //     // // Der magische Schritt: Der Controller übernimmt Tastatur & Button-Module
+                    //     // this.uiController.parseContainer(targetElement);
+                    //     // this.uiController.focusContainer(targetElement);
+                    // }
                     break;
 
                 case "LOCK_DENIED":
+                    this.trigger("on-lock-denied", data);
                     alert("Datensatz wird gerade von einem anderen Benutzer bearbeitet!");
                     break;
 
                 case "LOCK_RELEASED_CONFIRMED":
+                    this.trigger("on-lock-released", data);
                     break;
 
                 case "SAVE_SUCCESS":
                     console.log("Erfolgreich gespeichert!");
+                    this.trigger("on-save", data);
                     // Optional: Dem Controller sagen, er soll den Fokus zurück auf die Tabelle legen
                     break;
 
                 case "DATA_MUTATED":
                     // Ein anderer Nutzer hat Daten geändert. 
-                    // Hier können Sie prüfen, ob die geänderte Tabelle gerade offen ist, 
-                    // und sie im Hintergrund neu anfordern oder updaten.
+                    // Hier prüfen, ob die geänderte Tabelle gerade offen ist, 
+                    // und ob im Hintergrund neu anfordern oder updaten.
+                    this.trigger("on-data-changed", data);
                     break;
 
                 case "DELETE_SUCCESS":
+                    this.trigger("on-delete", data);
                     break;
 
                 default:
@@ -1015,6 +1876,13 @@ export class RealtimeSync {
             // Code 4001 = Gezielter Kick durch den Server wegen Session-Timeout
             if (event.code === 4001) {
                 console.warn("Session abgelaufen! Zeige Login-Maske.");
+
+                // Wenn ein Hash existiert (z.B. "#api.schema=xxx"), sichern wir ihn im Speicher
+                // todo: Aktuelles merken
+                if (window.location.hash) {
+                    // für Redirekt nach dem Login (dort weitermachen bevor die Session abgelaufen ist)
+                    sessionStorage.setItem("spa_redirect_hash", window.location.hash);
+                }
 
                 // Seite neu laden. Da das Cookie ein Session-Cookie ist 
                 // und der Server das Token gelöscht hat, landet der User automatisch auf der Login-Seite.
@@ -1052,20 +1920,79 @@ export class RealtimeSync {
         } else {
             console.error("WebSocket ist nicht offen. Nachricht verworfen:", data.type);
         }
-    }    
+    }
+
+    // todo: Asynchrone Requests
+
+    /**
+     * Sendet eine Anfrage und gibt ein Promise zurück, das auflöst,
+     * sobald der Server mit der passenden requestId antwortet.
+     * @param {string} driverId - Name des DatenTreibers
+     * @param {string} tableName - Name der Daten Tabelle/Datei
+     * @param {Object<string,any>} [quest] - Anfrage, Daten Einschränkung
+     */
+    async requestData(driverId, tableName, quest) {
+        const requestId = getGSID();
+
+        /** @type {ClientServerMessage} */
+        const message = {
+            type: "GET_DATA"
+            , requestId
+            , driverId
+            , tableName
+            , quest
+        };
+
+        // Wir senden ab und geben ein Promise zurück
+        return new Promise((resolve, reject) => {
+            // Wir merken uns, wie wir das Promise auflösen können, wenn die Antwort kommt
+            this.pendingRequests.set(requestId, { resolve, reject });
+
+            // Timeout einbauen, damit die UI nicht ewig einfriert, falls der Server abstürzt
+            setTimeout(() => {
+                if (this.pendingRequests.has(requestId)) {
+                    this.pendingRequests.delete(requestId);
+                    reject(new Error(`Timeout bei Anfrage ${requestId}`));
+                }
+            }, 10000); // 10 Sekunden Timeout
+
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(message));
+            } else {
+                console.error("WebSocket ist nicht offen. Nachricht verworfen:", message.type);
+                 reject(new Error(`WebSocket ist nicht offen. Nachricht verworfen: ${message.type}`));
+            }
+        });
+    }
+
+    // // Wird von ws.onmessage aufgerufen
+    // handleIncomingMessage(jsonString) {
+    //     const message = JSON.parse(jsonString);
+
+    //     // 1. Prüfen, ob diese Nachricht zu einer aktiven Anfrage gehört
+    //     if (message.requestId && this.pendingRequests.has(message.requestId)) {
+    //         const deferred = this.pendingRequests.get(message.requestId);
+    //         this.pendingRequests.delete(message.requestId); // Anfrage erledigt, löschen
+
+    //         // Promise auflösen und die Daten direkt zurückgeben!
+    //         deferred.resolve(message.payload);
+    //         return;
+    //     }
+
+    //     // 2. Fallback für echte Push-Nachrichten vom Server (ohne vorherige Anfrage)
+    //     switch (message.type) {
+    //         case "BROADCAST_UPDATE":
+    //             this.trigger("global-update", message.payload);
+    //             break;
+    //     }
+    // }
 }
 
 
 
 // ===================================================
 
-// ============ Beispiel Verwendung =================
-
-
-
 export class InfoRouter {
-
-
     /**
      * Erzeugt aus einem String ein Objekt  
      * Wandelt "id:456,name:hallo" in ein Objekt {id: "456", name: "hallo"} um.
@@ -1078,18 +2005,18 @@ export class InfoRouter {
 
         // Aufteilen am Komma
         const pairs = valueString.split(",");
-        
+
         for (let i = 0; i < pairs.length; i++) {
             const pair = pairs[i].split(":");
             if (pair[0] && pair[1]) {
                 const key = pair[0].trim();
                 let value = pair[1].trim();
-                
+
                 // Optional: Automatisch Zahlen konvertieren
                 //if (!isNaN(value)) {
                 //    value = Number(value);
                 //}
-                
+
                 obj[key] = value;
             }
         }
@@ -1104,20 +2031,20 @@ export class InfoRouter {
     get_hashData() {
         // darf nicht in den Daten stehen "#","/","&", "=", "," -> sind Trennzeichen
         // key beginnt mit: "api." = Fetch API, "ws." = Websocket typ "GET_DATA", "LOCK_DATA", "SAVE_DATA", "DEL_DATA"  ("ws.get.adresse","ws.lock.adresse", "ws.save.adresse", "ws.del.adresse")
-        // domain.de/#?api.menu=/menu/menu1&api.content=/forms/form1&ws.get.addresse=id:456,name:hallo&ws.get.bestellungen=gsid:25
+        // domain.de/#?api.menu=/menu/menu1&api.content=/forms/form1&ws.addresse=id:456,name:hallo&ws.bestellungen=gsid:25
         const hash = window.location.hash;
         const hashString = hash.includes("?") ? hash.split("?")[1] : "";
-        if (!hashString) {return;}
+        if (!hashString) { return; }
 
         // In parts "key=value" aufsplitten
         const parts = hashString.split("&");
         const api_list = []; // [["menu", "/menu/menu1"], ["content","/forms/form1"]]
-        const ws_list = []; // [ ["get.addresse", {id: "456", name: "hallo"}], ["get.bestellungen": {gsid: "25"}] ]
+        const ws_list = []; // [ ["addresse", {id: "456", name: "hallo"}], ["bestellungen": {gsid: "25"}] ]
 
         // alle Parts durchgehen
         for (let i = 0; i < parts.length; i++) {
             const key_value = parts[i].split("=");
-            
+
             // wenn UI - startet mit "api."
             if (key_value[0].startsWith("api.")) {
                 api_list.push([key_value[0].substring(4), key_value[1]]);
@@ -1132,32 +2059,41 @@ export class InfoRouter {
         // Zurückgeben
         return { api: api_list, ws: ws_list };
     }
+
+
 }
 
+// ==========================================
+//   UI Schema
+// -------------
 
+export const infoUISchema = new Schema("infoUISchema");
 
+// Enums
+infoUISchema.setEnum({ name: "InfoUIInputType", values: InfoUIInputType_values });
 
-// =========================================================================
-//   ZENTRALER APPMANAGER & DOM ORCHESTRATOR
-// =========================================================================
+// InfoUITableCol
+infoUISchema.setDataType({ name: "InfoUITableCol", art: "object", id: "column_name" });
+infoUISchema.addProperty("InfoUITableCol", "column_name");
+infoUISchema.addProperty("InfoUITableCol", "display_name");
+infoUISchema.addProperty("InfoUITableCol", "position", { prop_type: "int" });
+infoUISchema.addProperty("InfoUITableCol", "format", { min: 0 });
 
-export class AppCore {
-    // static getLoadedTable(tableId) {
-    //     throw new Error("Method not implemented.");
-    // }
-    // static renderOrUpdateColumn(tableId, arg1, currentTable, arg3) {
-    //     throw new Error("Method not implemented.");
-    // }
-    // static refreshColumnHTML(tableId, filteredTable) {
-    //     throw new Error("Method not implemented.");
-    // }
-    // /** @type {RealtimeSync|null} */
-    // static sync = null;
-    // /** @type {UiController|null} */
-    // static controller = null;
+// InfoUIFormField
+infoUISchema.setDataType({ name: "InfoUIFormField", art: "object", id: "field_name" });
+infoUISchema.addProperty("InfoUIFormField", "field_name");
+infoUISchema.addProperty("InfoUIFormField", "label");
+infoUISchema.addProperty("InfoUIFormField", "position", { prop_type: "int" });
+infoUISchema.addProperty("InfoUIFormField", "ui_element", { prop_type: "InfoUIInputType", min: 0 });
+infoUISchema.addProperty("InfoUIFormField", "action_module", { min: 0 });
+infoUISchema.addProperty("InfoUIFormField", "action_function", { min: 0 });
 
-    // /** @type {HTMLElement|null} */
-    // static appContainer = null;
+// InfoUIFormField
+infoUISchema.setDataType({ name: "InfoUIDetailField", art: "object", id: "field_name" });
+infoUISchema.addProperty("InfoUIDetailField", "field_name");
+infoUISchema.addProperty("InfoUIDetailField", "label");
+infoUISchema.addProperty("InfoUIDetailField", "position", { prop_type: "int" });
+infoUISchema.addProperty("InfoUIDetailField", "format", { min: 0 });
 
     /**
      * Initialisiert die App und hängt den Basis-Container ein
@@ -1170,48 +2106,40 @@ export class AppCore {
             </div>
         `;
 
-        // APP-Container Lesen
-        const appContainer = document.getElementById("app-container");
-        if (!appContainer) throw new Error("App-Container nicht gefunden");
+// ==========================================
+//   UI- Komponenten
+// ------------------
 
-        // 1. Controller und Sync instanziieren und kreuzverweisen
-        const controller = new UiController(appContainer); // Wird gleich im Sync gesetzt
-        const sync = new RealtimeSync(serverUrl, controller);
-        //controller.sync = sync;
+// Tabellen ansicht
+export const infoUITable_list = new InfoUITable("table_cols", "Table Columns");
+infoUITable_list.add_col("column_name");
+infoUITable_list.add_col("display_name");
+infoUITable_list.add_col("position");
+infoUITable_list.add_col("format");
 
-        // 2. Verbindung starten
-        sync.connect();
+export const infoUITable_form = new InfoUIForm("table_form", "Table Formular");
+infoUITable_form.add_field("column_name");
+infoUITable_form.add_field("display_name");
+infoUITable_form.add_field("position", "position", "input_number");
+infoUITable_form.add_field("format");
 
-        // Events registrieren
-        window.addEventListener("keydown", (e) => {
-            if (!controller.activeContainer) return;
-            
-            /** @type {ClientServerMessage|undefined} */
-            let sendCommand;
+// Formular Ansicht
+export const infoUIForm_list = new InfoUITable("form_fields", "Formular Fields");
+infoUIForm_list.add_col("field_name");
+infoUIForm_list.add_col("label");
+infoUIForm_list.add_col("position");
+infoUIForm_list.add_col("ui_element");
+infoUIForm_list.add_col("action_module");
+infoUIForm_list.add_col("action_function");
 
-            const targetType = controller.activeContainer.getAttribute("data-target-type");
-    
-            if (targetType === "LIST" || targetType === "MENU") {
-                sendCommand = controller.handleTableNavigation(e);
-            } else if (targetType === "FORM") {
-                sendCommand = controller.handleFormNavigation(e);
-            }
-            
-            // Alt + Pfeiltasten für Spaltenwechsel
-            if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-                const currentCol = controller.activeContainer.closest(".app-column");
-                if (!currentCol) return;
-                const currentIdx = parseInt(currentCol.getAttribute("data-col-index") || "0", 10);
-                let targetIdx = e.key === "ArrowLeft" ? currentIdx - 1 : currentIdx + 1;
-                const targetCol = controller.appContainer.querySelector(`.app - column[data - col - index="${targetIdx}"]`);
-                if (targetCol) {
-                    const viewContainer = targetCol.querySelector(".ui-view-container");
-                    if (viewContainer instanceof HTMLElement) {
-                        controller.focusContainer(viewContainer);
-                        e.preventDefault();
-                    }
-                }
-            }
+export const infoUIForm_form = new InfoUIForm("form_form", "Form Formular");
+infoUIForm_form.add_field("field_name");
+infoUIForm_form.add_field("label");
+infoUIForm_form.add_field("position");
+infoUIForm_form.add_field("ui_element", "ui_element", "select");
+infoUIForm_form.add_field("action_module");
+infoUIForm_form.add_field("action_function");
+infoUIForm_form.setSelectOptions("ui_element", InfoUIInputType_values);
 
             if (sendCommand) {
                 sync.send(sendCommand);
@@ -1220,9 +2148,14 @@ export class AppCore {
     }
 }
 
+//-------  Schema Komponenten ---------
 
-    // // Hier merken wir uns die aktuell im UI geladenen DataTable-Instanzen
-    // static loadedTables = new Map();
+// ObjektTypen
+export const infoUISchema_typelist = new InfoUITable("schema_typelist", "Schema Type List");
+infoUISchema_typelist.add_col("name");
+infoUISchema_typelist.add_col("art");
+infoUISchema_typelist.add_col("base_name");
+infoUISchema_typelist.add_col("simple_types");
 
     // /**
     //  * Gibt eine bestehende DatenTabelle zurück
@@ -1233,25 +2166,34 @@ export class AppCore {
     //     return AppCore.loadedTables.get(tableId);
     // }
 
-    // /**
-    //  * Entscheidet, ob eine Spalte neu geöffnet oder nur aktualisiert (refreshed) wird
-    //  * @param {string} tableName - Name der Tabelle
-    //  * @param {string} targetType - Zile Typ ? "LIST", "FORM", ...
-    //  * @param {DataTable<any>} dataTable - DatenTabelle
-    //  * @param {string} html - HTML String ????? 
-    //  */
-    // static renderOrUpdateColumn(tableName, targetType, dataTable, html) {
-    //     // Prüfen, ob dieses UI-Element bereits im DOM existiert
-    //     const existingView = document.querySelector(`[data-table-id="${tableName}"][data-target-type="${targetType}"]`);
+// Propertys von Objekt Typen
+export const infoUISchema_proplist = new InfoUITable("schema_proplist", "Schema Property List");
+infoUISchema_proplist.add_col("name");
+infoUISchema_proplist.add_col("pos");
+infoUISchema_proplist.add_col("prop_type");
+infoUISchema_proplist.add_col("min");
+infoUISchema_proplist.add_col("max");
+infoUISchema_proplist.add_col("default");
+infoUISchema_proplist.add_col("fix");
 
     //     // Instanz für spätere Sortierung/Filterung im Cache merken
     //     AppCore.loadedTables.set(tableName, dataTable);
 
-    //     if (existingView) {
-    //         // REFRESH: Bestehendes HTML einfach austauschen!
-    //         const bodyContainer = existingView.closest(".app-column-body");
-    //         if (bodyContainer) {
-    //             bodyContainer.innerHTML = html;
+// Simple Typen
+export const infoUISchema_simpletypelist = new InfoUITable("schema_simpletypelist", "Schema SimpleType List");
+infoUISchema_simpletypelist.add_col("name");
+infoUISchema_simpletypelist.add_col("art");
+infoUISchema_simpletypelist.add_col("length");
+infoUISchema_simpletypelist.add_col("min_length");
+infoUISchema_simpletypelist.add_col("max_length");
+infoUISchema_simpletypelist.add_col("pattern");
+infoUISchema_simpletypelist.add_col("whitespace");
+infoUISchema_simpletypelist.add_col("casing");
+infoUISchema_simpletypelist.add_col("decimals");
+infoUISchema_simpletypelist.add_col("min_inclusive");
+infoUISchema_simpletypelist.add_col("min_exclusive");
+infoUISchema_simpletypelist.add_col("max_exclusive");
+infoUISchema_simpletypelist.add_col("max_inclusive");
 
     //             // Dem Controller sagen, er soll das geänderte HTML neu scannen
     //             /** @type {HTMLElement|null} */
@@ -1268,83 +2210,119 @@ export class AppCore {
     //     AppCore.controller?.focusContainer(targetElement);
     // }
 
-    // /**
-    //  * Erstellt eine neue visuelle Spalte im macOS-Finder-Stil, entfernt alle rechts davon stehenden Spalten
-    //  * und bettet das generierte HTML ein.
-    //  * @param {string} title - Titel der Spalte (wird im Header angezeigt)
-    //  * @param {string} innerHtml - Das vom UiGenerator erzeugte HTML
-    //  * @returns {HTMLElement|null} - Das innere Container-Element für den UiController (.ui-view-container)
-    //  */
-    // static appendColumnHTML(title, innerHtml) {
-    //     const container = document.getElementById("app-container");
-    //     if (!this.appContainer) throw new Error("App-Container nicht gefunden");
+// ==========================================
+//   Beispiel APP
+// ---------------
 
-    //     // 1. Ermittle, von wo aus die Aktion getriggert wurde (aktive Spalte)
-    //     // Falls kein Element aktiv ist, fangen wir bei Spalte 0 an.
-    //     let currentColIdx = -1;
-    //     if (AppCore.controller && AppCore.controller.activeContainer) {
-    //         const parentCol = AppCore.controller.activeContainer.closest(".app-column");
-    //         if (parentCol) {
-    //             currentColIdx = parseInt(parentCol.getAttribute("data-col-index") || "0", 10);
-    //         }
-    //     }
+// // app.js (Spezifischer Business-Anwendungsfall)
+// import { UiController, UiColumn, InfoUITable } from "./infoui.js";
+// import { DataTable } from "./infotable.js";
 
-    //     // 2. Kaskadierendes Löschen: Alle Spalten RECHTS von der aktuellen Spalte abschneiden
-    //     const targetColIdx = currentColIdx + 1;
-    //     const existingCols = this.appContainer.querySelectorAll(".app-column");
-    //     existingCols.forEach(col => {
-    //         const idx = parseInt(col.getAttribute("data-col-index") || "0", 10);
-    //         if (idx >= targetColIdx) {
-    //             col.remove();
-    //         }
-    //     });
+// const container = document.getElementById("app-container");
+// const controller = new UiController(container);
 
-    //     // 3. Neue Spalten-Hülle bauen
-    //     const colDiv = document.createElement("div");
-    //     colDiv.className = "app-column";
-    //     colDiv.setAttribute("data-col-index", targetColIdx.toString());
-    //     colDiv.style.cssText = "display: flex; flex-direction: column; width: 350px; min-width: 350px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e1e4e8; height: 100%;";
+// // Beispiel-Daten
+// const kundenDaten = new DataTable("kunden", [
+//     ["gsid", "name", "ort"],
+//     ["1", "Müller GmbH", "Wien"],
+//     ["2", "Gruber AG", "Salzburg"]
+// ]);
 
-    //     // Spalten-Kopf (Header)
-    //     colDiv.innerHTML = `
-    //         <div class="app-column-header" style="padding: 10px; font-weight: bold; border-bottom: 1px solid #e1e4e8; background: #fafbfc; border-radius: 6px 6px 0 0;">
-    //             ${title}
-    //         </div>
-    //         <div class="app-column-body" style="flex: 1; overflow-y: auto; padding: 10px;">
-    //             ${innerHtml}
-    //         </div>
-    //     `;
+// const ansprechpartnerDaten = new DataTable("partner", [
+//     ["gsid", "name", "funktion"],
+//     ["p1", "Max Mustermann", "Einkauf"],
+//     ["p2", "Anna Rossi", "Geschäftsführung"]
+// ]);
 
-    //     this.appContainer.appendChild(colDiv);
+// // SPALTE 1 bauen (Mit ZWEI vertikalen Tabellen untereinander)
+// const col1 = new UiColumn("Kundenstamm", 0);
 
-    //     // Nach rechts scrollen
-    //     this.appContainer.scrollTo({ left: this.appContainer.scrollWidth, behavior: "smooth" });
+// const t1 = new InfoUITable("kunden_master", "Firmen", kundenDaten);
+// t1.add_col("gsid", "ID");
+// t1.add_col("name", "Name");
+// col1.addComponent(t1);
 
-    //     // Das interaktive Element für den Controller zurückgeben
-    //     return colDiv.querySelector(".ui-view-container");
-    // }
+// const t2 = new InfoUITable("kunden_kontakte", "Ansprechpartner", ansprechpartnerDaten);
+// t2.add_col("name", "Name");
+// t2.add_col("funktion", "Rolle");
+// col1.addComponent(t2);
 
-    // static registerGlobalEvents() {
-    //     window.addEventListener("keydown", (e) => {
-    //         // Horizontaler Spaltenwechsel mit Alt + ArrowLeft / ArrowRight
-    //         if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-    //             if (!this.appContainer || !AppCore.controller || !AppCore.controller.activeContainer) return;
+// // Spalte an den Controller übergeben -> Rendert automatisch alles inklusive globaler Event-Links
+// controller.addColumn(col1);
 
-    //             const currentCol = AppCore.controller.activeContainer.closest(".app-column");
-    //             if (!currentCol) return;
+// // Logische Custom Events abfangen
+// container.addEventListener("row-select", (e) => {
+//     const { tableId, recordId } = e.detail;
+//     console.log(`app.js hat die Auswahl mitbekommen: ${tableId} -> ${recordId}`);
+//     // Hier folgt dein sync.send(...) für den WebSocket
+// });
 
-    //             const currentIdx = parseInt(currentCol.getAttribute("data-col-index") || "0", 10);
-    //             let targetIdx = e.key === "ArrowLeft" ? currentIdx - 1 : currentIdx + 1;
+// -------  2. Beispiel --------------------
 
-    //             const targetCol = this.appContainer.querySelector(`.app-column[data-col-index="${targetIdx}"]`);
-    //             if (targetCol) {
-    //                 const viewContainer = targetCol.querySelector(".ui-view-container");
-    //                 if (viewContainer instanceof HTMLElement) {
-    //                     AppCore.controller.focusContainer(viewContainer);
-    //                     e.preventDefault();
-    //                 }
-    //             }
-    //         }
-    //     });
-    // }
-//}
+// // kunden_app.js (Beispiel für einen konkreten Anwendungsfall)
+// import { UiController, UiColumn, InfoUITable, InfoUIForm, RealtimeSync } from "./infoui.js";
+
+// const container = document.getElementById("app-container");
+// const controller = new UiController(container);
+// const sync = new RealtimeSync("ws://localhost:3000/socket", controller);
+// sync.connect();
+
+// // 1. Definition der UI-Komponenten für diese App
+// const kundenTabelle = new InfoUITable("kunden_master", "Kundenliste");
+// kundenTabelle.add_col("gsid", "ID", 0);
+// kundenTabelle.add_col("name", "Firmenname", 1);
+// kundenTabelle.add_col("ort", "Stadt", 2);
+
+// const kundenForm = new InfoUIForm("kunden_form", "Kundendetails");
+// kundenForm.add_field("name", "Firmenname", "input_text", 0);
+// kundenForm.add_field("ort", "Stadt", "input_text", 1);
+
+// // Spalten definieren
+// const spalte1 = new UiColumn("Stammdaten", 0);
+// spalte1.addComponent(kundenTabelle);
+// controller.addColumn(spalte1); // Zeigt die erste leere/wartende Spalte an
+
+// // 2. REAKTION AUF DATEN VOM SERVER (Über RealtimeSync geleitet)
+// window.addEventListener("sync-data-received", (e) => {
+//     const { tableName, targetType, dataTable } = e.detail;
+
+//     // Wenn es die Kundenliste ist -> Tabelle befüllen und rendern
+//     if (tableName === "kunden" && targetType === "LIST") {
+//         kundenTabelle.updateData(dataTable);
+//     }
+
+//     // Wenn ein einzelner Kunde geladen wurde -> Formular dynamisch in Spalte 2 öffnen
+//     if (tableName === "kunden" && targetType === "FORM") {
+//         const clientObj = dataTable.getObject(1); // Hole Zeile 1 als Objekt
+//         kundenForm.dataObject = clientObj; // Dem Formular die Daten geben
+
+//         // Prüfen, ob Spalte 2 schon offen ist, ansonsten neu hinzufügen
+//         let spalte2 = controller.columns[1];
+//         if (!spalte2) {
+//             spalte2 = new UiColumn("Bearbeiten", 1);
+//             spalte2.addComponent(kundenForm);
+//             controller.addColumn(spalte2);
+//         } else {
+//             // Wenn Spalte schon offen, nur Inhalt aktualisieren
+//             kundenForm.domElement.innerHTML = kundenForm.render();
+//         }
+//     }
+// });
+
+// // 3. REAKTION AUF AKTIONEN AUS DER UI (Tastatur / Maus)
+// container.addEventListener("row-edit", (e) => {
+//     const { tableId, recordId } = e.detail;
+
+//     if (tableId === "kunden_master") {
+//         // Sende Datenanforderung für das Formular an den Server
+//         sync.send({
+//             type: "GET_DATA",
+//             tableName: "kunden",
+//             recordId: recordId,
+//             targetType: "FORM"
+//         });
+//     }
+// });
+
+
+// ==========================================
