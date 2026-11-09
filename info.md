@@ -13,17 +13,18 @@ Diese Spezifikation beschreibt das flache, deklarative JSON-Format zur Abbildung
 
 Jeder Tabellen-Konfigurationsblock besitzt folgendes flaches Schema auf oberster Ebene:
 
-|* Key	|* Typ	|* Beschreibung	|* Beispiel |
-| table | String	| Der Tabellenname inklusive optionalem Alias.	| "customers c" |
-| cols	| Array<String>	| Ausgewählte Spalten, SQL-Funktionen oder mathematische Ausdrücke.	| ["c.id", "SUM(ci.score) AS total"] |
-| joins	| Array<Object>	| Liste flacher Relationen. Jedes Objekt enthält table und ein on-Vergleichsobjekt.	| [ { "table": "logs l", "on": { "l.user_id": "$.c.id" } } ] |
-| quest	| Object | Array	| Die Filterbedingungen (WHERE-Klausel). Unterbaut auch _exists und _not_exists.	| { "c.city": "Wien" } |
-| subs	| Object	| Definiert Subselects. Der Key wird zum SQL-Alias, das Ergebnis wird automatisch an cols angehängt.	| { "cnt": { "table": "logs", "cols": | ["COUNT(*)"] } } |
-| group	| Array<String>	| Gruppierungsspalten für Aggregationen.	| ["c.id", "c.name"] |
-| having	| Object	| Filterbedingungen für Aggregatfunktionen nach dem GROUP BY.	| { "SUM(ci.score)": { ">": 50 } } |
-| sort	| Array<String>	| Sortierungsanweisungen inklusive SQL-Zusätzen.	| ["total_score DESC", "c.name ASC NULLS FIRST"] |
-| limit	| Number	| Maximale Anzahl an zurückzugebenden Datensätzen.	| 25 |
-| page	| Number	| Die Seitenzahl für die Paginierung (berechnet automatisch den OFFSET).	| 2 |
+|* Key	 |* Typ	|* Beschreibung	|* Beispiel |
+| driver | String	| Name des Datenbak Treibers.	| "sqlite1" |
+| table  | String	| Der Tabellenname inklusive optionalem Alias.	| "customers c" |
+| cols	 | Array<String>	| Ausgewählte Spalten, SQL-Funktionen oder mathematische Ausdrücke.	| ["c.id", "SUM(ci.score) AS total"] |
+| joins	 | Array<Object>	| Liste flacher Relationen. Jedes Objekt enthält table und ein on-Vergleichsobjekt.	| [ { "table": "logs l", "on": { "l.user_id": "$.c.id" } } ] |
+| quest	 | Object | Array	| Die Filterbedingungen (WHERE-Klausel). Unterbaut auch _exists und _not_exists.	| { "c.city": "Wien" } |
+| subs	 | Object	| Definiert Subselects. Der Key wird zum SQL-Alias, das Ergebnis wird automatisch an cols angehängt.	| { "cnt": { "table": "logs", "cols":  | ["COUNT(*)"] } } |
+| group	 | Array<String>	| Gruppierungsspalten für Aggregationen.	| ["c.id", "c.name"] |
+| having | Object	| Filterbedingungen für Aggregatfunktionen nach dem GROUP BY.	| { "SUM(ci.score)": { ">": 50 } } |
+| sort	 | Array<String>	| Sortierungsanweisungen inklusive SQL-Zusätzen.	| ["total_score DESC", "c.name ASC NULLS FIRST"] |
+| limit	 | Number	| Maximale Anzahl an zurückzugebenden Datensätzen.	| 25 |
+| page	 | Number	| Die Seitenzahl für die Paginierung (berechnet automatisch den OFFSET).	| 2 |
 
 
 ## 3. Anwendungsbeispiele & JSON-Vorlagen
@@ -35,6 +36,7 @@ Holt Kunden aus Wien, sortiert nach Name, limitiert auf 25 Einträge für die zw
 ```json
 {
   "table": "customers c",
+  "driver": "sqlite1",
   "cols": ["c.id", "c.name", "c.email"],
   "quest": {
     "c.city": "Wien"
@@ -55,6 +57,7 @@ Um im UI bei Klick auf einen Kunden dessen Interessen filtern zu können, wird d
 ```json
 {
   "table": "interests i",
+  "driver": "sqlite1",
   "cols": ["i.*", "ci.customer_id"],
   "joins": [
     {
@@ -78,6 +81,7 @@ Holt alle Wiener Kunden, die mindestens ein aktives Interesse besitzen, aber kei
 ```json
 {
   "table": "customers c",
+  "driver": "sqlite1",
   "cols": ["c.*"],
   "quest": {
     "c.city": "Wien",
@@ -122,6 +126,7 @@ Berechnet Statistiken pro Kunde. Nutzt das subs-Objekt für korrelierte Unterabf
 ```json
 {
   "table": "customers c",
+  "driver": "sqlite1",
   "cols": ["c.id", "c.name", "SUM(ci.score) AS total_score"],
   "subs": {
     "global_interest_avg": {

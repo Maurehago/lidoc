@@ -311,15 +311,15 @@ export class RealtimeServer {
     /**
      * Gibt eine Message zum zurücksenden eines Fehlers zurück.
      * @param {string} message - Fehlermeldung
-     * @param {string|undefined} requestId - Fehlermeldung
+     * @param {string|undefined} request_id - Fehlermeldung
      * @returns {ClientServerMessage}
      */
-    getErrorMessage(message, requestId) {
+    getErrorMessage(message, request_id) {
         /** @type {ClientServerMessage} */
         return {
             type: "ERROR"
-            , requestId
-            , payload: { message }
+            , request_id
+            , payload: message
         };
     }
 

@@ -65,6 +65,33 @@
 
 
 /**
+ * @typedef {Object} QuestObject
+ * @property {string} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
+ * @property {string} driver - Name/ID der Teibers der für das Ermitteln der Daten zuständig ist
+ * @property {string} table - Der Tabellenname inklusive optionalem Alias. oder bei Datei/Ordner basierten Treibern der Name der Datei. "customers c"
+ * @property {Array<string>} [cols] - Ausgewählte Spalten, SQL-Funktionen oder mathematische Ausdrücke.	["c.id", "SUM(ci.score) AS total"]
+ * @property {Array<Object>} [joins] - Liste flacher Relationen. Jedes Objekt enthält table und ein on-Vergleichsobjekt. Bei "on" Präfix "$." bei Werten für Tabellennamen, sonst ist es ein Wert. [ { "table": "logs l", "on": {"l.user_id": "$.c.id"} } ]
+ * @property {string} [record_id] - Eindeutige ID des Datensatzes. Kann auch für Datensatzsperren verendet werden. "GSID544"
+ * @property {Object|Array<any>} [quest] - Die Filterbedingungen (WHERE-Klausel). Unterbaut auch _exists und _not_exists. { "c.city": "Wien" }
+ * @property {Object<string,any>} [subs] -  Definiert Subselects. Der Key wird zum SQL-Alias, das Ergebnis wird automatisch an cols angehängt. { "cnt": {"table": "logs", "cols": ["COUNT(*)"]} }
+ * @property {Array<string>} [group] - Gruppierungsspalten für Aggregationen. ["c.id", "c.name"]
+ * @property {Object} [having] - Filterbedingungen für Aggregatfunktionen nach dem GROUP BY. { "SUM(ci.score)": {">": 50} }
+ * @property {Array<string>} [sort] - Sortierungsanweisungen inklusive SQL-Zusätzen. ["total_score DESC", "c.name ASC NULLS FIRST"]
+ * @property {number} [limit] - Maximale Anzahl an zurückzugebenden Datensätzen. 25
+ * @property {number} [page] - Die Seitenzahl für die Paginierung (berechnet automatisch den OFFSET). 2
+ */
+
+/**
+ * @typedef {Object} TableObject
+ * @property {string} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
+ * @property {string} [driver] - Name/ID der Teibers der für das Ermitteln der Daten zuständig ist
+ * @property {string} [table] - Der Tabellenname oder bei Datei/Ordner basierten Treibern der Name der Datei. "customers"
+ * @property {string|Array<string>} [id_col] - Name der ID-Spalte(n)
+ * @property {Array<Array<any>>} [rows] - Datenzeilen bei Tabellen Abfragen. 1. Zeile enthält Feldnamen
+ * @property {Array<string>|Array<Array<string>>} [ids] - Liste mit Datensatz IDs
+ */
+
+/**
  * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
  * server:"INITIAL_STATE" -> client // bei erster Verbindung
  * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
@@ -77,6 +104,27 @@
  * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
  *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
  * @typedef {Object} ClientServerMessage
+ * @property {MessageType} type - Aktionstyp
+ * @property {string} [request_id] - Eindeutige ID der Nachricht wird an den Server geschickt, und dieser sendet diese wieder zurück damit der Client diese zuordnen kann????
+ * @property {string} [message] - Meldung, zum Beispiel bei Fehler
+ * @property {Object<string,QuestObject|TableObject>|string|Array<string>} [payload] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
+ * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
+ */
+
+
+/**
+ * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
+ * server:"INITIAL_STATE" -> client // bei erster Verbindung
+ * client:"GET_DATA" -> server:"DATA"|"ERROR" -> client 
+ * client:"REQUEST_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert wenn die Sperrung OK ist
+ *                          server:"DATA"|"ERROR"|"LOCK_DENIED" -> client 
+ * client:"RELEASE_LOCK" -> server:"LOCK_UPDATED" -> app_group // Alle Benutzer werden mit "LOCK_UPDATED" informiert das die Sperrung aufgehoben ist
+ *                          server:"LOCK_RELEASED_CONFIRMED" -> client
+ * client:"SAVE_DATA" ->    server:"SAVE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * client:"DELETE_DATA" ->  server:"DELETE_SUCCESS"|"ERROR" -> client
+ *                          server:"DATA_MUTATED" -> app_group // Alle Benutzer werden mit "DATA_MUTATED" informiert das sich Daten geändert haben
+ * @typedef {Object} ClientServerMessage_old
  * @property {MessageType} type - Aktionstyp
  * @property {string} [requestId] - Eindeutige ID der Nachricht wird an den Server geschickt, und dieser sendet diese wieder zurück damit der Client diese zuordnen kann????
  * @property {string} [driverId] - Ziel-Treiber für die Aktion
