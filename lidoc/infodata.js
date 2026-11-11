@@ -86,7 +86,7 @@
  * @property {string} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
  * @property {string} [driver] - Name/ID der Teibers der für das Ermitteln der Daten zuständig ist
  * @property {string} [table] - Der Tabellenname oder bei Datei/Ordner basierten Treibern der Name der Datei. "customers"
- * @property {string|Array<string>} [id_col] - Name der ID-Spalte(n)
+ * @property {string|Array<string>} [id_name] - Name der ID-Spalte(n)
  * @property {Array<Array<any>>} [rows] - Datenzeilen bei Tabellen Abfragen. 1. Zeile enthält Feldnamen
  * @property {Array<string>|Array<Array<string>>} [ids] - Liste mit Datensatz IDs
  */
@@ -107,7 +107,7 @@
  * @property {MessageType} type - Aktionstyp
  * @property {string} [request_id] - Eindeutige ID der Nachricht wird an den Server geschickt, und dieser sendet diese wieder zurück damit der Client diese zuordnen kann????
  * @property {string} [message] - Meldung, zum Beispiel bei Fehler
- * @property {Object<string,QuestObject|TableObject>|string|Array<string>} [payload] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
+ * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
  * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
  */
 
@@ -867,15 +867,15 @@ export class DataTable {
     /**
      * Liefert die ID eines Objektes zurück
      * @param {Object<string,any>|Array<any>} obj - Datenobjekt mit dem idFeld
-     * @returns {any} ID
+     * @returns {string|undefined} ID
      */
     getID(obj) {
         if (!obj) { return; }
         if (Array.isArray(obj)) {
             const idIdx = this.columnIndex[this.idColumnName];
-            return obj[idIdx];
+            return obj[idIdx] + "";
         } else {
-            return obj[this.idColumnName] || undefined;
+            return obj[this.idColumnName] + "" || undefined;
         }
     }
 
@@ -924,7 +924,7 @@ export class DataTable {
             rowInfo.index = this.rowMap.get(id) || -1;
         } else if (id > 0 && id < this.rows.length) {
             rowInfo.index = id;
-            rowInfo.id = this.getID(this.rows[id]);
+            rowInfo.id = this.getID(this.rows[id]) || "";
         } else {
             return rowInfo;
         }
@@ -991,7 +991,7 @@ export class DataTable {
         // Alle Zeilen durchgehen
         for (let i = 1; i < newRows.length; i++) {
             const newRow = newRows[i];
-            const id = this.getID(newRow);
+            const id = this.getID(newRow) || getGSID();
 
             // versuchen bestehenesn Datensatz zu lesen
             let row = this.getRow(id);

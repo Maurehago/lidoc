@@ -42,7 +42,7 @@ import { DBDriver } from "./infodata.js"
 // Aufruf-Beispiel: bun run server.js --name="MeinLagerSystem"
 const args = Bun.argv;
 const nameArg = args.find(arg => arg.startsWith("--name="));
-const APP_NAME = nameArg ? nameArg.split("=")[1] : "Standard_Echtzeit_App";
+const APP_NAME = nameArg ? nameArg.split("=")[1] : "info_app";
 
 console.log(`\n=== Bootstrapping gestartet: "${APP_NAME}" ===`);
 
@@ -319,7 +319,7 @@ export class RealtimeServer {
         return {
             type: "ERROR"
             , request_id
-            , payload: message
+            , message
         };
     }
 
