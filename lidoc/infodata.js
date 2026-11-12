@@ -64,13 +64,21 @@
  */
 
 
+
+/**
+ * @typedef {Object} QuestJoin
+ * @property {string} table - Name der verknüpften Tabelle
+ * @property {Object<string, any>} on - Tabellen Verknüpfung
+ */
+
+
 /**
  * @typedef {Object} QuestObject
- * @property {string} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
+ * @property {"quest"} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
  * @property {string} driver - Name/ID der Teibers der für das Ermitteln der Daten zuständig ist
  * @property {string} table - Der Tabellenname inklusive optionalem Alias. oder bei Datei/Ordner basierten Treibern der Name der Datei. "customers c"
  * @property {Array<string>} [cols] - Ausgewählte Spalten, SQL-Funktionen oder mathematische Ausdrücke.	["c.id", "SUM(ci.score) AS total"]
- * @property {Array<Object>} [joins] - Liste flacher Relationen. Jedes Objekt enthält table und ein on-Vergleichsobjekt. Bei "on" Präfix "$." bei Werten für Tabellennamen, sonst ist es ein Wert. [ { "table": "logs l", "on": {"l.user_id": "$.c.id"} } ]
+ * @property {Array<QuestJoin>} [joins] - Liste flacher Relationen. Jedes Objekt enthält table und ein on-Vergleichsobjekt. Bei "on" Präfix "$." bei Werten für Tabellennamen, sonst ist es ein Wert. [ { "table": "logs l", "on": {"l.user_id": "$.c.id"} } ]
  * @property {string} [record_id] - Eindeutige ID des Datensatzes. Kann auch für Datensatzsperren verendet werden. "GSID544"
  * @property {Object|Array<any>} [quest] - Die Filterbedingungen (WHERE-Klausel). Unterbaut auch _exists und _not_exists. { "c.city": "Wien" }
  * @property {Object<string,any>} [subs] -  Definiert Subselects. Der Key wird zum SQL-Alias, das Ergebnis wird automatisch an cols angehängt. { "cnt": {"table": "logs", "cols": ["COUNT(*)"]} }
@@ -83,10 +91,10 @@
 
 /**
  * @typedef {Object} TableObject
- * @property {string} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
+ * @property {"table"} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
  * @property {string} [driver] - Name/ID der Teibers der für das Ermitteln der Daten zuständig ist
  * @property {string} [table] - Der Tabellenname oder bei Datei/Ordner basierten Treibern der Name der Datei. "customers"
- * @property {string|Array<string>} [id_name] - Name der ID-Spalte(n)
+ * @property {string|Array<string>} [id_name] - Name der ID-Spalte(n) Name(n)
  * @property {Array<Array<any>>} [rows] - Datenzeilen bei Tabellen Abfragen. 1. Zeile enthält Feldnamen
  * @property {Array<string>|Array<Array<string>>} [ids] - Liste mit Datensatz IDs
  */
@@ -107,8 +115,19 @@
  * @property {MessageType} type - Aktionstyp
  * @property {string} [request_id] - Eindeutige ID der Nachricht wird an den Server geschickt, und dieser sendet diese wieder zurück damit der Client diese zuordnen kann????
  * @property {string} [message] - Meldung, zum Beispiel bei Fehler
- * @property {Object<string,any>} [payload] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
+ * @property {Object<string,QuestObject>} [quest_objects] - Datenanfrage
+ * @property {Object<string,TableObject>} [table_objects] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
  * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
+ */
+
+/**
+ * Repräsentiert eine aktive Bearbeitungssperre eines/mehrerer Datensätze (Concurrency Management).
+ * Existiert rein In-Memory.
+ * @typedef {Object} LockData
+ * @property {string} lockKey - Zusammengesetzter Key aus `driverId_tableName_recordId`
+ * @property {Array<TableObject>} table_objects - ID des betroffenen Treibers
+ * @property {string} username - Name des Benutzers, der den Datensatz aktuell sperrt
+ * @property {string} lockTime - Uhrzeit des Sperr-Zeitpunkts (LocaleTimeString)
  */
 
 
@@ -403,7 +422,7 @@ export class DBDriver {
 
     /**
      * But aus einer Abfrage einen SQL String + Parameter ARRAY
-     * @param {Object<string,any>} config - Tabellen Abfrage
+     * @param {QuestObject} config - Tabellen Abfrage
      * @returns {SQLQuery}
      */
     buildSelectStatement(config) {
@@ -440,10 +459,12 @@ export class DBDriver {
         }
 
         // Haupt-WHERE
-        const parsedQuery = this.quest_to_query(config.quest);
-        if (parsedQuery.sql && parsedQuery.sql !== "1=1") {
-            sql += ` WHERE ${parsedQuery.sql}`;
-            allParams.push(...parsedQuery.params);
+        if (config.quest) {
+            const parsedQuery = this.quest_to_query(config.quest);
+            if (parsedQuery.sql && parsedQuery.sql !== "1=1") {
+                sql += ` WHERE ${parsedQuery.sql}`;
+                allParams.push(...parsedQuery.params);
+            }
         }
 
         // GROUP BY hinzufügen
@@ -632,67 +653,67 @@ export class DBDriver {
     //             }
     //         }
 
-            //     // Behandlung von Operatoren-Objekten
-            //     if (val && typeof val === "object") {
-            //         const operators = Object.keys(val);
-            //         for (const op of operators) {
-            //             if (!ALLOWED_OPERATORS.includes(op)) {
-            //                 throw new Error(`Ungültiger Operator: ${op}`);
-            //             }
+    //     // Behandlung von Operatoren-Objekten
+    //     if (val && typeof val === "object") {
+    //         const operators = Object.keys(val);
+    //         for (const op of operators) {
+    //             if (!ALLOWED_OPERATORS.includes(op)) {
+    //                 throw new Error(`Ungültiger Operator: ${op}`);
+    //             }
 
-            //             const innerVal = val[op];
+    //             const innerVal = val[op];
 
-            //             // NEU: Spezialbehandlung für IN / NOT IN
-            //             if (op === "IN" || op === "NOT IN") {
+    //             // NEU: Spezialbehandlung für IN / NOT IN
+    //             if (op === "IN" || op === "NOT IN") {
 
-            //                 // Variante A: Normales Array von Werten (z.B. ["admin", "moderator"])
-            //                 if (Array.isArray(innerVal)) {
-            //                     if (innerVal.length === 0) {
-            //                         // Ein leeres IN-Array wirft in SQL Fehler, daher fangen wir es logisch ab
-            //                         clauses.push(op === "IN" ? "1=0" : "1=1");
-            //                     } else {
-            //                         const placeholders = innerVal.map(() => "?").join(", ");
-            //                         clauses.push(`${key} ${op} (${placeholders})`);
-            //                         params.push(...innerVal);
-            //                     }
-            //                 }
+    //                 // Variante A: Normales Array von Werten (z.B. ["admin", "moderator"])
+    //                 if (Array.isArray(innerVal)) {
+    //                     if (innerVal.length === 0) {
+    //                         // Ein leeres IN-Array wirft in SQL Fehler, daher fangen wir es logisch ab
+    //                         clauses.push(op === "IN" ? "1=0" : "1=1");
+    //                     } else {
+    //                         const placeholders = innerVal.map(() => "?").join(", ");
+    //                         clauses.push(`${key} ${op} (${placeholders})`);
+    //                         params.push(...innerVal);
+    //                     }
+    //                 }
 
-            //                 // Variante B: Unter-Select (z.B. { subSelect: { table: '...', ... } })
-            //                 else if (innerVal && typeof innerVal === "object" && innerVal.subSelect) {
-            //                     const sub = innerVal.subSelect;
+    //                 // Variante B: Unter-Select (z.B. { subSelect: { table: '...', ... } })
+    //                 else if (innerVal && typeof innerVal === "object" && innerVal.subSelect) {
+    //                     const sub = innerVal.subSelect;
 
-            //                     // Sicherheits-Checks für das Unter-Select
-            //                     if (!this.tableNameRegex.test(sub.table)) throw new Error(`Ungültige Tabelle im Subselect: ${sub.table}`);
-            //                     //if (!ALLOWED_COLUMNS.includes(sub.column)) throw new Error(`Ungültige Spalte im Subselect: ${sub.column}`);
+    //                     // Sicherheits-Checks für das Unter-Select
+    //                     if (!this.tableNameRegex.test(sub.table)) throw new Error(`Ungültige Tabelle im Subselect: ${sub.table}`);
+    //                     //if (!ALLOWED_COLUMNS.includes(sub.column)) throw new Error(`Ungültige Spalte im Subselect: ${sub.column}`);
 
-            //                     // Rekursiver Aufruf für die WHERE-Bedingung des Unter-Selects!
-            //                     const subParsed = this.quest_to_query(sub.where || {});
+    //                     // Rekursiver Aufruf für die WHERE-Bedingung des Unter-Selects!
+    //                     const subParsed = this.quest_to_query(sub.where || {});
 
-            //                     clauses.push(`${key} ${op} (SELECT ${sub.column} FROM ${sub.table} WHERE ${subParsed.sql})`);
-            //                     params.push(...subParsed.params);
-            //                 } else {
-            //                     throw new Error(`Ungültiger Wert für Operator ${op}. Erwartet wird ein Array oder ein subSelect-Objekt.`);
-            //                 }
-            //             }
-            //             // Alle anderen Operatoren (=, >=, IS NULL, etc.)
-            //             else {
-            //                 if (innerVal === null) {
-            //                     if (op === "=" || op === "IS") clauses.push(`${key} IS NULL`);
-            //                     else if (op === "!=" || op === "IS NOT") clauses.push(`${key} IS NOT NULL`);
-            //                     else throw new Error(`Operator ${op} kann nicht mit null verwendet werden.`);
-            //                 } else {
-            //                     clauses.push(`${key} ${op} ?`);
-            //                     params.push(innerVal);
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     // Normale Gleichheit
-            //     else {
-            //         clauses.push(`${key} = ?`);
-            //         params.push(val);
-            //     }
-            // }
+    //                     clauses.push(`${key} ${op} (SELECT ${sub.column} FROM ${sub.table} WHERE ${subParsed.sql})`);
+    //                     params.push(...subParsed.params);
+    //                 } else {
+    //                     throw new Error(`Ungültiger Wert für Operator ${op}. Erwartet wird ein Array oder ein subSelect-Objekt.`);
+    //                 }
+    //             }
+    //             // Alle anderen Operatoren (=, >=, IS NULL, etc.)
+    //             else {
+    //                 if (innerVal === null) {
+    //                     if (op === "=" || op === "IS") clauses.push(`${key} IS NULL`);
+    //                     else if (op === "!=" || op === "IS NOT") clauses.push(`${key} IS NOT NULL`);
+    //                     else throw new Error(`Operator ${op} kann nicht mit null verwendet werden.`);
+    //                 } else {
+    //                     clauses.push(`${key} ${op} ?`);
+    //                     params.push(innerVal);
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     // Normale Gleichheit
+    //     else {
+    //         clauses.push(`${key} = ?`);
+    //         params.push(val);
+    //     }
+    // }
 
     //         return {
     //             sql: clauses.length > 1 ? `(${clauses.join(" AND ")})` : clauses.join(" AND "),
@@ -765,19 +786,17 @@ export class DBDriver {
 
     /**
      * Gibt alle Datensätze oder nur die von der Abfrage zurück
-     * @param {string} tableName - Name der Datentabelle
-     * @param {Object<string,any>} [quest] - Optionale Abfrage
+     * @param {QuestObject} [quest_object] - Optionale Abfrage
      * @returns {Promise<DataRows>}
      */
-    async getRows(tableName, quest) { return []; }
+    async getRows(quest_object) { return []; }
 
     /**
      * Gibt einen Datensatz mit angegebener ID zurück
-     * @param {string} tableName - Name der Datentabelle
-     * @param {Object<string,any>} quest - Abfrage für eindeutigen Datensatz.
+     * @param {QuestObject} [quest_object] - Optionale Abfrage
      * @returns {Promise<DataRows>}
      */
-    async getRecord(tableName, quest) { return []; }
+    async getRecord(quest_object) { return []; }
 
     /**
      * Speichert die Daten oder legt diese neu an. Die ID-Spalten müssen den Datensatz eindeutig Identifizieren.

@@ -11,7 +11,7 @@ import { DBDriver } from "./infodata.js";
 // =============================================
 //   Typen
 // ---------
-/** @typedef {import('./infodata.js').DataRows} DataRows */
+/** @import {DataRows, QuestObject} from "./infodata.js" */
 
 // =============================================
 
@@ -49,14 +49,16 @@ export class SQLiteDriver extends DBDriver {
     /**
      * Liest aus einer Tabelle Datensätze mit flexiblen Filtern und Sortierung.
      * Unterstützt die virtuelle Tabelle 'sys_tables_menu' zur Systemabfrage.
-     * 
-     * @param {string} tableName - Name der Tabelle
-     * @param {Object<string,any>} [quest] - Optional Abfrage der Daten
+     * @param {QuestObject} quest_object - Optional Abfrage der Daten
      * @returns {Promise<DataRows>} [Spaltennamen, ...Datenzeilen]
      */
-    async getRows(tableName, quest) {
+    async getRows(quest_object) {
+        if (typeof quest_object != "object") {
+            throw new Error("no QuestObject!");
+        }
+
         // SONDERFALL: Virtuelle System-Menü-Tabelle abfangen
-        if (tableName === "sys_tables_menu") {
+        if (quest_object.table === "sys_tables_menu") {
             // Holt alle vom Benutzer angelegten Tabellen aus dem SQLite-Katalog (ohne interne Tabellen)
             const q = this.db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
             const dbTables = q.values(); // Liefert ein Array von Arrays, z.B. [ ["users"], ["records"] ]
@@ -71,44 +73,48 @@ export class SQLiteDriver extends DBDriver {
         }
 
         // Regulärer Tabellen-Abruf (Schutz gegen SQL-Injection)
-        if (!this.tableNameRegex.test(tableName)) throw new Error("Table not allowed!");
+        if (!this.tableNameRegex.test(quest_object.table)) throw new Error("Table not allowed!");
 
-        const qColumns = this.db.query(`SELECT * FROM ${tableName} WHERE 0`);
-        const columnNames = qColumns.columnNames;
+        // SQL und Parameter zusammenbauen
+        
+        // const qColumns = this.db.query(`SELECT * FROM ${quest_object.table} WHERE 0`);
+        // const columnNames = qColumns.columnNames;
+        
+        const sql_object = this.buildSelectStatement(quest_object);
 
-        if (typeof quest == "object") {
-            const where = this.quest_to_query(quest);
-            const q = this.db.query(`SELECT * FROM ${tableName} WHERE ${where.sql}`);
-            return [columnNames, ...q.values(...where.params)];
+        if (typeof sql_object == "object") {
+            //const where = this.quest_to_query(quest);
+            const q = this.db.query(sql_object.sql);
+            return [q.columnNames, ...q.values(...sql_object.params)];
         } else {
-            const q = this.db.query(`SELECT * FROM ${tableName}`);
-            return [columnNames, ...q.values()];
+            const q = this.db.query(`SELECT * FROM ${quest_object.table}`);
+            return [q.columnNames, ...q.values()];
         }
     }
 
-    /**
-     * Holt genau einen Datensatz für die Detail-/Formularansicht des Clients.
-     * @param {string} tableName - Name der Tabelle
-     * @param {Object<string, any>} quest - Die ID des gesuchten Datensatzes
-     * @returns {Promise<DataRows>} [Header, Datenzeile]
-     */
-    async getRecord(tableName, quest) {
-        if (!this.tableNameRegex.test(tableName)) throw new Error("Table not allowed!");
+    // /**
+    //  * Holt genau einen Datensatz für die Detail-/Formularansicht des Clients.
+    //  * @param {string} tableName - Name der Tabelle
+    //  * @param {Object<string, any>} quest - Die ID des gesuchten Datensatzes
+    //  * @returns {Promise<DataRows>} [Header, Datenzeile]
+    //  */
+    // async getRecord(tableName, quest) {
+    //     if (!this.tableNameRegex.test(tableName)) throw new Error("Table not allowed!");
 
         
-        const qColumns = this.db.query(`SELECT * FROM ${tableName} WHERE 0`);
-        const columnNames = qColumns.columnNames;
+    //     const qColumns = this.db.query(`SELECT * FROM ${tableName} WHERE 0`);
+    //     const columnNames = qColumns.columnNames;
         
-        const where = this.quest_to_query(quest);
-        const q = this.db.query(`SELECT * FROM ${tableName} WHERE ${where.sql}`);
-        const resultRows = q.values(...where.params);
+    //     const where = this.quest_to_query(quest);
+    //     const q = this.db.query(`SELECT * FROM ${tableName} WHERE ${where.sql}`);
+    //     const resultRows = q.values(...where.params);
 
-        if (!resultRows) {
-            throw new Error(`Datensatz mit quest '${JSON.stringify(quest)}' existiert nicht in Tabelle '${tableName}'.`);
-        }
+    //     if (!resultRows) {
+    //         throw new Error(`Datensatz mit quest '${JSON.stringify(quest)}' existiert nicht in Tabelle '${tableName}'.`);
+    //     }
 
-        return [columnNames, ...resultRows];
-    }
+    //     return [columnNames, ...resultRows];
+    // }
 
     /**
      * Speichert die Daten oder legt diese neu an. Die ID-Spalten müssen den Datensatz eindeutig Identifizieren.

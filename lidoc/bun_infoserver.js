@@ -7,7 +7,8 @@ import { join } from "path";
 import { mkdir } from "fs/promises";
 import { InfoSchema } from "./infoschema.js";
 import { InfoUITableCol_fields, InfoUIFormField_fields } from "./infoui.js";
-import { DBDriver } from "./infodata.js"
+import { DataTable, DBDriver } from "./infodata.js"
+import { table } from "console";
 
 //import { JsonFileDriver } from "./db_drivers.js";
 
@@ -17,7 +18,7 @@ import { DBDriver } from "./infodata.js"
 
 /**
  * DatenTypen vom Schema
- * @import {ApplicationConfig, ClientServerMessage, Token, DriverConfig} from "./infodata.js"
+ * @import {ApplicationConfig, ClientServerMessage, Token, DataRows, TableObject, QuestObject} from "./infodata.js"
  */
 
 
@@ -25,13 +26,18 @@ import { DBDriver } from "./infodata.js"
  * Repräsentiert eine aktive Bearbeitungssperre eines Datensatzes (Concurrency Management).
  * Existiert rein In-Memory auf dem Server.
  * @typedef {Object} LockData
- * @property {string} lockKey - Zusammengesetzter Key aus `driverId_tableName_recordId`
- * @property {string} driverId - ID des betroffenen Treibers
- * @property {string} tableName - Name der editierten Tabelle
- * @property {string} recordId - Eindeutige ID des Datensatzes (Wert der ID-Spalte)
+ * @property {string} GSID - Eindeutige ID der Sperrung
+ * @property {string} driver - ID des betroffenen Treibers
+ * @property {string} table - Name der editierten Tabelle
+ * @property {string|Array<string>} ids - Eindeutige ID des Datensatzes (Wert der ID-Spalte)
  * @property {string} username - Name des Benutzers, der den Datensatz aktuell sperrt
  * @property {string} lockTime - Uhrzeit des Sperr-Zeitpunkts (LocaleTimeString)
  */
+const LockData_fields = ["gsid", "driverid", "tablename", "recordid", "username", "locktime"];
+
+/** @type {DataTable<LockData>} */
+const LockList = new DataTable("lockdata", [LockData_fields], "gsid");
+
 
 
 // =========================================================================
@@ -539,7 +545,7 @@ export class RealtimeServer {
                         // Prüfen, ob die Datenstruktur des Nutzers überhaupt existiert
                         if (!ws.data || !ws.data.userId) {
                             /** @type {ClientServerMessage} */
-                            const errmsg = this.getErrorMessage("No Login.", msg.requestId);
+                            const errmsg = this.getErrorMessage("No Login.", msg.request_id);
 
                             ws.send(JSON.stringify(errmsg));
                             ws.close(4001, "Nicht authentifiziert");
@@ -549,7 +555,7 @@ export class RealtimeServer {
                         // Prüfen, ob die Session-Zeit (exp) abgelaufen ist
                         if (Date.now() > ws.data.exp) {
                             /** @type {ClientServerMessage} */
-                            const errmsg = this.getErrorMessage("Session Timeout.", msg.requestId);
+                            const errmsg = this.getErrorMessage("Session Timeout.", msg.request_id);
 
                             ws.send(JSON.stringify(errmsg));
                             ws.close(4001, "Session abgelaufen");
@@ -568,14 +574,14 @@ export class RealtimeServer {
                         const currentConfig = await loadOrInitializeConfig();
 
                         // Eindeutigen Sperrschlüssel generieren, falls Treiber, Tabelle und ID vorliegen
-                        const lockKey = (msg.driverId && msg.tableName && msg.recordId)
-                            ? `${msg.driverId}_${msg.tableName}_${msg.recordId}`
-                            : "";
+                        // const lockKey = (msg.driverId && msg.tableName && msg.recordId)
+                        //     ? `${msg.driverId}_${msg.tableName}_${msg.recordId}`
+                        //     : "";
 
-                        const { type, requestId, driverId, tableName, recordId, idFields, quest, targetType, payload } = msg;
+                        const { type, request_id, quest_objects, table_objects } = msg;
 
                         /** @type {ClientServerMessage} */
-                        const answer = { type: "ERROR", requestId, driverId, tableName, recordId, targetType };
+                        const answer = { type: "ERROR", request_id };
 
                         switch (msg.type) {
 
@@ -584,16 +590,16 @@ export class RealtimeServer {
                             // =================================================================
                             case "GET_DATA": {
                                 // Fall A: Der Client möchte das Ersteinrichtungs-Formular aufrufen
-                                if (targetType === "CONFIG") {
-                                    // Wir liefern die Tabellenstruktur, um Treiber-Daten einzugeben
-                                    answer.type = "DATA";
-                                    answer.targetType = "CONFIG";
-                                    answer.payload = currentConfig;
-                                    //const answer = { type: "DATA", targetType: "FORM", rows: wizardForm };
+                                // if (targetType === "CONFIG") {
+                                //     // Wir liefern die Tabellenstruktur, um Treiber-Daten einzugeben
+                                //     answer.type = "DATA";
+                                //     answer.targetType = "CONFIG";
+                                //     answer.payload = currentConfig;
+                                //     //const answer = { type: "DATA", targetType: "FORM", rows: wizardForm };
 
-                                    ws.send(JSON.stringify(answer));
-                                    break;
-                                }
+                                //     ws.send(JSON.stringify(answer));
+                                //     break;
+                                // }
 
                                 // // Fall B: Ein Treiber wurde gewählt -> Frage dessen Tabellenliste oder Menütabelle ab
                                 // if (targetType === "DRIVER_MAIN") {
@@ -616,61 +622,64 @@ export class RealtimeServer {
                                 //     break;
                                 // }
 
-                                if (payload) {
+                                if (quest_objects) {
                                     // 1. Die Magie: Referenzen im JavaScript auflösen
-                                    /** @type {Object<string,Array<any>>} */
-                                    const answerPayload = {};
+                                    /** @type {Object<string,TableObject>} */
+                                    const answerTables = {};
 
                                     // 2. Jede Tabelle nacheinander abfragen (Reihenfolge ist jetzt egal, da alle Daten fertig im JS liegen!)
                                     //for (const [tableName, config] of Object.entries(cleanPayload)) {
-                                    const tables = Object.keys(payload);
-                                    for (let i = 0; i < tables.length; i++) {
-                                        const tableName = tables[i];
-                                        const config = payload[tableName];
-                                        const driver = this.activeDrivers.get(config.driverId);
-                                        if (driver) {
+                                    const objects = Object.keys(quest_objects);
+                                    for (let i = 0; i < objects.length; i++) {
+                                        const objectName = objects[i];
+                                        const quest_object = quest_objects[objectName];
+                                        const driver = this.activeDrivers.get(quest_object.driver || "");
+                                        if (driver && quest_object.type == "quest") {
                                             // Treiber erhält die vollständig ausformulierte Quest mit EXISTS-Kette
-                                            answerPayload[tableName] = await driver.getRows(tableName, config.quest);
+                                            answerTables[objectName] = {
+                                                type: "table"
+                                                , driver: quest_object.driver
+                                                , rows: await driver.getRows(quest_object)
+                                            };
                                         }
                                     }
 
                                     answer.type = "DATA";
-                                    answer.targetType = "LIST";
-                                    answer.payload = answerPayload; // Schickt { customers: [...], customers_interests: [...], interests: [...] }
+                                    answer.table_objects = answerTables; // Schickt { customers: [...], customers_interests: [...], interests: [...] }
                                     ws.send(JSON.stringify(answer));
                                     break;
                                 }
 
-                                // Fall C: Eine Tabelle wurde gewählt -> Hole Datensätze oder Datensatz
-                                if (driverId && tableName) {
-                                    const driver = this.activeDrivers.get(driverId);
+                                // // Fall C: Eine Tabelle wurde gewählt -> Hole Datensätze oder Datensatz
+                                // if (driverId && tableName) {
+                                //     const driver = this.activeDrivers.get(driverId);
 
-                                    if (!driver) {
-                                        ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`, requestId)));
-                                        break;
-                                    }
+                                //     if (!driver) {
+                                //         ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`, requestId)));
+                                //         break;
+                                //     }
 
-                                    let tableRows;
+                                //     let tableRows;
 
-                                    // Wenn datensatz ID  && !recordId
-                                    if (recordId != undefined && quest) {
-                                        tableRows = await driver.getRecord(tableName, quest);
-                                    } else {
-                                        // Hole das komplette Daten-Array über den Treiber
-                                        tableRows = await driver.getRows(tableName, quest);
-                                    }
+                                //     // Wenn datensatz ID  && !recordId
+                                //     if (recordId != undefined && quest) {
+                                //         tableRows = await driver.getRecord(tableName, quest);
+                                //     } else {
+                                //         // Hole das komplette Daten-Array über den Treiber
+                                //         tableRows = await driver.getRows(tableName, quest);
+                                //     }
 
-                                    ///** @type {ClientServerMessage} */
-                                    //const answer = { type: "DATA", targetType: "LIST", rows: tableRows };
-                                    answer.type = "DATA";
-                                    answer.targetType = "LIST";
-                                    answer.payload = { [tableName]: tableRows };
+                                //     ///** @type {ClientServerMessage} */
+                                //     //const answer = { type: "DATA", targetType: "LIST", rows: tableRows };
+                                //     answer.type = "DATA";
+                                //     answer.targetType = "LIST";
+                                //     answer.payload = { [tableName]: tableRows };
 
-                                    // Der Server gibt das Array unverändert an den Client weiter.
-                                    // Der Client speichert es in seiner lokalen InfoTable zum Filtern und Sortieren.
-                                    ws.send(JSON.stringify(answer));
-                                    break;
-                                }
+                                //     // Der Server gibt das Array unverändert an den Client weiter.
+                                //     // Der Client speichert es in seiner lokalen InfoTable zum Filtern und Sortieren.
+                                //     ws.send(JSON.stringify(answer));
+                                //     break;
+                                // }
                                 break;
                             }
 
@@ -678,6 +687,36 @@ export class RealtimeServer {
                             //   CONCURRENCY LOGIC (Sperren & Freigeben)
                             // =================================================================
                             case "REQUEST_LOCK": {
+                                if (table_objects) {
+                                    const object_names = Object.keys(table_objects);
+                                    for (let i = 0; i < object_names.length; i++) {
+                                        const objectName = object_names[i];
+                                        const config = table_objects[objectName];
+
+                                        // Prüfen ob gesperrt
+                                        // driver, Tables, ids
+                                        const lock_object = LockList.find(config);
+                                        if (lock_object) {
+                                            // Auf User Prüdfen
+
+                                            // gsid. Zurückschicken
+                                        } else {
+                                            // Neues Lock_Objekt anlegen
+
+                                            // neue GSID zurückschicken
+                                        }
+
+
+
+                                        const driver = this.activeDrivers.get(config.driverId);
+                                        if (driver) {
+                                            // Treiber erhält die vollständig ausformulierte Quest mit EXISTS-Kette
+                                            
+                                        }
+                                    }                                    
+                                }
+
+
                                 if (!lockKey || !driverId || !tableName || !recordId) {
                                     ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.", requestId)));
                                     break;
