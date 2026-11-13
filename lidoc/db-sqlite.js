@@ -5,13 +5,14 @@
 
 import { Database } from "bun:sqlite";
 import { DBDriver } from "./infodata.js";
+import { skip } from "node:test";
 
 //const tableNameRegex = /^(?!sqlite_)[a-z_][a-z0-9_]*$/;
 
 // =============================================
 //   Typen
 // ---------
-/** @import {DataRows, QuestObject} from "./infodata.js" */
+/** @import {DataRows, QuestObject, TableObject} from "./infodata.js" */
 
 // =============================================
 
@@ -62,7 +63,7 @@ export class SQLiteDriver extends DBDriver {
             // Holt alle vom Benutzer angelegten Tabellen aus dem SQLite-Katalog (ohne interne Tabellen)
             const q = this.db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
             const dbTables = q.values(); // Liefert ein Array von Arrays, z.B. [ ["users"], ["records"] ]
-            
+
             // Formatieren als zweidimensionales Client-Menü-Array
             /** @type {DataRows} */
             const menuRows = [
@@ -76,10 +77,10 @@ export class SQLiteDriver extends DBDriver {
         if (!this.tableNameRegex.test(quest_object.table)) throw new Error("Table not allowed!");
 
         // SQL und Parameter zusammenbauen
-        
+
         // const qColumns = this.db.query(`SELECT * FROM ${quest_object.table} WHERE 0`);
         // const columnNames = qColumns.columnNames;
-        
+
         const sql_object = this.buildSelectStatement(quest_object);
 
         if (typeof sql_object == "object") {
@@ -101,10 +102,10 @@ export class SQLiteDriver extends DBDriver {
     // async getRecord(tableName, quest) {
     //     if (!this.tableNameRegex.test(tableName)) throw new Error("Table not allowed!");
 
-        
+
     //     const qColumns = this.db.query(`SELECT * FROM ${tableName} WHERE 0`);
     //     const columnNames = qColumns.columnNames;
-        
+
     //     const where = this.quest_to_query(quest);
     //     const q = this.db.query(`SELECT * FROM ${tableName} WHERE ${where.sql}`);
     //     const resultRows = q.values(...where.params);
@@ -116,45 +117,224 @@ export class SQLiteDriver extends DBDriver {
     //     return [columnNames, ...resultRows];
     // }
 
+
     /**
-     * Speichert die Daten oder legt diese neu an. Die ID-Spalten müssen den Datensatz eindeutig Identifizieren.
-     * @param {string} tableName - Name der Datentabelle
-     * @param {Array<Array<any>>} deltaRows - geänderte Daten. In der ersten Zeile stehen die Spaltennamen.
-     * @param {Array<string>} idCols - Name der ID-Spalten
+     * Speichert die Daten mehrerer Tabellen in einer einzigen Transaktion.
+     * Bei einem Fehler wird alles zurückgesetzt (Rollback).
+     * @param {Object<string,TableObject>} tables - Objekt mit Datentabellen
+     * @param {string} driver_id - ID des Treibers
      * @returns {Promise<boolean>} true wenn erfolgreich
      */
-    async saveRows(tableName, deltaRows, idCols) {
-        if (!this.tableNameRegex.test(tableName)) throw new Error("Table not allowed!");
-        if (!Array.isArray(deltaRows) || deltaRows.length <= 1) return false;
+    async saveRows(tables, driver_id) {
+        // Die gesamte Verarbeitung aller Tabellen in EINE Transaktion verpacken
+        const saveAllTransaction = this.db.transaction((tablesObj) => {
+            const table_names = Object.keys(tablesObj);
+            let anythingSaved = false;
 
-        const headers = deltaRows[0];
-        const updateFields = headers.filter(col => idCols.indexOf(col) == -1);
+            for (let i = 0; i < table_names.length; i++) {
+                const table_object = tablesObj[table_names[i]];
 
-        if (updateFields.length === 0) return false;
+                // Nur Tabellen mit richtiger Treiber-ID berücksichtigen
+                if (table_object.driver !== driver_id) {
+                    continue;
+                }
 
-        const columnsStr = headers.join(", ");
-        const placeholdersStr = headers.map(() => "?").join(", ");
-        const updateStr = updateFields.map(col => `${col} = EXCLUDED.${col}`).join(", ");
+                // Validierungen: Werfen bei Problemen einen Fehler -> löst Rollback aus!
+                if (!table_object.table || !this.tableNameRegex.test(table_object.table)) {
+                    throw new Error(`Table '${table_object.table}' not allowed!`);
+                }
+                if (!Array.isArray(table_object.rows) || table_object.rows.length <= 1) {
+                    throw new Error(`No valid rows provided for table '${table_object.table}'.`);
+                }
+                if (!table_object.id_name) {
+                    throw new Error(`Missing id_name for table '${table_object.table}'.`);
+                }
 
-        const sql = `
-            INSERT INTO ${tableName} (${columnsStr}) 
-            VALUES (${placeholdersStr})
-            ON CONFLICT(${idCols.join(",")}) 
-            DO UPDATE SET ${updateStr}
-        `;
+                /** @type {Array<string>} */
+                const IDs = Array.isArray(table_object.id_name) ? table_object.id_name : [table_object.id_name];
 
-        const stmt = this.db.prepare(sql);
-        
-        // Transaktions-Sicherheit über Buns native API
-        const transaction = this.db.transaction((allRows) => {
-            for (let i = 1; i < allRows.length; i++) {
-                stmt.run(...allRows[i]);
+                /** @type {Array<string>} Kopfzeilen */
+                const headers = table_object.rows[0];
+
+                /** @type {Array<string>} Spalten die geändert werden */
+                const updateFields = [];
+                for (let j = 0; j < headers.length; j++) {
+                    // SpaltenNamen prüfen, Spalten-Injection-Schutz
+                    if (!this.tableNameRegex.test(headers[j])) {
+                        throw new Error(`Column '${headers[j]}' not allowed!`);
+                    }
+
+                    if (IDs.indexOf(headers[j]) === -1) {
+                        updateFields.push(headers[j]);
+                    }
+                }
+
+                // Keine Änderungen möglich (z.B. wenn Tabelle nur aus ID-Spalten besteht)
+                if (updateFields.length === 0) {
+                    throw new Error(`No updatable fields for table '${table_object.table}'.`);
+                }
+
+                const columnsStr = headers.join(", ");
+                const placeholdersStr = headers.map(() => "?").join(", ");
+                const updateStr = updateFields.map(col => `${col} = EXCLUDED.${col}`).join(", ");
+
+                const sql = `
+                INSERT INTO ${table_object.table} (${columnsStr}) 
+                VALUES (${placeholdersStr})
+                ON CONFLICT(${IDs.join(",")}) 
+                DO UPDATE SET ${updateStr}
+            `;
+
+                const stmt = this.db.prepare(sql);
+
+                // Erste Zeile enthält Feldnamen, deshalb bei j = 1 starten
+                for (let j = 1; j < table_object.rows.length; j++) {
+                    stmt.run(...table_object.rows[j]);
+                }
+
+                anythingSaved = true;
             }
-            return true;
+
+            return anythingSaved;
         });
 
-        return transaction(deltaRows);
+        // Transaktion ausführen
+        return saveAllTransaction(tables);
     }
+
+
+    /**
+     * Löscht Datensätze aus einer oder mehreren Tabellen in einer einzigen Transaktion.
+     * Unterstützt sowohl konkrete ID-Listen (id_name + ids) als auch Filterabfragen (quest).
+     * Bei einem Fehler wird die gesamte Transaktion zurückgesetzt (Rollback).
+     * 
+     * @param {Object<string,TableObject|QuestObject>} tables - Objekt mit Datentabellen od Datenbank Abfragen(Quest)
+     * @param {string} driver_id - ID des Treibers
+     * @returns {Promise<boolean>} true wenn mindestens ein Datensatz gelöscht wurde
+     */
+    async deleteRows(tables, driver_id) {
+        const deleteAllTransaction = this.db.transaction((tablesObj) => {
+            const table_names = Object.keys(tablesObj);
+            let totalChanges = 0;
+
+            for (let i = 0; i < table_names.length; i++) {
+                const table_object = tablesObj[table_names[i]];
+
+                // 1. Nur Tabellen mit passender Treiber-ID berücksichtigen
+                if (table_object.driver !== driver_id) {
+                    continue;
+                }
+
+                // 2. Tabellenname validieren (SQL-Injection-Schutz)
+                if (!table_object.table || !this.tableNameRegex.test(table_object.table)) {
+                    throw new Error(`Table '${table_object.table}' not allowed!`);
+                }
+
+                // =================================================================
+                // FALL 1: Löschen über konkrete ID-Liste (id_name + ids)
+                // =================================================================
+                if (table_object.id_name && Array.isArray(table_object.ids) && table_object.ids.length > 0) {
+                    const idCols = Array.isArray(table_object.id_name) ? table_object.id_name : [table_object.id_name];
+
+                    // Spaltennamen gegen SQL-Injection prüfen
+                    for (const col of idCols) {
+                        if (!this.tableNameRegex.test(col)) {
+                            throw new Error(`Column '${col}' not allowed!`);
+                        }
+                    }
+
+                    // A) Einfacher Primärschlüssel (z.B. id_name = "gsid", ids = ["1", "2", "3"])
+                    // Sehr performant durch ein einzelnes "WHERE gsid IN (?, ?, ?)" Statement
+                    if (idCols.length === 1) {
+                        const placeholders = table_object.ids.map(() => "?").join(", ");
+                        const sql = `DELETE FROM ${table_object.table} WHERE ${idCols[0]} IN (${placeholders})`;
+                        const result = this.db.run(sql, table_object.ids);
+                        totalChanges += result.changes;
+                    }
+                    // B) Zusammengesetzter Primärschlüssel (z.B. id_name = ["a", "b"], ids = [["1", "2"], ["3", "4"]])
+                    else {
+                        const whereClause = idCols.map(col => `${col} = ?`).join(" AND ");
+                        const sql = `DELETE FROM ${table_object.table} WHERE ${whereClause}`;
+                        const stmt = this.db.prepare(sql);
+
+                        for (let j = 0; j < table_object.ids.length; j++) {
+                            const idTuple = table_object.ids[j];
+                            if (!Array.isArray(idTuple) || idTuple.length !== idCols.length) {
+                                throw new Error(`Invalid composite ID format in table '${table_object.table}'.`);
+                            }
+                            const result = stmt.run(...idTuple);
+                            totalChanges += result.changes;
+                        }
+                    }
+                }
+
+                // =================================================================
+                // FALL 2: Löschen über Filter-Objekt (quest)
+                // =================================================================
+                if (table_object.quest && Object.keys(table_object.quest).length > 0) {
+                    const where = this.quest_to_query(table_object.quest);
+
+                    // Sicherheitsnetz: Niemals ohne WHERE-Klausel löschen
+                    if (!where || !where.sql) {
+                        throw new Error(`Refusing to delete from '${table_object.table}' without valid WHERE condition.`);
+                    }
+
+                    const sql = `DELETE FROM ${table_object.table} WHERE ${where.sql}`;
+                    const result = this.db.run(sql, where.params);
+                    totalChanges += result.changes;
+                }
+            }
+
+            return totalChanges > 0;
+        });
+
+        return deleteAllTransaction(tables);
+    }
+
+
+
+    /**
+     * Löscht Datensätze aus einer oder mehreren Tabellen in einer Transaktion.
+     * @param {Object<string,TableObject>} deleteTasks - Löschaufträge
+     * @param {string} driver_id - ID des Treibers
+     * @returns {Promise<boolean>} true wenn mindestens ein Datensatz gelöscht wurde
+     */
+    async deleteRows3(deleteTasks, driver_id) {
+        const deleteAllTransaction = this.db.transaction((tasksObj) => {
+            const taskKeys = Object.keys(tasksObj);
+            let totalChanges = 0;
+
+            for (let i = 0; i < taskKeys.length; i++) {
+                const task = tasksObj[taskKeys[i]];
+
+                // Nur Aufgaben für diesen Treiber ausführen
+                if (task.driver !== driver_id) {
+                    continue;
+                }
+
+                if (!task.table || !this.tableNameRegex.test(task.table)) {
+                    throw new Error(`Table '${task.table}' not allowed!`);
+                }
+
+                const where = this.quest_to_query(task.quest);
+
+                // Sicherheitsnetz: Verhindert versehentliches Löschen der gesamten Tabelle ohne WHERE-Klausel
+                if (!where || !where.sql) {
+                    throw new Error(`Refusing to delete from '${task.table}' without WHERE condition.`);
+                }
+
+                const sql = `DELETE FROM ${task.table} WHERE ${where.sql}`;
+                const result = this.db.run(sql, where.params);
+
+                totalChanges += result.changes;
+            }
+
+            return totalChanges > 0;
+        });
+
+        return deleteAllTransaction(deleteTasks);
+    }
+
 
     /**
      * Löscht Datensätze von der Abfrage
@@ -162,15 +342,15 @@ export class SQLiteDriver extends DBDriver {
      * @param {Object<string,any>} quest - Optionale Abfrage
      * @returns {Promise<boolean>}
      */
-    async deleteRows(tableName, quest) {
+    async deleteRows2(tableName, quest) {
         if (!this.tableNameRegex.test(tableName)) throw new Error("Table not allowed!");
 
         const where = this.quest_to_query(quest);
         const sql = `DELETE FROM ${tableName} WHERE ${where.sql}`;
-        
+
         // Führe das Delete-Statement aus
         const result = this.db.run(sql, where.params);
-        
+
         // result.changes gibt die Anzahl der betroffenen Zeilen in SQLite zurück
         return result.changes > 0;
     }

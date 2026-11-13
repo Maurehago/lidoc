@@ -8,7 +8,7 @@ import { mkdir } from "fs/promises";
 import { InfoSchema } from "./infoschema.js";
 import { InfoUITableCol_fields, InfoUIFormField_fields } from "./infoui.js";
 import { DataTable, DBDriver } from "./infodata.js"
-import { table } from "console";
+import { error, table } from "console";
 
 //import { JsonFileDriver } from "./db_drivers.js";
 
@@ -18,7 +18,7 @@ import { table } from "console";
 
 /**
  * DatenTypen vom Schema
- * @import {ApplicationConfig, ClientServerMessage, Token, DataRows, TableObject, QuestObject} from "./infodata.js"
+ * @import {ApplicationConfig, ClientServerMessage, Token, DataRows, TableObject, QuestObject, ErrorObject} from "./infodata.js"
  */
 
 
@@ -29,9 +29,9 @@ import { table } from "console";
  * @property {string} GSID - Eindeutige ID der Sperrung
  * @property {string} driver - ID des betroffenen Treibers
  * @property {string} table - Name der editierten Tabelle
- * @property {string|Array<string>} ids - Eindeutige ID des Datensatzes (Wert der ID-Spalte)
+ * @property {string|Array<string>|Array<Array<string>>} ids - Eindeutige ID des Datensatzes (Wert der ID-Spalte)
  * @property {string} username - Name des Benutzers, der den Datensatz aktuell sperrt
- * @property {string} lockTime - Uhrzeit des Sperr-Zeitpunkts (LocaleTimeString)
+ * @property {string} locktime - Uhrzeit des Sperr-Zeitpunkts (LocaleTimeString)
  */
 const LockData_fields = ["gsid", "driverid", "tablename", "recordid", "username", "locktime"];
 
@@ -338,7 +338,11 @@ export class RealtimeServer {
         /** @type {ClientServerMessage} */
         return {
             type: "LOCK_UPDATED"
-            , payload: this.activeLocks.values()
+            , table_objects: {
+                locks: {
+                    rows: LockList.rows
+                }
+            }
         };
     }
 
@@ -634,11 +638,10 @@ export class RealtimeServer {
                                         const objectName = objects[i];
                                         const quest_object = quest_objects[objectName];
                                         const driver = this.activeDrivers.get(quest_object.driver || "");
-                                        if (driver && quest_object.type == "quest") {
+                                        if (driver) {
                                             // Treiber erhält die vollständig ausformulierte Quest mit EXISTS-Kette
                                             answerTables[objectName] = {
-                                                type: "table"
-                                                , driver: quest_object.driver
+                                                driver: quest_object.driver
                                                 , rows: await driver.getRows(quest_object)
                                             };
                                         }
@@ -688,104 +691,224 @@ export class RealtimeServer {
                             // =================================================================
                             case "REQUEST_LOCK": {
                                 if (table_objects) {
+                                    /** @type {Object<string,TableObject>} */
+                                    const answer_tables = {};
+
                                     const object_names = Object.keys(table_objects);
+                                    for (let i = 0; i < object_names.length; i++) {
+                                        const objectName = object_names[i];
+                                        const config = table_objects[objectName];
+
+                                        /** @type {ErrorObject|undefined} */
+                                        let error;
+
+                                        /** @type {string|undefined} */
+                                        let lock_id;
+
+
+                                        // Prüfen ob gesperrt
+                                        // driver, Tables, ids
+                                        const lock_object = LockList.find(config);
+                                        if (lock_object) {
+                                            // Auf User Prüfen ? ID
+                                            if (ws.data.username == lock_object.username) {
+                                                // Ist OK
+                                                lock_id = lock_object.GSID;
+                                            } else {
+                                                // bereits gesperrt
+                                                error = { id: "403", message: `Datensatz wird bereits von '${lock_object.username}' bearbeitet (seit ${lock_object.locktime}).` }
+                                            }
+
+                                            // Antwort ertsellen
+                                            answer_tables[objectName] = {
+                                                driver: config.driver
+                                                , table: config.table
+                                                , ids: config.ids
+                                                , lock_id
+                                                , error
+                                            };
+                                        } else {
+                                            // Neues Lock_Objekt anlegen
+                                            lock_id = LockList.setObject({
+                                                driver: config.driver
+                                                , table: config.table
+                                                , ids: config.ids
+                                                , username: ws.data.username
+                                                , locktime: new Date().toISOString()
+                                            }, true);
+
+                                            // Antwort ertsellen
+                                            answer_tables[objectName] = {
+                                                driver: config.driver
+                                                , table: config.table
+                                                , ids: config.ids
+                                                , lock_id
+                                            };
+                                        }
+                                    } // for alle Tabellen Objekte
+
+                                    // Antwort zurückschicken
+                                    answer.type = "DATA";
+                                    answer.table_objects = answer_tables;
+                                    ws.send(JSON.stringify(answer));
+
+                                    // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
+                                    server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
+                                } else {
+                                    // Keine gültige Anfrage
+                                    answer.type = "ERROR";
+                                    answer.error = { id: "400", message: "Falsches Anfrage Format" };
+                                    ws.send(JSON.stringify(answer));
+                                }
+                                break;
+
+                                // if (!lockKey || !driverId || !tableName || !recordId) {
+                                //     ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.", requestId)));
+                                //     break;
+                                // }
+
+                                // // Prüfen, ob ein anderer Operator diesen Datensatz blockiert
+                                // if (this.activeLocks.has(lockKey)) {
+                                //     const currentLock = this.activeLocks.get(lockKey);
+                                //     if (currentLock && currentLock.username !== ws.data.username) {
+                                //         // Zugriff verweigert! Client erhält Fehlermeldung und darf nicht editieren
+                                //         answer.type = "LOCK_DENIED";
+                                //         answer.payload = { message: `Datensatz wird bereits von '${currentLock.username}' bearbeitet (seit ${currentLock.lockTime}).` };
+
+                                //         ws.send(JSON.stringify(answer));
+                                //         break;
+                                //     }
+                                // }
+
+                                // // Jetzt holen wir den aktuellen Zustand GENAU DIESES einen Datensatzes frisch vom Treiber
+                                // const driver = this.activeDrivers.get(driverId);
+                                // if (driver && quest) {
+                                //     // Sperre im Server-Arbeitsspeicher (In-Memory) registrieren
+                                //     /** @type {LockData} */
+                                //     const newLock = {
+                                //         lockKey, driverId, tableName, recordId,
+                                //         username: ws.data.username,
+                                //         lockTime: new Date().toLocaleTimeString()
+                                //     };
+                                //     this.activeLocks.set(lockKey, newLock);
+
+                                //     // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
+                                //     server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
+
+                                //     // Daten lesen
+                                //     const singleRecordRows = await driver.getRecord(tableName, quest);
+
+                                //     // Antwort zusammenstellen
+                                //     answer.type = "DATA";
+                                //     answer.targetType = "FORM";
+                                //     answer.payload = { [tableName]: singleRecordRows };
+
+                                //     // Dem anfragenden Client grünes Licht geben und das Daten-Array für sein Formular senden
+                                //     ws.send(JSON.stringify(answer));
+                                // }
+
+                                // break;
+                            }
+
+                            case "RELEASE_LOCK": {
+                                if (table_objects) {
+                                    /** @type {Object<string,TableObject>} */
+                                    const answer_tables = {};
+                                    const object_names = Object.keys(table_objects);
+                                    let is_unlock = false;
+
                                     for (let i = 0; i < object_names.length; i++) {
                                         const objectName = object_names[i];
                                         const config = table_objects[objectName];
 
                                         // Prüfen ob gesperrt
                                         // driver, Tables, ids
-                                        const lock_object = LockList.find(config);
-                                        if (lock_object) {
-                                            // Auf User Prüdfen
+                                        const lock_object = LockList.getObject(config.lock_id || "");
 
-                                            // gsid. Zurückschicken
-                                        } else {
-                                            // Neues Lock_Objekt anlegen
+                                        // Afhebung muss vom selben Benutzer kommen
+                                        if (lock_object && ws.data.username == lock_object.username) {
+                                            if (ws.data.username == lock_object.username) {
+                                                // Sperre aufheben
+                                                LockList.delete(config.lock_id || "");
 
-                                            // neue GSID zurückschicken
+                                                // todo: Gelöschte Datensätze aufräumen?
+
+                                                // Antwort Tabelle scheiben
+                                                answer_tables[objectName] = config;
+                                                is_unlock = true;
+                                            } else {
+                                                // Nicht erlaubt
+                                                answer_tables[objectName] = {
+                                                    driver: config.driver
+                                                    , table: config.table
+                                                    , lock_id: config.lock_id
+                                                    , error: { id: "403", message: "Sperre Aufheben nicht erlaubt" }
+                                                }
+                                            }
                                         }
+                                    } // Alle Tabellen entsperren
 
-
-
-                                        const driver = this.activeDrivers.get(config.driverId);
-                                        if (driver) {
-                                            // Treiber erhält die vollständig ausformulierte Quest mit EXISTS-Kette
-                                            
-                                        }
-                                    }                                    
-                                }
-
-
-                                if (!lockKey || !driverId || !tableName || !recordId) {
-                                    ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.", requestId)));
-                                    break;
-                                }
-
-                                // Prüfen, ob ein anderer Operator diesen Datensatz blockiert
-                                if (this.activeLocks.has(lockKey)) {
-                                    const currentLock = this.activeLocks.get(lockKey);
-                                    if (currentLock && currentLock.username !== ws.data.username) {
-                                        // Zugriff verweigert! Client erhält Fehlermeldung und darf nicht editieren
-                                        answer.type = "LOCK_DENIED";
-                                        answer.payload = { message: `Datensatz wird bereits von '${currentLock.username}' bearbeitet (seit ${currentLock.lockTime}).` };
-
-                                        ws.send(JSON.stringify(answer));
-                                        break;
-                                    }
-                                }
-
-                                // Jetzt holen wir den aktuellen Zustand GENAU DIESES einen Datensatzes frisch vom Treiber
-                                const driver = this.activeDrivers.get(driverId);
-                                if (driver && quest) {
-                                    // Sperre im Server-Arbeitsspeicher (In-Memory) registrieren
-                                    /** @type {LockData} */
-                                    const newLock = {
-                                        lockKey, driverId, tableName, recordId,
-                                        username: ws.data.username,
-                                        lockTime: new Date().toLocaleTimeString()
-                                    };
-                                    this.activeLocks.set(lockKey, newLock);
-
-                                    // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
-                                    server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
-
-                                    // Daten lesen
-                                    const singleRecordRows = await driver.getRecord(tableName, quest);
-
-                                    // Antwort zusammenstellen
-                                    answer.type = "DATA";
-                                    answer.targetType = "FORM";
-                                    answer.payload = { [tableName]: singleRecordRows };
-
-                                    // Dem anfragenden Client grünes Licht geben und das Daten-Array für sein Formular senden
+                                    // Antwort schicken
+                                    answer.type = "LOCK_RELEASED";
+                                    answer.table_objects = answer_tables;
                                     ws.send(JSON.stringify(answer));
-                                }
 
-                                break;
-                            }
-
-                            case "RELEASE_LOCK": {
-                                if (lockKey && this.activeLocks.has(lockKey)) {
-                                    const currentLock = this.activeLocks.get(lockKey);
-                                    // Nur der Besitzer des Locks darf es regulär wieder freigeben
-                                    if (currentLock?.username === ws.data.username) {
-                                        this.activeLocks.delete(lockKey);
-
+                                    if (is_unlock) {
                                         // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
                                         server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
-
-                                        // Benutzer Informieren das die Sperre aufgehoben ist
-                                        ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED", requestId }));
                                     }
                                 }
                                 break;
+
+                                // if (lockKey && this.activeLocks.has(lockKey)) {
+                                //     const currentLock = this.activeLocks.get(lockKey);
+                                //     // Nur der Besitzer des Locks darf es regulär wieder freigeben
+                                //     if (currentLock?.username === ws.data.username) {
+                                //         this.activeLocks.delete(lockKey);
+
+                                //         // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
+                                //         server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
+
+                                //         // Benutzer Informieren das die Sperre aufgehoben ist
+                                //         ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED", requestId }));
+                                //     }
+                                // }
+                                // break;
                             }
 
                             // =================================================================
                             //   DATEN MODIFIKATION & SPEICHERUNG (Delta-Handling)
                             // =================================================================
                             case "SAVE_DATA": {
+                                if (table_objects) {
+                                    /** @type {Object<string,TableObject>} */
+                                    const answer_tables = {};
+                                    const object_names = Object.keys(table_objects);
+                                    
+                                    /** @type {Array<string>} */
+                                    const drivers = [];
+                                    
+                                    
+                                    // Alle Treiber ermitteln
+                                    for (let i = 0; i < object_names.length; i++) {
+                                        const driverid = table_objects[object_names[i]].driver;
+                                        
+                                        if (driverid && drivers.indexOf(driverid) < 0) {
+                                            drivers.push(driverid);
+                                        } 
+                                    }
+                                    
+                                    for (let i = 0; i < drivers.length; i++) {
+                                        const driver = this.activeDrivers.get(drivers[i]);
+                                        if (driver) {
+                                            const is_save = await driver.saveRows(table_objects, drivers[i]);
+
+                                            // todo: ab hier weiter OK oder nicht OK
+                                        }
+                                    }
+                                }
+
+
                                 // Sonderfall: Speichern der globalen Optionen (Zustand: NULL überwinden)
                                 // if (msg.tableName === "save_driver_wizard" && rows) {
                                 //     const headers = rows[0];

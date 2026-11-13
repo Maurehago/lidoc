@@ -54,7 +54,7 @@
  * Alle erlaubten MessageTypen für das System.
  * @typedef {"GET_DATA" | "REQUEST_LOCK" | "RELEASE_LOCK" | "SAVE_DATA"
  * | "DELETE_DATA" | "SAVE_CONFIG" | "INITIAL_STATE" | "LOCK_UPDATED" 
- * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED_CONFIRMED"
+ * | "DATA" | "ERROR" | "LOCK_DENIED" | "LOCK_RELEASED"
  * | "SAVE_SUCCESS" | "DATA_MUTATED" | "DELETE_SUCCESS"} MessageType
  */
 
@@ -63,6 +63,12 @@
  * @typedef {"LIST"|"FORM"|"DETAIL"|"MENU"|"CONFIG"|"DRIVER_MAIN"} TargetType
  */
 
+
+/**
+ * @typedef {Object} ErrorObject
+ * @property {string} id - Nummer/ID des Fehlers
+ * @property {string} message - FehlerText
+ */
 
 
 /**
@@ -74,7 +80,6 @@
 
 /**
  * @typedef {Object} QuestObject
- * @property {"quest"} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
  * @property {string} driver - Name/ID der Teibers der für das Ermitteln der Daten zuständig ist
  * @property {string} table - Der Tabellenname inklusive optionalem Alias. oder bei Datei/Ordner basierten Treibern der Name der Datei. "customers c"
  * @property {Array<string>} [cols] - Ausgewählte Spalten, SQL-Funktionen oder mathematische Ausdrücke.	["c.id", "SUM(ci.score) AS total"]
@@ -91,13 +96,15 @@
 
 /**
  * @typedef {Object} TableObject
- * @property {"table"} type - Typ des Objektes. Kann je Anwendung eigens deffiniert werden???
  * @property {string} [driver] - Name/ID der Teibers der für das Ermitteln der Daten zuständig ist
  * @property {string} [table] - Der Tabellenname oder bei Datei/Ordner basierten Treibern der Name der Datei. "customers"
  * @property {string|Array<string>} [id_name] - Name der ID-Spalte(n) Name(n)
  * @property {Array<Array<any>>} [rows] - Datenzeilen bei Tabellen Abfragen. 1. Zeile enthält Feldnamen
- * @property {Array<string>|Array<Array<string>>} [ids] - Liste mit Datensatz IDs
+ * @property {string|Array<string>|Array<Array<string>>} [ids] - Liste mit Datensatz IDs
+ * @property {string} [lock_id] - Datensatz sperre. Muss angegeben werden beim Speichern
+ * @property {ErrorObject} [error] - Bei Fehler das Fehler Objekt
  */
+
 
 /**
  * Das einheitliche WebSocket-Nachrichtenformat für die Kommunikation zwischen Client und Server.
@@ -115,6 +122,7 @@
  * @property {MessageType} type - Aktionstyp
  * @property {string} [request_id] - Eindeutige ID der Nachricht wird an den Server geschickt, und dieser sendet diese wieder zurück damit der Client diese zuordnen kann????
  * @property {string} [message] - Meldung, zum Beispiel bei Fehler
+ * @property {ErrorObject} [error] - Fehler Objekt bei Fehler
  * @property {Object<string,QuestObject>} [quest_objects] - Datenanfrage
  * @property {Object<string,TableObject>} [table_objects] - Freitext-Feld für Payloads (z.B. DatenTabellen Array<Array<any>>, Config-JSON oder Schema-JSON)
  * @property {TargetType} [targetType] - Für Navigation: Welcher UI-Typ wird erwartet ("MENU" | "TABLE" | "FORM" | "DETAIL" | "WIZARD")
@@ -800,20 +808,22 @@ export class DBDriver {
 
     /**
      * Speichert die Daten oder legt diese neu an. Die ID-Spalten müssen den Datensatz eindeutig Identifizieren.
-     * @param {string} tableName - Name der Datentabelle
-     * @param {Array<Array<any>>} deltaRows - geänderte Daten. In der ersten Zeile stehen die Spaltennamen.
-     * @param {Array<string>} idCols - Name der ID-Spalten
+     * @param {Object<string,TableObject>} tables - Name der Datentabelle
+     * @param {string} driver_id - ID des Teibers, damit nur Tabellen berücksichtigt werden die zu dem selben Treiber gehören.
      * @returns {Promise<boolean>} true wenn erfolgreich
      */
-    async saveRows(tableName, deltaRows, idCols) { return true; }
+    async saveRows(tables, driver_id) { return true; }
 
     /**
-     * Löscht Datensätze von der Abfrage
-     * @param {string} tableName - Name der Datentabelle
-     * @param {Object<string,any>} quest - Optionale Abfrage
-     * @returns {Promise<boolean>}
+     * Löscht Datensätze aus einer oder mehreren Tabellen in einer einzigen Transaktion.
+     * Unterstützt sowohl konkrete ID-Listen (id_name + ids) als auch Filterabfragen (quest).
+     * Bei einem Fehler wird die gesamte Transaktion zurückgesetzt (Rollback).
+     * 
+     * @param {Object<string,TableObject|QuestObject>} tables - Objekt mit Datentabellen od Datenbank Abfragen(Quest)
+     * @param {string} driver_id - ID des Treibers
+     * @returns {Promise<boolean>} true wenn mindestens ein Datensatz gelöscht wurde
      */
-    async deleteRows(tableName, quest) { return false; }
+    async deleteRows(tables, driver_id) { return false; }
 }
 
 
