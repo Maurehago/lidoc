@@ -504,6 +504,9 @@ export class RealtimeServer {
 
                     console.log(`Client verbunden (ID: ${ws.data.userId})`);
 
+                    // Mit APP gruppe verbinden
+                    ws.subscribe("app_group");
+
                     // Jedes Mal beim Verbindungsaufbau prüfen wir frisch den Zustand der config.json
                     const currentConfig = await loadOrInitializeConfig();
 

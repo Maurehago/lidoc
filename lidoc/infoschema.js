@@ -13,6 +13,8 @@ import { DataTable, getGSID, isNumber } from "./infodata.js";
 //   Typen
 // ---------
 
+/** @import {DataRows, QuestObject, TableObject} from "./infodata.js" */
+
 /**
  * @typedef {Object} ValidError
  * @property {boolean} valid - true wenn gültig
@@ -396,7 +398,7 @@ export class Schema {
      * @returns {string|number|undefined} ID oder Datensatzposition wenn erfolgreich
      */
     addMoreProperties(type_name, property_id) {
-        return this.#dataTypeList.addCellArrayValue(type_name, "moreProperties", property_id);
+        return this.#dataTypeList.addCellArrayValue(type_name, "more_properties", property_id);
     }
 
 
@@ -407,7 +409,7 @@ export class Schema {
      * @returns {string|number|undefined} ID wenn erfolgreich
      */
     addMoreAttributes(type_name, attribute_id) {
-        return this.#dataTypeList.addCellArrayValue(type_name, "moreAttributes", attribute_id);
+        return this.#dataTypeList.addCellArrayValue(type_name, "more_attributes", attribute_id);
     }
 
 
@@ -634,7 +636,7 @@ export class Schema {
         }
 
         if (Array.isArray(value)) {
-            obj.values.concat(value);
+            obj.values.push(...value);
         } else {
             obj.values.push(value);
         }
@@ -725,7 +727,6 @@ export class Schema {
     getAllTypeNames() {
         return [...this.#dataTypeList.rowMap.keys()];
     }
-
 
     /**
      * Prüft einen Wert gegen einen Simplen Typ
@@ -924,8 +925,63 @@ export class Schema {
             return { valid: false, error: `${typeName}.${propertyName} nicht gefunden!` };
         }
 
+
+        // Standardwerte für min/max absichern
+        const min = prop.min ?? 1;
+        const max = prop.max ?? 1;
+        const targetType = prop.prop_type || "string";
+
+        // 1. Pflichtfeld-Prüfung (wenn Wert leer/nicht vorhanden ist)
+        if (value === undefined || value === null || value === "") {
+            // Optionales Feld (min <= 0) oder es existiert ein Default-Wert -> gültig
+            if (min <= 0 || prop.default !== undefined) {
+                return { valid: true };
+            }
+            return { valid: false, error: `Pflichtfeld '${propertyName}' fehlt.` };
+        }
+
+        // 2. Fixwert-Prüfung
+        if (prop.fix !== undefined && value !== prop.fix) {
+            return { valid: false, error: `'${propertyName}' muss exakt den Wert '${prop.fix}' haben.` };
+        }
+
+        // 3. Prüfen, ob das Feld eine Liste ist oder sein kann
+        const canBeList = prop.is_list === true || max > 1 || max === -1;
+
+        if (Array.isArray(value)) {
+            if (!canBeList) {
+                return { valid: false, error: `'${propertyName}' erlaubt keine Liste.` };
+            }
+            if (min > 0 && value.length < min) {
+                return { valid: false, error: `'${propertyName}' benötigt mindestens ${min} Einträge.` };
+            }
+            if (max !== -1 && value.length > max) {
+                return { valid: false, error: `'${propertyName}' erlaubt maximal ${max} Einträge.` };
+            }
+
+            // Jedes einzelne Element der Liste gegen den Zieldatentyp prüfen
+            for (let i = 0; i < value.length; i++) {
+                const itemValid = this.validateDataType(targetType, value[i]);
+                if (!itemValid.valid) {
+                    return {
+                        valid: false,
+                        error: `Eintrag [${i}] in '${propertyName}': ${itemValid.error}`
+                    };
+                }
+            }
+            return { valid: true };
+        }
+
+        // 4. Wenn es kein Array ist, aber zwingend eine Liste sein muss
+        if (prop.is_list === true) {
+            return { valid: false, error: `'${propertyName}' muss eine Liste (Array) sein.` };
+        }
+
+        // 5. Einzelwert gegen den eigentlichen Zieldatentyp prüfen
+        return this.validateDataType(targetType, value);
+
         // Eigenschaft prüfen
-        return this.validateDataType(prop.gsid, value);
+        //return this.validateDataType(prop.gsid, value);
     }
 
 
@@ -1061,6 +1117,124 @@ export class Schema {
 
 
     /**
+     * Vergleicht dieses Schema (oldSchema) mit einem neuen Schema (newSchema)
+     * und gibt alle Unterschiede im InfoData-Format (2D-Arrays) zurück.
+     * 
+     * @param {Schema} newSchema - Das neue Schema zum Vergleich
+     * @returns {Object<string,DataRows>} InfoData-Objekt mit der Tabelle "schema_changes"
+     */
+    diff(newSchema) {
+        // Header im gewohnten InfoData-Format (Array of Arrays)
+        /** @type {DataRows} */
+        const changes = [
+            ["category", "action", "target_id", "field", "old_value", "new_value"]
+        ];
+
+        /**
+         * 
+         * @param {any} val - Wert einer Spalte
+         * @returns {any}
+         */
+        const formatCell = (val) => {
+            if (val === undefined || val === null) return null;
+            if (typeof val === "object") return JSON.stringify(val);
+            return val;
+        };
+
+        /**
+         * Hilfsfunktion zum Vergleichen zweier Listen von Schema-Objekten
+         * @template {Object<string,any>} T
+         * @param {string} category - Name der Kategorie (z. B. "property")
+         * @param {DataTable<T>} oldItems - Objekte aus dem alten Schema
+         * @param {DataTable<T>} newItems - Objekte aus dem neuen Schema
+         */
+        const compareCollection = (category, oldItems, newItems) => {
+            //const oldMap = new Map(oldItems.map(item => [getKey(item), item]));
+            //const newMap = new Map(newItems.map(item => [getKey(item), item]));
+
+            // 1. Prüfen auf gelöschte oder geänderte Einträge
+            //for (const [key, oldObj] of oldMap.entries()) {
+            for (let i = 1; i < oldItems.rows.length; i++) {
+                /** @type {T|undefined} */
+                const oldObj = oldItems.getObject(i);
+                if (!oldObj) { continue; }
+
+                const key = oldItems.getID(oldObj);
+                if (!key) { continue; }
+
+                /** @type {T|undefined} */
+                const newObj = newItems.getObject(key);
+                if (!newObj || !newItems.has(key)) {
+                    changes.push([category, "REMOVED", key, "*", JSON.stringify(oldObj), null]);
+                    continue;
+                }
+
+                //const allFields = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+
+                //for (const field of allFields) {
+                for (let j = 0; j < oldItems.columns.length; j++) {
+                    const field = oldItems.columns[j];
+
+                    // Interne oder rein beschreibende Felder bei Bedarf ausschließen
+                    //if (field === "gsid") continue;
+
+                    const oldVal = oldObj[field];
+                    const newVal = newObj[field];
+
+                    // Vergleich über JSON.stringify fängt auch Arrays (z. B. enum values, object_props) sauber ab
+                    const oldStr = oldVal !== undefined ? JSON.stringify(oldVal) : null;
+                    const newStr = newVal !== undefined ? JSON.stringify(newVal) : null;
+
+                    if (oldStr !== newStr) {
+                        changes.push([
+                            category,
+                            "MODIFIED",
+                            key,
+                            field,
+                            formatCell(oldVal),
+                            formatCell(newVal)
+                        ]);
+                    }
+                }
+            }
+
+            // 2. Prüfen auf neu hinzugekommene Einträge
+            //for (const [key, newObj] of newMap.entries()) {
+            for (let i = 1; i < newItems.rows.length; i++) {
+                /** @type {T|undefined} */
+                const newObj = newItems.getObject(i);
+                if (!newObj) { continue; }
+
+                const key = newItems.getID(newObj);
+                if (!key) { continue; }
+
+                if (!oldItems.has(key)) {
+                    changes.push([category, "ADDED", key, "*", null, JSON.stringify(newObj)]);
+                }
+            }
+        };
+
+
+        // Alle Schema-Bereiche vergleichen (alle Objekte über findAll({}) aus den internen Listen holen)
+        compareCollection("datatype", this.#dataTypeList, newSchema.#dataTypeList);
+
+        compareCollection("property", this.#propList, newSchema.#propList);
+
+        compareCollection("simpletype", this.#simpleTypeList, newSchema.#simpleTypeList);
+
+        compareCollection("enum", this.#enumList, newSchema.#enumList);
+
+        compareCollection("ref", this.#refList, newSchema.#refList);
+
+        compareCollection("unique", this.#uniqueList, newSchema.#uniqueList);
+
+        return {
+            schema_changes: changes
+        };
+    }
+
+
+    /**
      * Erzeugt ein neues Schema
      * @param {string} name - Name des Schemas
      * @param {string|Object|undefined} [data] - JSON-String oder Objekt mit SchemaDaten
@@ -1123,9 +1297,9 @@ infoSchema.setDataType({ name: "string_number", art: "multi", multi_types: ["str
 infoSchema.setDataType({ name: "EnumType", art: "object", id: "name" });
 infoSchema.addProperty("EnumType", "name");
 infoSchema.addProperty("EnumType", "values", { prop_type: "string_number", is_list: true, min: 0, max: -1 });
-infoSchema.addProperty("EnumType", "moreEnums", {is_list: true, min: 0, max: -1 });
+infoSchema.addProperty("EnumType", "more_enums", { is_list: true, min: 0, max: -1 });
 
-infoSchema.setRef({name: "enum_type", object_name: "EnumType", object_props: ["name"], ref_name: "DataType", ref_props: ["name"]});
+infoSchema.setRef({ name: "enum_type", object_name: "EnumType", object_props: ["name"], ref_name: "DataType", ref_props: ["name"] });
 
 // SimpleType
 infoSchema.setDataType({ name: "SimpleType", art: "object", id: "name" });
@@ -1143,7 +1317,7 @@ infoSchema.addProperty("SimpleType", "min_exclusive", { prop_type: "string_numbe
 infoSchema.addProperty("SimpleType", "max_exclusive", { prop_type: "string_number", min: 0 });
 infoSchema.addProperty("SimpleType", "max_inclusive", { prop_type: "string_number", min: 0 });
 
-infoSchema.setRef({name: "simple_type", object_name: "SimpleType", object_props: ["name"], ref_name: "DataType", ref_props: ["name"]});
+infoSchema.setRef({ name: "simple_type", object_name: "SimpleType", object_props: ["name"], ref_name: "DataType", ref_props: ["name"] });
 
 
 // RefType
@@ -1151,7 +1325,7 @@ infoSchema.setDataType({ name: "RefType", art: "object", id: "gsid" });
 infoSchema.addProperty("RefType", "gsid");
 infoSchema.addProperty("RefType", "name");
 infoSchema.addProperty("RefType", "object_name");
-infoSchema.addProperty("RefType", "object_props", {is_list: true, max: -1 });
+infoSchema.addProperty("RefType", "object_props", { is_list: true, max: -1 });
 infoSchema.addProperty("RefType", "ref_name");
 infoSchema.addProperty("RefType", "ref_props", { is_list: true, max: -1 });
 infoSchema.addProperty("RefType", "on_update", { prop_type: "onupdate" });
@@ -1181,7 +1355,7 @@ infoSchema.addProperty("PropertyType", "max", { prop_type: "int", default: 1, mi
 infoSchema.addProperty("PropertyType", "default", { prop_type: "any", min: 0 });
 infoSchema.addProperty("PropertyType", "fix", { prop_type: "any", min: 0 });
 
-infoSchema.setRef({name: "prop_type", object_name: "PropertyType", object_props: ["object_name"], ref_name: "DataType", ref_props: ["name"]});
+infoSchema.setRef({ name: "prop_type", object_name: "PropertyType", object_props: ["object_name"], ref_name: "DataType", ref_props: ["name"] });
 
 // DataTyp
 infoSchema.setDataType({ name: "DataType", art: "object", id: "name" });

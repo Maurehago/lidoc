@@ -3,6 +3,7 @@
 // ============================
 // @ts-check
 
+import { Schema, InfoSchema } from "./infoschema.js";
 
 // ----------- Daten DatenTypen ---------------------
 
@@ -824,6 +825,36 @@ export class DBDriver {
      * @returns {Promise<boolean>} true wenn mindestens ein Datensatz gelöscht wurde
      */
     async deleteRows(tables, driver_id) { return false; }
+
+    /**
+     * Liest eine bestehende Tabelle aus der Datenquelle aus und überträgt sie in ein InfoSchema.
+     * @param {Schema} schema - Die Ziel-Instanz deiner Schema-Klasse
+     * @param {string} tableName - Name der auszulesenden Tabelle
+     * @returns {Promise<void> | void}
+     */
+    extractTableToSchema(schema, tableName) {
+        throw new Error(`extractTableToSchema() wird vom Treiber '${this.type}' nicht unterstützt.`);
+    }
+
+    /**
+     * Erzeugt das datenbankspezifische CREATE TABLE Statement aus dem Schema.
+     * @param {Schema} schema - Das Quell-Schema
+     * @param {string} objectName - Name des ObjektTyps (Tabellenname)
+     * @returns {string}
+     */
+    generateCreateTableSQL(schema, objectName) {
+        throw new Error(`generateCreateTableSQL() wird vom Treiber '${this.type}' nicht unterstützt.`);
+    }
+
+    /**
+     * Führt eine Migration basierend auf dem Schema-Diff durch und gibt die Änderungen im InfoData-Format zurück.
+     * @param {Schema} newSchema - Das neue Ziel-Schema
+     * @param {Object<string, any>} [options] - Optionale Einstellungen (z. B. { dropRemovedTables: false })
+     * @returns {Promise<Object<string, DataRows>> | Object<string, DataRows>} InfoData-Objekt mit der Tabelle "schema_changes"
+     */
+    migrateSchema(newSchema, options = { dropRemovedTables: false }) {
+        throw new Error(`migrateSchema() wird vom Treiber '${this.type}' nicht unterstützt.`);
+    }
 }
 
 

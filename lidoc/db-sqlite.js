@@ -5,7 +5,7 @@
 
 import { Database } from "bun:sqlite";
 import { DBDriver } from "./infodata.js";
-import { skip } from "node:test";
+import { Schema } from "./infoschema.js";
 
 //const tableNameRegex = /^(?!sqlite_)[a-z_][a-z0-9_]*$/;
 
@@ -13,6 +13,7 @@ import { skip } from "node:test";
 //   Typen
 // ---------
 /** @import {DataRows, QuestObject, TableObject} from "./infodata.js" */
+/** @import {PropertyType} from "./infoschema.js" */
 
 // =============================================
 
@@ -234,6 +235,7 @@ export class SQLiteDriver extends DBDriver {
                 // FALL 1: Löschen über konkrete ID-Liste (id_name + ids)
                 // =================================================================
                 if (table_object.id_name && Array.isArray(table_object.ids) && table_object.ids.length > 0) {
+                    /** @type {Array<string>} */
                     const idCols = Array.isArray(table_object.id_name) ? table_object.id_name : [table_object.id_name];
 
                     // Spaltennamen gegen SQL-Injection prüfen
@@ -292,66 +294,508 @@ export class SQLiteDriver extends DBDriver {
     }
 
 
-
     /**
-     * Löscht Datensätze aus einer oder mehreren Tabellen in einer Transaktion.
-     * @param {Object<string,TableObject>} deleteTasks - Löschaufträge
-     * @param {string} driver_id - ID des Treibers
-     * @returns {Promise<boolean>} true wenn mindestens ein Datensatz gelöscht wurde
+     * Liest eine bestehende SQLite-Tabelle aus und überträgt sie in ein InfoSchema.
+     * @param {Schema} schema - Die Ziel-Instanz deiner Schema-Klasse
+     * @param {string} tableName - Name der auszulesenden Tabelle
      */
-    async deleteRows3(deleteTasks, driver_id) {
-        const deleteAllTransaction = this.db.transaction((tasksObj) => {
-            const taskKeys = Object.keys(tasksObj);
-            let totalChanges = 0;
+    extractTableToSchema(schema, tableName) {
+        if (!this.tableNameRegex.test(tableName)) {
+            throw new Error(`Ungültiger Tabellenname: ${tableName}`);
+        }
 
-            for (let i = 0; i < taskKeys.length; i++) {
-                const task = tasksObj[taskKeys[i]];
+        // 1. Spalteninformationen auslesen
+        // Liefert: [cid, name, type, notnull, dflt_value, pk]
+        const columns = this.db.query(`PRAGMA table_info(${tableName})`).all();
+        if (!columns || columns.length === 0) return;
 
-                // Nur Aufgaben für diesen Treiber ausführen
-                if (task.driver !== driver_id) {
-                    continue;
-                }
+        const pkColumns = [];
 
-                if (!task.table || !this.tableNameRegex.test(task.table)) {
-                    throw new Error(`Table '${task.table}' not allowed!`);
-                }
-
-                const where = this.quest_to_query(task.quest);
-
-                // Sicherheitsnetz: Verhindert versehentliches Löschen der gesamten Tabelle ohne WHERE-Klausel
-                if (!where || !where.sql) {
-                    throw new Error(`Refusing to delete from '${task.table}' without WHERE condition.`);
-                }
-
-                const sql = `DELETE FROM ${task.table} WHERE ${where.sql}`;
-                const result = this.db.run(sql, where.params);
-
-                totalChanges += result.changes;
+        // 2. Spalten in Properties umwandeln
+        for (const col of columns) {
+            if (col.pk > 0) {
+                pkColumns.push(col.name);
             }
 
-            return totalChanges > 0;
+            // SQL-Typ auf deine Basistypen mappen
+            let propType = "string";
+            const sqlType = (col.type || "").toUpperCase();
+            if (sqlType.includes("INT")) {
+                propType = "number"; // oder "bigint", je nach Wunsch
+            } else if (sqlType.includes("REAL") || sqlType.includes("FLOA") || sqlType.includes("DOUB")) {
+                propType = "number";
+            } else if (sqlType.includes("BOOL")) {
+                propType = "boolean";
+            }
+
+            // Default-Wert bereinigen (SQLite gibt Strings oft in Anführungszeichen zurück)
+            let defaultVal = col.dflt_value;
+            if (typeof defaultVal === "string" && defaultVal.startsWith("'") && defaultVal.endsWith("'")) {
+                defaultVal = defaultVal.slice(1, -1);
+            }
+
+            schema.addProperty(tableName, col.name, {
+                prop_type: propType,
+                min: col.notnull === 1 || col.pk > 0 ? 1 : 0,
+                max: 1,
+                default: defaultVal !== null ? defaultVal : undefined
+            });
+        }
+
+        // 3. Primary Key beim DataType hinterlegen
+        schema.setDataType({
+            name: tableName,
+            art: "object",
+            id: pkColumns.length === 1 ? pkColumns[0] : pkColumns
         });
 
-        return deleteAllTransaction(deleteTasks);
+        // 4. Fremdschlüssel (Foreign Keys) auslesen
+        // Liefert: [id, seq, table, from, to, on_update, on_delete, match]
+        const fks = this.db.query(`PRAGMA foreign_key_list(${tableName})`).all();
+        const fkGroups = new Map();
+
+        for (const fk of fks) {
+            if (!fkGroups.has(fk.id)) {
+                fkGroups.set(fk.id, {
+                    name: `fk_${tableName}_${fk.table}_${fk.id}`,
+                    object_name: tableName,
+                    object_props: [],
+                    ref_name: fk.table,
+                    ref_props: [],
+                    on_update: this.#mapSqlAction(fk.on_update),
+                    on_delete: this.#mapSqlAction(fk.on_delete)
+                });
+            }
+            const group = fkGroups.get(fk.id);
+            group.object_props.push(fk.from);
+            group.ref_props.push(fk.to);
+        }
+
+        for (const refObj of fkGroups.values()) {
+            schema.setRef(refObj);
+        }
+
+        // 5. Unique-Constraints auslesen
+        const indexes = this.db.query(`PRAGMA index_list(${tableName})`).all();
+        for (const idx of indexes) {
+            if (idx.unique === 1 && idx.origin !== "pk") {
+                const idxCols = this.db.query(`PRAGMA index_info(${idx.name})`).all();
+                schema.setUnique({
+                    name: idx.name,
+                    object_name: tableName,
+                    object_props: idxCols.map(c => c.name)
+                });
+            }
+        }
+    }
+
+    /** Hilfsfunktion für FK-Aktionen
+     * @param {string} sqlAction - Art der Datenbank Verbindung
+     */
+    #mapSqlAction(sqlAction) {
+        if (sqlAction === "CASCADE") return "DELETE"; // bzw. UPDATE
+        if (sqlAction === "SET NULL") return "NULL";
+        if (sqlAction === "SET DEFAULT") return "DEFAULT";
+        return "NO";
+    }
+
+    /**
+     * Erzeugt ein vollständiges SQLite CREATE TABLE Statement aus dem Schema.
+     * @param {Schema} schema 
+     * @param {string} objectName 
+     * @returns {string}
+     */
+    generateCreateTableSQL(schema, objectName) {
+        const dataType = schema.getDataType(objectName);
+        if (!dataType || dataType.art !== "object") {
+            throw new Error(`'${objectName}' ist kein gültiger ObjektTyp im Schema.`);
+        }
+
+        const props = schema.getObjProperties(objectName);
+        const columnDefs = [];
+        const tableConstraints = [];
+
+        // Primary Key ermitteln
+        const pkFields = Array.isArray(dataType.id) ? dataType.id : (dataType.id ? [dataType.id] : []);
+
+        for (const prop of props) {
+            // Listen (Arrays) in einer Spalte werden in SQLite als JSON-Text gespeichert
+            if (prop.is_list || (prop.max && (prop.max > 1 || prop.max === -1))) {
+                let def = `${prop.name} TEXT`;
+                if ((prop.min ?? 1) >= 1) def += " NOT NULL";
+                columnDefs.push(def);
+                continue;
+            }
+
+            const targetType = prop.prop_type || "string";
+            const targetDataType = schema.getDataType(targetType);
+            const simpleType = schema.getSimpleType(targetType);
+
+            // 1. SQL-Basistyp bestimmen
+            let sqlType = "TEXT";
+            if (targetType === "number" || simpleType?.art === "number") {
+                sqlType = simpleType?.decimals === 0 ? "INTEGER" : "REAL";
+            } else if (targetType === "bigint" || simpleType?.art === "bigint" || targetType === "boolean" || simpleType?.art === "boolean") {
+                sqlType = "INTEGER";
+            }
+
+            let colSql = `${prop.name} ${sqlType}`;
+
+            // 2. NOT NULL & DEFAULT
+            if ((prop.min ?? 1) >= 1) {
+                colSql += " NOT NULL";
+            }
+            if (prop.default !== undefined) {
+                const defVal = typeof prop.default === "string" ? `'${prop.default.replace(/'/g, "''")}'` : prop.default;
+                colSql += ` DEFAULT ${defVal}`;
+            }
+
+            // 3. CHECK-Constraints aus SimpleType ableiten
+            const checks = [];
+            if (simpleType) {
+                if (simpleType.min_length !== undefined) checks.push(`length(${prop.name}) >= ${simpleType.min_length}`);
+                if (simpleType.max_length !== undefined) checks.push(`length(${prop.name}) <= ${simpleType.max_length}`);
+                if (simpleType.length !== undefined) checks.push(`length(${prop.name}) = ${simpleType.length}`);
+                if (simpleType.min_inclusive !== undefined) checks.push(`${prop.name} >= ${simpleType.min_inclusive}`);
+                if (simpleType.max_inclusive !== undefined) checks.push(`${prop.name} <= ${simpleType.max_inclusive}`);
+                if (simpleType.min_exclusive !== undefined) checks.push(`${prop.name} > ${simpleType.min_exclusive}`);
+                if (simpleType.max_exclusive !== undefined) checks.push(`${prop.name} < ${simpleType.max_exclusive}`);
+            }
+
+            // 4. CHECK-Constraints aus EnumType ableiten
+            if (targetDataType?.art === "enum") {
+                const enumObj = schema.getEnum(targetType);
+                if (enumObj && Array.isArray(enumObj.values) && enumObj.values.length > 0 && !enumObj.more_enums) {
+                    const allowed = enumObj.values.map(v => typeof v === "string" ? `'${v.replace(/'/g, "''")}'` : v).join(", ");
+                    checks.push(`${prop.name} IN (${allowed})`);
+                }
+            }
+
+            if (checks.length > 0) {
+                colSql += ` CHECK (${checks.join(" AND ")})`;
+            }
+
+            columnDefs.push(colSql);
+        }
+
+        // Primary Key Constraint
+        if (pkFields.length > 0) {
+            tableConstraints.push(`PRIMARY KEY (${pkFields.join(", ")})`);
+        }
+
+        // Unique Constraints aus schema.uniques
+        const uniques = schema.uniques.findAll({ object_name: objectName });
+        for (const u of uniques) {
+            const uCols = Array.isArray(u.object_props) ? u.object_props : [u.object_props];
+            tableConstraints.push(`UNIQUE (${uCols.join(", ")})`);
+        }
+
+        // Foreign Keys aus schema.refs
+        const refs = schema.refs.findAll({ object_name: objectName });
+        for (const r of refs) {
+            const fromCols = Array.isArray(r.object_props) ? r.object_props.join(", ") : r.object_props;
+            const toCols = Array.isArray(r.ref_props) ? r.ref_props.join(", ") : r.ref_props;
+            let fkSql = `FOREIGN KEY (${fromCols}) REFERENCES ${r.ref_name} (${toCols})`;
+
+            if (r.on_delete === "DELETE") fkSql += " ON DELETE CASCADE";
+            else if (r.on_delete === "NULL") fkSql += " ON DELETE SET NULL";
+            else if (r.on_delete === "DEFAULT") fkSql += " ON DELETE SET DEFAULT";
+
+            if (r.on_update === "UPDATE") fkSql += " ON UPDATE CASCADE";
+            else if (r.on_update === "NULL") fkSql += " ON UPDATE SET NULL";
+            else if (r.on_update === "DEFAULT") fkSql += " ON UPDATE SET DEFAULT";
+
+            tableConstraints.push(fkSql);
+        }
+
+        const allDefinitions = [...columnDefs, ...tableConstraints].join(",\n    ");
+        return `CREATE TABLE IF NOT EXISTS ${objectName} (\n    ${allDefinitions}\n);`;
     }
 
 
     /**
-     * Löscht Datensätze von der Abfrage
-     * @param {string} tableName - Name der Datentabelle
-     * @param {Object<string,any>} quest - Optionale Abfrage
-     * @returns {Promise<boolean>}
+     * Erzeugt die SQL-Definition für eine einzelne Spalte (z. B. "age INTEGER NOT NULL CHECK (age >= 18)")
+     * @param {Schema} schema 
+     * @param {PropertyType} prop - Das Property-Objekt aus dem Schema
+     * @returns {string}
      */
-    async deleteRows2(tableName, quest) {
-        if (!this.tableNameRegex.test(tableName)) throw new Error("Table not allowed!");
+    #buildColumnDefinition(schema, prop) {
+        // Listen (Arrays) werden in SQLite als JSON-Text gespeichert
+        if (prop.is_list || (prop.max && (prop.max > 1 || prop.max === -1))) {
+            let def = `${prop.name} TEXT`;
+            if ((prop.min ?? 1) >= 1) def += " NOT NULL";
+            if (prop.default !== undefined) {
+                const defVal = typeof prop.default === "string" ? `'${prop.default.replace(/'/g, "''")}'` : `'${JSON.stringify(prop.default)}'`;
+                def += ` DEFAULT ${defVal}`;
+            }
+            return def;
+        }
 
-        const where = this.quest_to_query(quest);
-        const sql = `DELETE FROM ${tableName} WHERE ${where.sql}`;
+        const targetType = prop.prop_type || "string";
+        const targetDataType = schema.getDataType(targetType);
+        const simpleType = schema.getSimpleType(targetType);
 
-        // Führe das Delete-Statement aus
-        const result = this.db.run(sql, where.params);
+        // 1. SQL-Basistyp bestimmen
+        let sqlType = "TEXT";
+        if (targetType === "number" || simpleType?.art === "number") {
+            sqlType = simpleType?.decimals === 0 ? "INTEGER" : "REAL";
+        } else if (targetType === "bigint" || simpleType?.art === "bigint" || targetType === "boolean" || simpleType?.art === "boolean") {
+            sqlType = "INTEGER";
+        }
 
-        // result.changes gibt die Anzahl der betroffenen Zeilen in SQLite zurück
-        return result.changes > 0;
+        let colSql = `${prop.name} ${sqlType}`;
+
+        // 2. NOT NULL & DEFAULT
+        if ((prop.min ?? 1) >= 1) {
+            colSql += " NOT NULL";
+        }
+        if (prop.default !== undefined) {
+            const defVal = typeof prop.default === "string" ? `'${prop.default.replace(/'/g, "''")}'` : prop.default;
+            colSql += ` DEFAULT ${defVal}`;
+        }
+
+        // 3. CHECK-Constraints aus SimpleType ableiten
+        const checks = [];
+        if (simpleType) {
+            if (simpleType.min_length !== undefined) checks.push(`length(${prop.name}) >= ${simpleType.min_length}`);
+            if (simpleType.max_length !== undefined) checks.push(`length(${prop.name}) <= ${simpleType.max_length}`);
+            if (simpleType.length !== undefined) checks.push(`length(${prop.name}) = ${simpleType.length}`);
+            if (simpleType.min_inclusive !== undefined) checks.push(`${prop.name} >= ${simpleType.min_inclusive}`);
+            if (simpleType.max_inclusive !== undefined) checks.push(`${prop.name} <= ${simpleType.max_inclusive}`);
+            if (simpleType.min_exclusive !== undefined) checks.push(`${prop.name} > ${simpleType.min_exclusive}`);
+            if (simpleType.max_exclusive !== undefined) checks.push(`${prop.name} < ${simpleType.max_exclusive}`);
+        }
+
+        // 4. CHECK-Constraints aus EnumType ableiten
+        if (targetDataType?.art === "enum") {
+            const enumObj = schema.getEnum(targetType);
+            if (enumObj && Array.isArray(enumObj.values) && enumObj.values.length > 0 && !enumObj.more_enums) {
+                const allowed = enumObj.values.map(v => typeof v === "string" ? `'${v.replace(/'/g, "''")}'` : v).join(", ");
+                checks.push(`${prop.name} IN (${allowed})`);
+            }
+        }
+
+        if (checks.length > 0) {
+            colSql += ` CHECK (${checks.join(" AND ")})`;
+        }
+
+        return colSql;
     }
+
+
+    /**
+     * Führt eine intelligente Migration basierend auf dem Schema-Diff durch.
+     * Gibt alle durchgeführten Änderungen im InfoData-Format zurück.
+     * 
+     * @param {Schema} newSchema - Das neue Ziel-Schema
+     * @param {Object<string,any>} options - Optionale Einstellungen (z. B. { dropRemovedTables: false })
+     * @returns {Object<string,DataRows>} InfoData-Objekt mit der Tabelle "schema_changes"
+     */
+    migrateSchema(newSchema, options = { dropRemovedTables: false }) {
+        this.db.run("PRAGMA foreign_keys = ON;");
+
+        // Systemtabellen für aktuellen Zustand und Änderungs-Log (InfoData) sicherstellen
+        this.db.run(`
+        CREATE TABLE IF NOT EXISTS _info_schema_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            schema_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+    `);
+        this.db.run(`
+        CREATE TABLE IF NOT EXISTS _info_schema_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            migrated_at TEXT NOT NULL,
+            category TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            field TEXT NOT NULL,
+            old_value TEXT,
+            new_value TEXT
+        );
+    `);
+
+        const stateRow = this.db.query("SELECT schema_json FROM _info_schema_state WHERE id = 1").get();
+
+        // Wenn die DB komplett neu ist, starten wir mit einem leeren Vergleichs-Schema
+        const oldSchema = stateRow
+            ? new Schema("old_db_state", stateRow.schema_json)
+            : new Schema("empty_db_state");
+
+        // 1. Diff berechnen (liefert { schema_changes: [ ["category", ...], ... ] })
+        const diffResult = oldSchema.diff(newSchema);
+        const rows = diffResult.schema_changes; // Header-Zeile überspringen
+
+        // Wenn es keine Änderungen gibt, sofort fertig
+        if (rows.length <= 1) {
+            return diffResult;
+        }
+
+        // 2. Änderungen analysieren: Welche Tabellen brauchen was?
+        const tablesToCreate = new Set();
+        const tablesToDrop = new Set();
+        const columnsToAdd = new Map();      // tableName -> Array of propNames
+        const tablesToRebuild = new Set();   // Tabellen, die Copy-and-Swap brauchen
+
+        /**
+         * Markiert alle Tabellen, die einen bestimmten SimpleType oder Enum nutzen, für Rebuild
+         * @param {string} typeName - Name des Types
+         */
+        const markTablesUsingType = (typeName) => {
+            newSchema.properties.forEach((p) => {
+                if (p.prop_type === typeName) {
+                    tablesToRebuild.add(p.object_name);
+                }
+            });
+        };
+
+
+        //for (const [category, action, targetId, field, oldVal, newVal] of rows) {
+        for (let i = 1; i < rows.length; i ++) {
+            const [category, action, targetId, field, oldVal, newVal] = rows[i];
+
+            if (category === "datatype") {
+                const dt = action === "REMOVED" ? JSON.parse(oldVal + "") : newSchema.getDataType(targetId + "");
+                if (dt?.art === "object") {
+                    if (action === "ADDED") tablesToCreate.add(targetId);
+                    else if (action === "REMOVED" && options.dropRemovedTables) tablesToDrop.add(targetId);
+                    else if (action === "MODIFIED") tablesToRebuild.add(targetId); // z. B. Primary Key geändert
+                }
+            }
+            else if (category === "property") {
+                const [tableName, propName] = (targetId + "").split(".");
+                if (tablesToCreate.has(tableName)) continue; // Wird ohnehin komplett neu erstellt
+
+                if (action === "ADDED") {
+                    const prop = newSchema.getProperty({ object_name: tableName, name: propName });
+                    if (!prop) {continue;}
+
+                    // SQLite erlaubt ADD COLUMN nur, wenn die Spalte nullable ist ODER einen Default-Wert hat
+                    const isNullable = (prop.min ?? 1) === 0;
+                    const hasDefault = prop.default !== undefined;
+
+                    if (isNullable || hasDefault) {
+                        if (!columnsToAdd.has(tableName)) columnsToAdd.set(tableName, []);
+                        columnsToAdd.get(tableName).push(prop);
+                    } else {
+                        // Pflichtfeld ohne Default erfordert Rebuild
+                        tablesToRebuild.add(tableName);
+                    }
+                } else {
+                    // Spalte gelöscht (REMOVED) oder verändert (MODIFIED) -> Rebuild nötig
+                    tablesToRebuild.add(tableName);
+                }
+            }
+            else if (category === "simpletype" || category === "enum") {
+                // Wenn sich z. B. max_length oder Enum-Werte ändern, müssen betroffene Tabellen ihre CHECK-Constraints erneuern
+                markTablesUsingType(targetId + "");
+            }
+            else if (category === "ref" || category === "unique") {
+                // Foreign Keys oder Unique-Constraints geändert -> betroffene Tabelle neu aufbauen
+                const objData = action === "REMOVED" ? JSON.parse(oldVal + "") : JSON.parse(newVal + "" || "{}");
+                const tableName = objData.object_name || (targetId + "").split("->")[0];
+                if (tableName) tablesToRebuild.add(tableName);
+            }
+        }
+
+        // 3. Migration sicher in einer Transaktion ausführen
+        const executeMigration = this.db.transaction(() => {
+            // Foreign Keys während struktureller Umbauten kurz pausieren
+            this.db.run("PRAGMA foreign_keys = OFF;");
+
+            // A) Neue Tabellen erstellen
+            for (const tableName of tablesToCreate) {
+                const createSql = this.generateCreateTableSQL(newSchema, tableName);
+                this.db.run(createSql);
+            }
+
+            // B) Schnelles ALTER TABLE ADD COLUMN (nur für Tabellen, die nicht ohnehin komplett neu gebaut werden)
+            for (const [tableName, props] of columnsToAdd.entries()) {
+                if (tablesToRebuild.has(tableName) || tablesToCreate.has(tableName)) continue;
+                for (const prop of props) {
+                    const colDef = this.#buildColumnDefinition(newSchema, prop);
+                    this.db.run(`ALTER TABLE ${tableName} ADD COLUMN ${colDef};`);
+                }
+            }
+
+            // C) Copy-and-Swap für komplexere Änderungen
+            for (const tableName of tablesToRebuild) {
+                if (tablesToCreate.has(tableName)) continue;
+                // Prüfen, ob die Tabelle im neuen Schema überhaupt noch existiert
+                if (!newSchema.getDataType(tableName)) continue;
+
+                const tempTable = `_temp_${tableName}_${Date.now()}`;
+                const rawCreateSql = this.generateCreateTableSQL(newSchema, tableName);
+                const tempCreateSql = rawCreateSql.replace(
+                    `CREATE TABLE IF NOT EXISTS ${tableName}`,
+                    `CREATE TABLE ${tempTable}`
+                );
+
+                this.db.run(tempCreateSql);
+
+                // Bestehende Daten aus gemeinsamen Spalten übernehmen
+                const oldCols = oldSchema.getObjProperties(tableName).map(p => p.name);
+                const newCols = newSchema.getObjProperties(tableName).map(p => p.name);
+                const commonCols = newCols.filter(col => oldCols.includes(col));
+
+                if (commonCols.length > 0) {
+                    const colsStr = commonCols.join(", ");
+                    this.db.run(`INSERT INTO ${tempTable} (${colsStr}) SELECT ${colsStr} FROM ${tableName};`);
+                }
+
+                this.db.run(`DROP TABLE ${tableName};`);
+                this.db.run(`ALTER TABLE ${tempTable} RENAME TO ${tableName};`);
+            }
+
+            // D) Optional: Entfernte Tabellen löschen (nur wenn explizit erlaubt)
+            if (options.dropRemovedTables) {
+                for (const tableName of tablesToDrop) {
+                    this.db.run(`DROP TABLE IF EXISTS ${tableName};`);
+                }
+            }
+
+            // E) Diff-Zeilen als Historie in _info_schema_history speichern
+            const now = new Date().toISOString();
+            const insertHistory = this.db.prepare(`
+            INSERT INTO _info_schema_history (migrated_at, category, action, target_id, field, old_value, new_value)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
+        `);
+
+            for (const [category, action, targetId, field, oldVal, newVal] of rows) {
+                insertHistory.run(
+                    now,
+                    category,
+                    action,
+                    targetId,
+                    field,
+                    oldVal !== null ? String(oldVal) : null,
+                    newVal !== null ? String(newVal) : null
+                );
+            }
+
+            // F) Neuen Schema-Zustand speichern
+            this.db.run(
+                `INSERT INTO _info_schema_state (id, schema_json, updated_at) 
+             VALUES (1, ?, ?) 
+             ON CONFLICT(id) DO UPDATE SET schema_json = excluded.schema_json, updated_at = excluded.updated_at;`,
+                [newSchema.toString(), now]
+            );
+
+            this.db.run("PRAGMA foreign_keys = ON;");
+        });
+
+        executeMigration();
+
+        // Das Diff-Ergebnis im InfoData-Format zurückgeben (z. B. für Logs oder UI-Anzeige)
+        return diffResult;
+    }
+
 }
+
+// Beispiel
+// const changes = sqliteDriver.migrateSchema(meinAppSchema);
+
+// if (changes.schema_changes.length > 1) {
+//     console.log("Datenbank erfolgreich migriert:", changes.schema_changes);
+// }
+
