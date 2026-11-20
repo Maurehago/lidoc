@@ -1637,9 +1637,9 @@ export class RealtimeSync {
             console.log("vom Server: ", data);
 
             // Prüfen, ob diese Nachricht zu einer aktiven Anfrage gehört
-            if (data.requestId && this.pendingRequests.has(data.requestId)) {
-                const deferred = this.pendingRequests.get(data.requestId);
-                this.pendingRequests.delete(data.requestId); // Anfrage erledigt, löschen
+            if (data.request_id && this.pendingRequests.has(data.request_id)) {
+                const deferred = this.pendingRequests.get(data.request_id);
+                this.pendingRequests.delete(data.request_id); // Anfrage erledigt, löschen
 
                 // Promise auflösen und die Daten direkt zurückgeben!
                 deferred.resolve(data);

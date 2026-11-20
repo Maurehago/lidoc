@@ -4,7 +4,7 @@
 // @ts-check
 
 import { Database } from "bun:sqlite";
-import { DBDriver } from "./infodata.js";
+import { DBDriver } from "./db-driver.js";
 import { Schema } from "./infoschema.js";
 
 //const tableNameRegex = /^(?!sqlite_)[a-z_][a-z0-9_]*$/;
@@ -16,8 +16,6 @@ import { Schema } from "./infoschema.js";
 /** @import {PropertyType} from "./infoschema.js" */
 
 // =============================================
-
-
 
 
 /**

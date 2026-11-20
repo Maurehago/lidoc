@@ -7,7 +7,8 @@ import { join } from "path";
 import { mkdir } from "fs/promises";
 import { InfoSchema } from "./infoschema.js";
 import { InfoUITableCol_fields, InfoUIFormField_fields } from "./infoui.js";
-import { DataTable, DBDriver } from "./infodata.js"
+import { DataTable } from "./infodata.js";
+import { DBDriver } from "./db-driver.js";
 import { error, table } from "console";
 
 //import { JsonFileDriver } from "./db_drivers.js";
@@ -596,39 +597,7 @@ export class RealtimeServer {
                             //   DATENABFRAGE
                             // =================================================================
                             case "GET_DATA": {
-                                // Fall A: Der Client möchte das Ersteinrichtungs-Formular aufrufen
-                                // if (targetType === "CONFIG") {
-                                //     // Wir liefern die Tabellenstruktur, um Treiber-Daten einzugeben
-                                //     answer.type = "DATA";
-                                //     answer.targetType = "CONFIG";
-                                //     answer.payload = currentConfig;
-                                //     //const answer = { type: "DATA", targetType: "FORM", rows: wizardForm };
-
-                                //     ws.send(JSON.stringify(answer));
-                                //     break;
-                                // }
-
-                                // // Fall B: Ein Treiber wurde gewählt -> Frage dessen Tabellenliste oder Menütabelle ab
-                                // if (targetType === "DRIVER_MAIN") {
-                                //     const driver = this.activeDrivers.get(driverId || "");
-                                //     if (!driver) {
-                                //         ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`)));
-                                //         break;
-                                //     }
-
-                                //     // Der Treiber liefert uns die Tabellenübersicht
-                                //     // (Entweder per Datei-Scan oder aus einer systeminternen Menütabelle)
-                                //     // Format: [ ["TableName", "Beschreibung"], ["kunden", "Kundenkartei"] ]
-                                //     const tablesList = await driver.getTables();
-
-                                //     answer.type = "DATA";
-                                //     answer.targetType = "LIST";
-                                //     answer.rows = tablesList;
-
-                                //     ws.send(JSON.stringify(answer));
-                                //     break;
-                                // }
-
+                                // Anfragen prüfen
                                 if (quest_objects) {
                                     // 1. Die Magie: Referenzen im JavaScript auflösen
                                     /** @type {Object<string,TableObject>} */
@@ -656,36 +625,6 @@ export class RealtimeServer {
                                     break;
                                 }
 
-                                // // Fall C: Eine Tabelle wurde gewählt -> Hole Datensätze oder Datensatz
-                                // if (driverId && tableName) {
-                                //     const driver = this.activeDrivers.get(driverId);
-
-                                //     if (!driver) {
-                                //         ws.send(JSON.stringify(this.getErrorMessage(`No Driver with ID '${driverId}' found.`, requestId)));
-                                //         break;
-                                //     }
-
-                                //     let tableRows;
-
-                                //     // Wenn datensatz ID  && !recordId
-                                //     if (recordId != undefined && quest) {
-                                //         tableRows = await driver.getRecord(tableName, quest);
-                                //     } else {
-                                //         // Hole das komplette Daten-Array über den Treiber
-                                //         tableRows = await driver.getRows(tableName, quest);
-                                //     }
-
-                                //     ///** @type {ClientServerMessage} */
-                                //     //const answer = { type: "DATA", targetType: "LIST", rows: tableRows };
-                                //     answer.type = "DATA";
-                                //     answer.targetType = "LIST";
-                                //     answer.payload = { [tableName]: tableRows };
-
-                                //     // Der Server gibt das Array unverändert an den Client weiter.
-                                //     // Der Client speichert es in seiner lokalen InfoTable zum Filtern und Sortieren.
-                                //     ws.send(JSON.stringify(answer));
-                                //     break;
-                                // }
                                 break;
                             }
 
@@ -764,56 +703,10 @@ export class RealtimeServer {
                                     ws.send(JSON.stringify(answer));
                                 }
                                 break;
-
-                                // if (!lockKey || !driverId || !tableName || !recordId) {
-                                //     ws.send(JSON.stringify(this.getErrorMessage("Wrong Lock-Params.", requestId)));
-                                //     break;
-                                // }
-
-                                // // Prüfen, ob ein anderer Operator diesen Datensatz blockiert
-                                // if (this.activeLocks.has(lockKey)) {
-                                //     const currentLock = this.activeLocks.get(lockKey);
-                                //     if (currentLock && currentLock.username !== ws.data.username) {
-                                //         // Zugriff verweigert! Client erhält Fehlermeldung und darf nicht editieren
-                                //         answer.type = "LOCK_DENIED";
-                                //         answer.payload = { message: `Datensatz wird bereits von '${currentLock.username}' bearbeitet (seit ${currentLock.lockTime}).` };
-
-                                //         ws.send(JSON.stringify(answer));
-                                //         break;
-                                //     }
-                                // }
-
-                                // // Jetzt holen wir den aktuellen Zustand GENAU DIESES einen Datensatzes frisch vom Treiber
-                                // const driver = this.activeDrivers.get(driverId);
-                                // if (driver && quest) {
-                                //     // Sperre im Server-Arbeitsspeicher (In-Memory) registrieren
-                                //     /** @type {LockData} */
-                                //     const newLock = {
-                                //         lockKey, driverId, tableName, recordId,
-                                //         username: ws.data.username,
-                                //         lockTime: new Date().toLocaleTimeString()
-                                //     };
-                                //     this.activeLocks.set(lockKey, newLock);
-
-                                //     // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
-                                //     server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
-
-                                //     // Daten lesen
-                                //     const singleRecordRows = await driver.getRecord(tableName, quest);
-
-                                //     // Antwort zusammenstellen
-                                //     answer.type = "DATA";
-                                //     answer.targetType = "FORM";
-                                //     answer.payload = { [tableName]: singleRecordRows };
-
-                                //     // Dem anfragenden Client grünes Licht geben und das Daten-Array für sein Formular senden
-                                //     ws.send(JSON.stringify(answer));
-                                // }
-
-                                // break;
                             }
 
                             case "RELEASE_LOCK": {
+                                // Lock für Tabellen aufheben
                                 if (table_objects) {
                                     /** @type {Object<string,TableObject>} */
                                     const answer_tables = {};
@@ -862,21 +755,6 @@ export class RealtimeServer {
                                     }
                                 }
                                 break;
-
-                                // if (lockKey && this.activeLocks.has(lockKey)) {
-                                //     const currentLock = this.activeLocks.get(lockKey);
-                                //     // Nur der Besitzer des Locks darf es regulär wieder freigeben
-                                //     if (currentLock?.username === ws.data.username) {
-                                //         this.activeLocks.delete(lockKey);
-
-                                //         // Informiere ALLE Clients über den neuen globalen Sperr-Zustand
-                                //         server.publish("app_group", JSON.stringify(this.getPublishLocksMessage()));
-
-                                //         // Benutzer Informieren das die Sperre aufgehoben ist
-                                //         ws.send(JSON.stringify({ type: "LOCK_RELEASED_CONFIRMED", requestId }));
-                                //     }
-                                // }
-                                // break;
                             }
 
                             // =================================================================
@@ -894,13 +772,20 @@ export class RealtimeServer {
                                     
                                     // Alle Treiber ermitteln
                                     for (let i = 0; i < object_names.length; i++) {
-                                        const driverid = table_objects[object_names[i]].driver;
+                                        const obj_name = object_names[i];
+
+                                        // Tabelle Sperren Prüfen ?
+                                        const table_object = table_objects[obj_name];
                                         
+
+                                        // Treiber lesen
+                                        const driverid = table_objects[object_names[i]].driver;
                                         if (driverid && drivers.indexOf(driverid) < 0) {
                                             drivers.push(driverid);
                                         } 
                                     }
                                     
+                                    // für jeden Treiber alle Tabellen zum Speichern schicken
                                     for (let i = 0; i < drivers.length; i++) {
                                         const driver = this.activeDrivers.get(drivers[i]);
                                         if (driver) {
