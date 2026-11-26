@@ -792,6 +792,10 @@ export class RealtimeServer {
                                             const is_save = await driver.saveRows(table_objects, drivers[i]);
 
                                             // todo: ab hier weiter OK oder nicht OK
+                                            if (is_save) {
+                                                // gespeicherte Tabellen als OK Markieren und freigeben
+                                                
+                                            }
                                         }
                                     }
                                 }
